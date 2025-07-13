@@ -204,6 +204,9 @@ class MainActionDock(QDockWidget):
         color_row.addWidget(color_picker_btn)
         frame_far_right_layout.addLayout(color_row)
 
+        # Store reference to color picker button
+        self._color_picker_btn = color_picker_btn
+
         def set_random_color_from_cursor():
             hue = random.randint(0, 359)
             s = 0.7
@@ -230,6 +233,7 @@ class MainActionDock(QDockWidget):
 
         name_field_widget = NameFieldWidget(container)
         name_field_widget.set_db_manager(self.db_manager)
+        name_field_widget.set_config_manager(self.config_manager)
         main_vlayout.addWidget(name_field_widget)
 
         try:

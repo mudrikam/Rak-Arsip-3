@@ -8,8 +8,8 @@
     },
     "action_options": {
         "date": true,
-        "markdown": false,
-        "open_explorer": false,
+        "markdown": true,
+        "open_explorer": true,
         "sanitize_name": true
     },
     "status_options": {

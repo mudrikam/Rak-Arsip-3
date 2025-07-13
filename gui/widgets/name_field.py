@@ -3,6 +3,9 @@ from PySide6.QtGui import QIcon
 from PySide6.QtCore import Qt, Signal
 import qtawesome as qta
 import os
+import sys
+import subprocess
+from helpers.markdown_generator import MarkdownGenerator
 
 class NameFieldWidget(QFrame):
     folder_created = Signal(str, str, str, str, str, str, int)  # date, name, root, path, category, subcategory, template_id
@@ -72,6 +75,8 @@ class NameFieldWidget(QFrame):
         self._current_path_data = None
         self.db_manager = None
         self.selected_template_id = None
+        self.config_manager = None
+        self.markdown_generator = MarkdownGenerator()
 
         self.line_edit.textChanged.connect(self._on_text_changed)
         self.sanitize_check.stateChanged.connect(self._on_sanitize_check_changed)
@@ -83,6 +88,9 @@ class NameFieldWidget(QFrame):
         self.db_manager = db_manager
         print(f"Database manager set: {self.db_manager is not None}")
 
+    def set_config_manager(self, config_manager):
+        self.config_manager = config_manager
+
     def set_selected_template(self, template_id):
         self.selected_template_id = template_id
 
@@ -93,6 +101,82 @@ class NameFieldWidget(QFrame):
                 return current.db_manager
             current = current.parent()
         return None
+
+    def get_config_manager_from_parent(self):
+        current = self.parent()
+        while current:
+            if hasattr(current, 'config_manager'):
+                return current.config_manager
+            current = current.parent()
+        return None
+
+    def _open_explorer_if_enabled(self, path):
+        """Open explorer if enabled in config"""
+        try:
+            config_manager = self.config_manager or self.get_config_manager_from_parent()
+            if config_manager:
+                open_explorer_enabled = config_manager.get("action_options.open_explorer")
+                if open_explorer_enabled:
+                    if sys.platform == "win32":
+                        subprocess.Popen(f'explorer "{path}"')
+                    else:
+                        subprocess.Popen(["xdg-open", path])
+                    print(f"Opened explorer for: {path}")
+        except Exception as e:
+            print(f"Error opening explorer: {e}")
+
+    def get_color_from_parent(self):
+        """Get current color from color picker in main action"""
+        try:
+            main_window = self.window()
+            if hasattr(main_window, 'main_action_dock'):
+                main_action = main_window.main_action_dock
+                if hasattr(main_action, '_color_picker_btn'):
+                    color_picker_btn = main_action._color_picker_btn
+                    style = color_picker_btn.styleSheet()
+                    if "background-color:" in style:
+                        color_start = style.find("background-color:") + len("background-color:")
+                        color_end = style.find(";", color_start)
+                        if color_end == -1:
+                            color_end = style.find("}", color_start)
+                        color = style[color_start:color_end].strip()
+                        print(f"Retrieved color from picker: {color}")
+                        return color
+        except Exception as e:
+            print(f"Error getting color from parent: {e}")
+        return "#7bb205"  # Default color
+
+    def _create_markdown_file(self, folder_path, name, actual_path):
+        """Create markdown file if markdown option is enabled"""
+        try:
+            config_manager = self.config_manager or self.get_config_manager_from_parent()
+            if config_manager:
+                markdown_enabled = config_manager.get("action_options.markdown")
+                print(f"Markdown enabled: {markdown_enabled}")
+                if markdown_enabled:
+                    current_color = self.get_color_from_parent()
+                    print(f"Creating markdown file in: {folder_path}")
+                    print(f"With name: {name}")
+                    print(f"Using color: {current_color}")
+                    
+                    result = self.markdown_generator.create_markdown_file(
+                        folder_path=folder_path,
+                        name=name,
+                        root=self._current_path_data.get('folder', ''),
+                        category=self._current_path_data.get('category', ''),
+                        subcategory=self._current_path_data.get('subcategory', ''),
+                        date_path=self._current_path_data.get('date', ''),
+                        full_path=actual_path,
+                        color=current_color
+                    )
+                    if result:
+                        print(f"Successfully created markdown file: {result}")
+                    else:
+                        print("Failed to create markdown file")
+                else:
+                    print("Markdown creation disabled in config")
+        except Exception as e:
+            print(f"Error creating markdown file: {e}")
 
     def _sanitize_text(self, text):
         sanitized = text.replace(" ", "_")
@@ -188,6 +272,12 @@ class NameFieldWidget(QFrame):
             )
             
             print(f"Created project: ID={file_id}, Path={actual_path}")
+            
+            # Create markdown file if enabled
+            self._create_markdown_file(actual_path, name, actual_path)
+            
+            # Open explorer if enabled
+            self._open_explorer_if_enabled(actual_path)
             
             self.folder_created.emit(
                 self._current_path_data.get('date', ''),
