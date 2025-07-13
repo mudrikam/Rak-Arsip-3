@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QHeaderView,
     QHBoxLayout, QLineEdit, QPushButton, QLabel, QSpacerItem, QSizePolicy, QComboBox
 )
-from PySide6.QtGui import QColor, QAction
+from PySide6.QtGui import QColor, QAction, QFontMetrics
 from PySide6.QtCore import Signal
 import qtawesome as qta
 from database.db_manager import DatabaseManager
@@ -55,7 +55,7 @@ class CentralWidget(QWidget):
         header.setSectionResizeMode(2, QHeaderView.Fixed)
         header.setSectionResizeMode(3, QHeaderView.Stretch)
         header.setSectionResizeMode(4, QHeaderView.Fixed)
-        header.resizeSection(0, 120)
+        header.resizeSection(0, 100)
         header.resizeSection(1, 200)
         header.resizeSection(2, 100)
         header.resizeSection(4, 120)
@@ -70,6 +70,11 @@ class CentralWidget(QWidget):
         pagination_row.addWidget(self.prev_btn)
         pagination_row.addWidget(self.page_label)
         pagination_row.addWidget(self.next_btn)
+
+        self.stats_label = QLabel(self)
+        self.stats_label.setStyleSheet("color: #666; font-size: 12px; margin-left: 20px;")
+        pagination_row.addWidget(self.stats_label)
+
         pagination_row.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
         layout.addLayout(pagination_row)
 
@@ -129,11 +134,34 @@ class CentralWidget(QWidget):
         self.current_page = 1
         self.update_table()
 
-    def _truncate_path(self, path, max_chars=50):
-        if len(path) <= max_chars:
+    def _truncate_path_by_width(self, path, column_width):
+        if not path:
+            return ""
+        
+        font_metrics = QFontMetrics(self.table.font())
+        ellipsis = "..."
+        ellipsis_width = font_metrics.horizontalAdvance(ellipsis)
+        available_width = column_width - 10
+        
+        if font_metrics.horizontalAdvance(path) <= available_width:
             return path
-        else:
-            return "..." + path[-(max_chars-3):]
+        
+        if available_width <= ellipsis_width:
+            return ellipsis
+        
+        available_for_text = available_width - ellipsis_width
+        
+        for i in range(1, len(path)):
+            truncated = path[:i]
+            if font_metrics.horizontalAdvance(truncated) <= available_for_text:
+                continue
+            else:
+                if i > 1:
+                    return path[:i-1] + ellipsis
+                else:
+                    return ellipsis
+        
+        return path
 
     def update_table(self):
         total_rows = len(self.filtered_data)
@@ -144,6 +172,8 @@ class CentralWidget(QWidget):
         page_data = self.filtered_data[start:end]
 
         self.table.setRowCount(len(page_data))
+        path_column_width = self.table.columnWidth(3)
+        
         for row_idx, row_data in enumerate(page_data):
             date_item = QTableWidgetItem(row_data['date'])
             date_item.setData(256, row_data)
@@ -152,7 +182,7 @@ class CentralWidget(QWidget):
             self.table.setItem(row_idx, 1, QTableWidgetItem(row_data['name']))
             self.table.setItem(row_idx, 2, QTableWidgetItem(row_data['root']))
             
-            truncated_path = self._truncate_path(row_data['path'], max_chars=60)
+            truncated_path = self._truncate_path_by_width(row_data['path'], path_column_width)
             path_item = QTableWidgetItem(truncated_path)
             path_item.setToolTip(row_data['path'])
             self.table.setItem(row_idx, 3, path_item)
@@ -167,6 +197,15 @@ class CentralWidget(QWidget):
         self.page_label.setText(f"Page {self.current_page} / {total_pages}")
         self.prev_btn.setEnabled(self.current_page > 1)
         self.next_btn.setEnabled(self.current_page < total_pages)
+        
+        self.update_stats_label()
+
+    def update_stats_label(self):
+        total_records = len(self._all_data)
+        last_date = "-"
+        if self._all_data:
+            last_date = self._all_data[0]['date']
+        self.stats_label.setText(f"Total: {total_records} | Last: {last_date}")
 
     def on_row_selected(self):
         current_row = self.table.currentRow()
