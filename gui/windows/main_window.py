@@ -3,6 +3,7 @@ from PySide6.QtCore import Qt, QRect, QCoreApplication
 from helpers.window_helper import get_window_config, set_app_user_model_id, set_window_icon
 from gui.widgets.main_menu import MainMenu
 from gui.dialogs.about_dialog import AboutDialog
+from gui.widgets.main_action import MainActionDock
 import os
 import sys
 
@@ -21,6 +22,8 @@ class MainWindow(QMainWindow):
         self.setMenuBar(self.menu_bar)
         self.menu_bar.exit_action.triggered.connect(self.close)
         self.menu_bar.about_action.triggered.connect(lambda: self.show_about_dialog(about_config))
+        self.main_action_dock = MainActionDock(self)
+        self.addDockWidget(Qt.LeftDockWidgetArea, self.main_action_dock)
 
     def center_on_screen(self):
         screen = QApplication.primaryScreen()
