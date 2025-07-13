@@ -72,6 +72,22 @@ class DatabaseManager:
         self.connection.commit()
         print("Status data initialized")
 
+    def get_all_categories(self):
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT DISTINCT name FROM categories ORDER BY name")
+        return [row[0] for row in cursor.fetchall()]
+
+    def get_subcategories_by_category(self, category_name):
+        cursor = self.connection.cursor()
+        cursor.execute("""
+            SELECT DISTINCT sc.name 
+            FROM subcategories sc 
+            JOIN categories c ON sc.category_id = c.id 
+            WHERE c.name = ? 
+            ORDER BY sc.name
+        """, (category_name,))
+        return [row[0] for row in cursor.fetchall()]
+
     def get_or_create_category(self, category_name):
         cursor = self.connection.cursor()
         

@@ -136,3 +136,28 @@ class NameFieldWidget(QFrame):
                 self.sanitize_label.setText(disk)
         else:
             self.sanitize_label.setText("-")
+
+    def set_disk_and_folder_with_date_category(self, disk, folder, category, subcategory, date_path, name_input):
+        disk = (disk or "")
+        if disk and ":\\" in disk:
+            disk = disk.split(" ")[0]
+        
+        path_parts = []
+        if disk:
+            path_parts.append(disk.rstrip("\\"))
+        if folder:
+            path_parts.append(folder)
+        if category:
+            path_parts.append(category)
+        if subcategory:
+            path_parts.append(subcategory)
+        if date_path:
+            path_parts.append(date_path)
+        if name_input:
+            path_parts.append(name_input)
+        
+        if path_parts:
+            path = "\\".join(path_parts)
+            self.sanitize_label.setText(path)
+        else:
+            self.sanitize_label.setText("-")

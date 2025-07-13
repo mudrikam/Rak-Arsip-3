@@ -9,8 +9,11 @@ import sys
 import os
 import random
 import datetime
+from pathlib import Path
 
 from .name_field import NameFieldWidget
+from database.db_manager import DatabaseManager
+from manager.config_manager import ConfigManager
 
 def get_available_disks():
     disks = []
@@ -82,6 +85,12 @@ class MainActionDock(QDockWidget):
     def __init__(self, config_manager, parent=None):
         super().__init__("Main Action", parent)
         self.config_manager = config_manager
+        
+        basedir = Path(__file__).parent.parent.parent
+        db_config_path = basedir / "configs" / "db_config.json"
+        db_config_manager = ConfigManager(str(db_config_path))
+        self.db_manager = DatabaseManager(db_config_manager, self.config_manager)
+        
         container = QWidget(self)
         main_vlayout = QVBoxLayout(container)
 
@@ -124,7 +133,9 @@ class MainActionDock(QDockWidget):
         category_row = QHBoxLayout()
         label_category = QLabel("Category", frame_middle)
         combo_category = QComboBox(frame_middle)
-        combo_category.setEnabled(False)
+        combo_category.setEditable(True)
+        combo_category.setMinimumWidth(150)
+        combo_category.addItem("")
         category_row.addWidget(label_category)
         category_row.addWidget(combo_category)
         frame_middle_layout.addLayout(category_row)
@@ -132,7 +143,10 @@ class MainActionDock(QDockWidget):
         subcategory_row = QHBoxLayout()
         label_subcategory = QLabel("Sub", frame_middle)
         combo_subcategory = QComboBox(frame_middle)
+        combo_subcategory.setEditable(True)
         combo_subcategory.setEnabled(False)
+        combo_subcategory.setMinimumWidth(150)
+        combo_subcategory.addItem("")
         subcategory_row.addWidget(label_subcategory)
         subcategory_row.addWidget(combo_subcategory)
         frame_middle_layout.addLayout(subcategory_row)
@@ -147,13 +161,11 @@ class MainActionDock(QDockWidget):
         markdown_check = QCheckBox("Markdown", frame_right)
         open_explorer_check = QCheckBox("Open Explorer", frame_right)
         
-        # Load saved checklist states
         try:
             date_check.setChecked(self.config_manager.get("action_options.date"))
             markdown_check.setChecked(self.config_manager.get("action_options.markdown"))
             open_explorer_check.setChecked(self.config_manager.get("action_options.open_explorer"))
         except KeyError:
-            # Use default values if config keys don't exist
             date_check.setChecked(False)
             markdown_check.setChecked(False)
             open_explorer_check.setChecked(False)
@@ -213,7 +225,6 @@ class MainActionDock(QDockWidget):
         name_field_widget = NameFieldWidget(container)
         main_vlayout.addWidget(name_field_widget)
 
-        # Load sanitize checkbox state
         try:
             name_field_widget.sanitize_check.setChecked(self.config_manager.get("action_options.sanitize_name"))
         except KeyError:
@@ -224,6 +235,8 @@ class MainActionDock(QDockWidget):
 
         self._combo_disk = combo_disk
         self._combo_folder = combo_folder
+        self._combo_category = combo_category
+        self._combo_subcategory = combo_subcategory
         self._adjust_folder_width = adjust_folder_width
         self._name_field_widget = name_field_widget
         self._date_check = date_check
@@ -233,6 +246,8 @@ class MainActionDock(QDockWidget):
         def update_name_field_label():
             disk_label = combo_disk.currentText()
             folder_label = combo_folder.currentText() if combo_folder.isEnabled() and combo_folder.currentIndex() >= 0 else ""
+            category_text = combo_category.currentText().strip()
+            subcategory_text = combo_subcategory.currentText().strip()
             date_path = ""
             if date_check.isChecked():
                 today = datetime.date.today()
@@ -242,7 +257,39 @@ class MainActionDock(QDockWidget):
             sanitize = name_field_widget.sanitize_check.isChecked()
             if sanitize:
                 name_input = sanitize_folder_name(name_input)
-            name_field_widget.set_disk_and_folder_with_date(disk_label, folder_label, date_path, name_input)
+            name_field_widget.set_disk_and_folder_with_date_category(
+                disk_label, folder_label, category_text, subcategory_text, date_path, name_input
+            )
+
+        def load_categories():
+            try:
+                self.db_manager.connect()
+                categories = self.db_manager.get_all_categories()
+                combo_category.clear()
+                combo_category.addItem("")
+                combo_category.addItems(categories)
+            except Exception as e:
+                print(f"Error loading categories: {e}")
+            finally:
+                self.db_manager.close()
+
+        def load_subcategories(category_name):
+            combo_subcategory.clear()
+            combo_subcategory.addItem("")
+            if not category_name:
+                combo_subcategory.setEnabled(False)
+                return
+            
+            try:
+                self.db_manager.connect()
+                subcategories = self.db_manager.get_subcategories_by_category(category_name)
+                combo_subcategory.addItems(subcategories)
+                combo_subcategory.setEnabled(True)
+            except Exception as e:
+                print(f"Error loading subcategories: {e}")
+                combo_subcategory.setEnabled(False)
+            finally:
+                self.db_manager.close()
 
         def on_disk_changed(index):
             if index < 0:
@@ -265,6 +312,73 @@ class MainActionDock(QDockWidget):
         def on_folder_changed(index):
             update_name_field_label()
 
+        def on_category_changed():
+            category_text = combo_category.currentText().strip()
+            if category_text and combo_category.findText(category_text) >= 0:
+                load_subcategories(category_text)
+            update_name_field_label()
+
+        def on_category_enter():
+            category_text = combo_category.currentText().strip()
+            
+            if not category_text:
+                update_name_field_label()
+                combo_subcategory.setFocus()
+                return
+            
+            try:
+                self.db_manager.connect()
+                category_id = self.db_manager.get_or_create_category(category_text)
+                self.db_manager.close()
+                
+                load_categories()
+                
+                new_index = combo_category.findText(category_text)
+                if new_index >= 0:
+                    combo_category.setCurrentIndex(new_index)
+                    
+            except Exception as e:
+                print(f"Error ensuring category: {e}")
+                if self.db_manager.connection:
+                    self.db_manager.close()
+                
+            load_subcategories(category_text)
+            update_name_field_label()
+            combo_subcategory.setFocus()
+
+        def on_subcategory_changed():
+            subcategory_text = combo_subcategory.currentText().strip()
+            update_name_field_label()
+
+        def on_subcategory_enter():
+            category_text = combo_category.currentText().strip()
+            subcategory_text = combo_subcategory.currentText().strip()
+            
+            if not category_text or not subcategory_text:
+                update_name_field_label()
+                name_field_widget.line_edit.setFocus()
+                return
+            
+            try:
+                self.db_manager.connect()
+                category_id = self.db_manager.get_or_create_category(category_text)
+                subcategory_id = self.db_manager.get_or_create_subcategory(category_id, subcategory_text)
+                self.db_manager.close()
+                
+                load_subcategories(category_text)
+                
+                new_index = combo_subcategory.findText(subcategory_text)
+                if new_index >= 0:
+                    combo_subcategory.setCurrentIndex(new_index)
+                    
+            except Exception as e:
+                print(f"Error ensuring subcategory: {e}")
+                if self.db_manager.connection:
+                    self.db_manager.close()
+                
+            update_name_field_label()
+            name_field_widget.line_edit.setFocus()
+
         def on_date_check_changed(state):
             self.config_manager.set("action_options.date", date_check.isChecked())
             update_name_field_label()
@@ -284,6 +398,11 @@ class MainActionDock(QDockWidget):
 
         combo_disk.currentIndexChanged.connect(on_disk_changed)
         combo_folder.currentIndexChanged.connect(on_folder_changed)
+        combo_category.currentTextChanged.connect(on_category_changed)
+        combo_category.lineEdit().returnPressed.connect(on_category_enter)
+        combo_subcategory.currentTextChanged.connect(on_subcategory_changed)
+        combo_subcategory.lineEdit().returnPressed.connect(on_subcategory_enter)
+
         date_check.stateChanged.connect(on_date_check_changed)
         markdown_check.stateChanged.connect(on_markdown_check_changed)
         open_explorer_check.stateChanged.connect(on_open_explorer_check_changed)
@@ -295,6 +414,8 @@ class MainActionDock(QDockWidget):
         self._disk_thread.start()
 
         self._on_disk_changed = on_disk_changed
+        
+        load_categories()
 
     @Slot(list)
     def _on_disks_ready(self, disks):
