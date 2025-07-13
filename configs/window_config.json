@@ -1,16 +1,22 @@
 {
-  "window": {
-    "title": "Rak Arsip 3",
-    "width": 800,
-    "height": 600,
-    "icon": "res/rakikon.ico",
-    "app_id": "rakarsip3.rakarsip"
-  },
-  "about": {
-    "title": "Rak Arsip 3",
-    "text": "Rak Arsip 3 adalah aplikasi inhouse untuk manajemen projek dan pengarsipan dokumen di Desainia Studio.",
-    "author": "Desainia Studio",
-    "license": "MIT",
-    "year": "2025"
-  }
+    "window": {
+        "title": "Rak Arsip 3",
+        "width": 800,
+        "height": 600,
+        "icon": "res/rakikon.ico",
+        "app_id": "rakarsip3.rakarsip"
+    },
+    "action_options": {
+        "date": true,
+        "markdown": false,
+        "open_explorer": false,
+        "sanitize_name": true
+    },
+    "about": {
+        "title": "Rak Arsip 3",
+        "text": "Rak Arsip 3 adalah aplikasi inhouse untuk manajemen projek dan pengarsipan dokumen di Desainia Studio.",
+        "author": "Desainia Studio",
+        "license": "MIT",
+        "year": "2025"
+    }
 }

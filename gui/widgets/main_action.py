@@ -66,6 +66,12 @@ def get_first_level_folders(disk_path):
     except Exception:
         return []
 
+def sanitize_folder_name(name):
+    forbidden = '<>:"/\\|?*'
+    sanitized = name.replace(" ", "_")
+    sanitized = "".join(c for c in sanitized if c not in forbidden)
+    return sanitized
+
 class DiskScanThread(QThread):
     disks_found = Signal(list)
     def run(self):
@@ -73,8 +79,9 @@ class DiskScanThread(QThread):
         self.disks_found.emit(disks)
 
 class MainActionDock(QDockWidget):
-    def __init__(self, parent=None):
+    def __init__(self, config_manager, parent=None):
         super().__init__("Main Action", parent)
+        self.config_manager = config_manager
         container = QWidget(self)
         main_vlayout = QVBoxLayout(container)
 
@@ -139,6 +146,18 @@ class MainActionDock(QDockWidget):
         date_check = QCheckBox("Date", frame_right)
         markdown_check = QCheckBox("Markdown", frame_right)
         open_explorer_check = QCheckBox("Open Explorer", frame_right)
+        
+        # Load saved checklist states
+        try:
+            date_check.setChecked(self.config_manager.get("action_options.date"))
+            markdown_check.setChecked(self.config_manager.get("action_options.markdown"))
+            open_explorer_check.setChecked(self.config_manager.get("action_options.open_explorer"))
+        except KeyError:
+            # Use default values if config keys don't exist
+            date_check.setChecked(False)
+            markdown_check.setChecked(False)
+            open_explorer_check.setChecked(False)
+        
         frame_right_layout.addWidget(date_check)
         frame_right_layout.addWidget(markdown_check)
         frame_right_layout.addWidget(open_explorer_check)
@@ -194,6 +213,12 @@ class MainActionDock(QDockWidget):
         name_field_widget = NameFieldWidget(container)
         main_vlayout.addWidget(name_field_widget)
 
+        # Load sanitize checkbox state
+        try:
+            name_field_widget.sanitize_check.setChecked(self.config_manager.get("action_options.sanitize_name"))
+        except KeyError:
+            name_field_widget.sanitize_check.setChecked(False)
+
         container.setLayout(main_vlayout)
         self.setWidget(container)
 
@@ -202,6 +227,8 @@ class MainActionDock(QDockWidget):
         self._adjust_folder_width = adjust_folder_width
         self._name_field_widget = name_field_widget
         self._date_check = date_check
+        self._markdown_check = markdown_check
+        self._open_explorer_check = open_explorer_check
 
         def update_name_field_label():
             disk_label = combo_disk.currentText()
@@ -211,7 +238,11 @@ class MainActionDock(QDockWidget):
                 today = datetime.date.today()
                 month_name = today.strftime("%B")
                 date_path = f"{today.year}\\{month_name}\\{today.day:02}"
-            self._name_field_widget.set_disk_and_folder_with_date(disk_label, folder_label, date_path)
+            name_input = name_field_widget.line_edit.text()
+            sanitize = name_field_widget.sanitize_check.isChecked()
+            if sanitize:
+                name_input = sanitize_folder_name(name_input)
+            name_field_widget.set_disk_and_folder_with_date(disk_label, folder_label, date_path, name_input)
 
         def on_disk_changed(index):
             if index < 0:
@@ -235,11 +266,29 @@ class MainActionDock(QDockWidget):
             update_name_field_label()
 
         def on_date_check_changed(state):
+            self.config_manager.set("action_options.date", date_check.isChecked())
+            update_name_field_label()
+
+        def on_markdown_check_changed(state):
+            self.config_manager.set("action_options.markdown", markdown_check.isChecked())
+
+        def on_open_explorer_check_changed(state):
+            self.config_manager.set("action_options.open_explorer", open_explorer_check.isChecked())
+
+        def on_name_input_changed(text):
+            update_name_field_label()
+
+        def on_sanitize_check_changed(state):
+            self.config_manager.set("action_options.sanitize_name", name_field_widget.sanitize_check.isChecked())
             update_name_field_label()
 
         combo_disk.currentIndexChanged.connect(on_disk_changed)
         combo_folder.currentIndexChanged.connect(on_folder_changed)
         date_check.stateChanged.connect(on_date_check_changed)
+        markdown_check.stateChanged.connect(on_markdown_check_changed)
+        open_explorer_check.stateChanged.connect(on_open_explorer_check_changed)
+        name_field_widget.line_edit.textChanged.connect(on_name_input_changed)
+        name_field_widget.sanitize_check.stateChanged.connect(on_sanitize_check_changed)
 
         self._disk_thread = DiskScanThread()
         self._disk_thread.disks_found.connect(self._on_disks_ready)
