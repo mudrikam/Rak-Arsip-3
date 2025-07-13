@@ -11,10 +11,7 @@ class MainMenu(QMenuBar):
         self.config_manager = config_manager
         
         file_menu = QMenu("File", self)
-        self.new_action = QAction(qta.icon('fa6s.file'), "New", self)
         self.exit_action = QAction(qta.icon('fa6s.right-from-bracket'), "Exit", self)
-        file_menu.addAction(self.new_action)
-        file_menu.addSeparator()
         file_menu.addAction(self.exit_action)
         self.addMenu(file_menu)
         

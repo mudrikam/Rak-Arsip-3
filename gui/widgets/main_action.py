@@ -150,6 +150,7 @@ class MainActionDock(QDockWidget):
         combo_category = QComboBox(frame_middle)
         combo_category.setEditable(True)
         combo_category.setMinimumWidth(150)
+        combo_category.setMaximumWidth(150)
         combo_category.addItem("")
         category_row.addWidget(category_icon)
         category_row.addWidget(label_category)
@@ -164,6 +165,7 @@ class MainActionDock(QDockWidget):
         combo_subcategory.setEditable(True)
         combo_subcategory.setEnabled(False)
         combo_subcategory.setMinimumWidth(150)
+        combo_subcategory.setMaximumWidth(150)
         combo_subcategory.addItem("")
         subcategory_row.addWidget(subcategory_icon)
         subcategory_row.addWidget(label_subcategory)
@@ -172,6 +174,54 @@ class MainActionDock(QDockWidget):
 
         frame_middle.setLayout(frame_middle_layout)
         main_layout.addWidget(frame_middle)
+
+        frame_far_right = QFrame(container)
+        frame_far_right.setFrameShape(QFrame.StyledPanel)
+        frame_far_right_layout = QVBoxLayout(frame_far_right)
+
+        template_row = QHBoxLayout()
+        template_icon = QLabel()
+        template_icon.setPixmap(qta.icon("fa6s.file-lines", color="#FF5722").pixmap(16, 16))
+        combo_template = QComboBox(frame_far_right)
+        combo_template.addItem("No Template")
+        template_row.addWidget(template_icon)
+        template_row.addWidget(combo_template)
+        frame_far_right_layout.addLayout(template_row)
+
+        color_row = QHBoxLayout()
+        theme_icon = QLabel()
+        theme_icon.setPixmap(qta.icon("fa6s.palette", color="#E91E63").pixmap(16, 16))
+        color_picker_btn = QPushButton(frame_far_right)
+        color_picker_btn.setFixedSize(20, 20)
+        color_picker_btn.setIcon(qta.icon("fa6s.eye-dropper"))
+        color_picker_btn.setStyleSheet("background-color: #cccccc; border: 1px solid #888;")
+        color_row.addWidget(theme_icon)
+        color_row.addWidget(color_picker_btn)
+        frame_far_right_layout.addLayout(color_row)
+
+        self._color_picker_btn = color_picker_btn
+
+        def set_random_color_from_cursor():
+            hue = random.randint(0, 359)
+            s = 0.7
+            v = 0.9
+            color = QColor()
+            color.setHsvF(hue / 359.0, s, v)
+            color_picker_btn.setStyleSheet(f"background-color: {color.name()}; border: 1px solid #888;")
+
+        container.setMouseTracking(True)
+        frame_far_right.setMouseTracking(True)
+        color_picker_btn.setMouseTracking(True)
+
+        def mouse_move_event(event):
+            set_random_color_from_cursor()
+
+        container.mouseMoveEvent = mouse_move_event
+        frame_far_right.mouseMoveEvent = mouse_move_event
+        color_picker_btn.mouseMoveEvent = mouse_move_event
+
+        frame_far_right.setLayout(frame_far_right_layout)
+        main_layout.addWidget(frame_far_right)
 
         frame_right = QFrame(container)
         frame_right.setFrameShape(QFrame.StyledPanel)
@@ -208,59 +258,6 @@ class MainActionDock(QDockWidget):
         frame_right_layout.addWidget(open_explorer_check)
         frame_right.setLayout(frame_right_layout)
         main_layout.addWidget(frame_right)
-
-        frame_far_right = QFrame(container)
-        frame_far_right.setFrameShape(QFrame.StyledPanel)
-        frame_far_right_layout = QVBoxLayout(frame_far_right)
-
-        template_row = QHBoxLayout()
-        template_icon = QLabel()
-        template_icon.setPixmap(qta.icon("fa6s.file-lines", color="#FF5722").pixmap(16, 16))
-        label_template = QLabel("Template")
-        combo_template = QComboBox(frame_far_right)
-        combo_template.addItem("No Template")
-        template_row.addWidget(template_icon)
-        template_row.addWidget(label_template)
-        template_row.addWidget(combo_template)
-        frame_far_right_layout.addLayout(template_row)
-
-        color_row = QHBoxLayout()
-        theme_icon = QLabel()
-        theme_icon.setPixmap(qta.icon("fa6s.palette", color="#E91E63").pixmap(16, 16))
-        label_theme = QLabel("Theme")
-        color_picker_btn = QPushButton(frame_far_right)
-        color_picker_btn.setFixedSize(20, 20)
-        color_picker_btn.setIcon(qta.icon("fa6s.eye-dropper"))
-        color_picker_btn.setStyleSheet("background-color: #cccccc; border: 1px solid #888;")
-        color_row.addWidget(theme_icon)
-        color_row.addWidget(label_theme)
-        color_row.addWidget(color_picker_btn)
-        frame_far_right_layout.addLayout(color_row)
-
-        # Store reference to color picker button
-        self._color_picker_btn = color_picker_btn
-
-        def set_random_color_from_cursor():
-            hue = random.randint(0, 359)
-            s = 0.7
-            v = 0.9
-            color = QColor()
-            color.setHsvF(hue / 359.0, s, v)
-            color_picker_btn.setStyleSheet(f"background-color: {color.name()}; border: 1px solid #888;")
-
-        container.setMouseTracking(True)
-        frame_far_right.setMouseTracking(True)
-        color_picker_btn.setMouseTracking(True)
-
-        def mouse_move_event(event):
-            set_random_color_from_cursor()
-
-        container.mouseMoveEvent = mouse_move_event
-        frame_far_right.mouseMoveEvent = mouse_move_event
-        color_picker_btn.mouseMoveEvent = mouse_move_event
-
-        frame_far_right.setLayout(frame_far_right_layout)
-        main_layout.addWidget(frame_far_right)
 
         main_vlayout.addLayout(main_layout)
 
