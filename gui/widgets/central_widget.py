@@ -45,7 +45,7 @@ class CentralWidget(QWidget):
         self.table.setColumnCount(5)
         self.table.setHorizontalHeaderLabels(["Date", "Name", "Root", "Path", "Status"])
         self._all_data = []
-        self.page_size = 5
+        self.page_size = 20
         self.current_page = 1
         self.filtered_data = []
 

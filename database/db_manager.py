@@ -51,7 +51,6 @@ class DatabaseManager:
             all_defs = column_defs + foreign_keys
             create_sql = f"CREATE TABLE IF NOT EXISTS {table_name} ({', '.join(all_defs)})"
             cursor.execute(create_sql)
-            print(f"Table {table_name} created/verified")
         
         self.connection.commit()
 
@@ -70,7 +69,6 @@ class DatabaseManager:
             )
         
         self.connection.commit()
-        print("Status data initialized")
 
     def get_all_categories(self):
         cursor = self.connection.cursor()
