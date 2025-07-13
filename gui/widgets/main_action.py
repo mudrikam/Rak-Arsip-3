@@ -222,6 +222,10 @@ class MainActionDock(QDockWidget):
         template_row.addWidget(combo_template)
         frame_far_right_layout.addLayout(template_row)
 
+        def refresh_templates_on_show():
+            load_templates()
+        combo_template.showPopup = lambda orig=combo_template.showPopup: (refresh_templates_on_show(), orig())
+
         color_row = QHBoxLayout()
         theme_icon = QLabel()
         theme_icon.setPixmap(qta.icon("fa6s.palette", color="#E91E63").pixmap(16, 16))
