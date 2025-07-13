@@ -70,11 +70,105 @@ class PreferencesWindow(QDialog):
         group_layout.addWidget(self.markdown_check)
         group_layout.addWidget(self.open_explorer_check)
         group_layout.addWidget(self.sanitize_name_check)
-        
+        group.setLayout(group_layout)
         layout.addWidget(group)
+
+        # Gemini API Key Section
+        gemini_group = QGroupBox("Gemini API Key")
+        gemini_layout = QVBoxLayout(gemini_group)
+        gemini_row = QHBoxLayout()
+        self.gemini_api_label = QLabel("API Key:")
+        self.gemini_api_edit = QLineEdit()
+        self.gemini_api_edit.setEchoMode(QLineEdit.Password)
+        self.gemini_api_edit.setPlaceholderText("Enter Gemini API Key")
+        self.gemini_api_edit.setMinimumWidth(300)
+        self.gemini_api_edit.setText(self._get_gemini_api_key())
+        self.gemini_api_show_btn = QPushButton(qta.icon("fa6s.eye"), "")
+        self.gemini_api_show_btn.setCheckable(True)
+        self.gemini_api_show_btn.setToolTip("Show/Hide API Key")
+        self.gemini_api_show_btn.setFixedWidth(32)
+        self.gemini_api_show_btn.clicked.connect(self.toggle_gemini_api_visibility)
+        gemini_row.addWidget(self.gemini_api_label)
+        gemini_row.addWidget(self.gemini_api_edit)
+        gemini_row.addWidget(self.gemini_api_show_btn)
+        gemini_layout.addLayout(gemini_row)
+
+        self.gemini_test_btn = QPushButton("Test Gemini API", self)
+        self.gemini_test_btn.setIcon(qta.icon("fa6s.plug-circle-check"))
+        self.gemini_test_btn.clicked.connect(self.test_gemini_api)
+        self.gemini_status_label = QLabel("")
+        self.gemini_status_label.setStyleSheet("color: #1976d2; font-weight: bold;")
+        gemini_status_row = QHBoxLayout()
+        gemini_status_row.addWidget(self.gemini_test_btn)
+        gemini_status_row.addWidget(self.gemini_status_label)
+        gemini_status_row.addStretch()
+        gemini_layout.addLayout(gemini_status_row)
+        gemini_group.setLayout(gemini_layout)
+        layout.addWidget(gemini_group)
+
         layout.addStretch()
-        
         self.tab_widget.addTab(tab, qta.icon("fa6s.gear"), "Action Options")
+
+    def toggle_gemini_api_visibility(self):
+        if self.gemini_api_show_btn.isChecked():
+            self.gemini_api_edit.setEchoMode(QLineEdit.Normal)
+            self.gemini_api_show_btn.setIcon(qta.icon("fa6s.eye-slash"))
+        else:
+            self.gemini_api_edit.setEchoMode(QLineEdit.Password)
+            self.gemini_api_show_btn.setIcon(qta.icon("fa6s.eye"))
+
+    def _get_gemini_api_key(self):
+        try:
+            basedir = Path(__file__).parent.parent.parent
+            ai_config_path = basedir / "configs" / "ai_config.json"
+            if ai_config_path.exists():
+                import json
+                with open(ai_config_path, "r", encoding="utf-8") as f:
+                    ai_config = json.load(f)
+                return ai_config.get("gemini", {}).get("api_key", "")
+        except Exception:
+            pass
+        return ""
+
+    def _set_gemini_api_key(self, api_key):
+        try:
+            basedir = Path(__file__).parent.parent.parent
+            ai_config_path = basedir / "configs" / "ai_config.json"
+            if ai_config_path.exists():
+                import json
+                with open(ai_config_path, "r", encoding="utf-8") as f:
+                    ai_config = json.load(f)
+                if "gemini" not in ai_config:
+                    ai_config["gemini"] = {}
+                ai_config["gemini"]["api_key"] = api_key
+                with open(ai_config_path, "w", encoding="utf-8") as f:
+                    json.dump(ai_config, f, indent=4)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to save Gemini API key: {e}")
+
+    def test_gemini_api(self):
+        api_key = self.gemini_api_edit.text().strip()
+        if not api_key:
+            self.gemini_status_label.setText("API Key is empty.")
+            self.gemini_status_label.setStyleSheet("color: #d32f2f; font-weight: bold;")
+            return
+        try:
+            import google.generativeai as genai
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel("gemini-2.0-flash")
+            response = model.generate_content("Say hello")
+            if hasattr(response, "text") and response.text:
+                self.gemini_status_label.setText("Gemini API is active.")
+                self.gemini_status_label.setStyleSheet("color: #43a047; font-weight: bold;")
+            else:
+                self.gemini_status_label.setText("No response from Gemini API.")
+                self.gemini_status_label.setStyleSheet("color: #d32f2f; font-weight: bold;")
+        except ImportError:
+            self.gemini_status_label.setText("google-genai not installed.")
+            self.gemini_status_label.setStyleSheet("color: #d32f2f; font-weight: bold;")
+        except Exception as e:
+            self.gemini_status_label.setText(f"Error: {e}")
+            self.gemini_status_label.setStyleSheet("color: #d32f2f; font-weight: bold;")
 
     def create_categories_tab(self):
         tab = QWidget()
@@ -228,6 +322,8 @@ class PreferencesWindow(QDialog):
             self.sanitize_name_check.setChecked(self.config_manager.get("action_options.sanitize_name"))
         except:
             pass
+        self.gemini_api_edit.setText(self._get_gemini_api_key())
+        self.gemini_status_label.setText("")
         
         self.load_categories()
         self.load_templates()
@@ -517,9 +613,8 @@ class PreferencesWindow(QDialog):
             self.config_manager.set("action_options.markdown", self.markdown_check.isChecked())
             self.config_manager.set("action_options.open_explorer", self.open_explorer_check.isChecked())
             self.config_manager.set("action_options.sanitize_name", self.sanitize_name_check.isChecked())
-            
+            self._set_gemini_api_key(self.gemini_api_edit.text().strip())
             QMessageBox.information(self, "Success", "Preferences saved successfully.")
             self.accept()
-            
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to save preferences: {e}")
