@@ -124,13 +124,60 @@ class DatabaseManager:
         result = cursor.fetchone()
         return result[0] if result else None
 
-    def insert_file(self, date, name, root, path, status_id, category_id=None, subcategory_id=None):
+    def get_all_templates(self):
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT id, name, content FROM templates ORDER BY name")
+        return cursor.fetchall()
+
+    def get_template_by_id(self, template_id):
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT id, name, content FROM templates WHERE id = ?", (template_id,))
+        return cursor.fetchone()
+
+    def insert_template(self, name, content):
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "INSERT INTO templates (name, content) VALUES (?, ?)",
+            (name, content)
+        )
+        self.connection.commit()
+        return cursor.lastrowid
+
+    def create_unique_path(self, base_path):
+        if not os.path.exists(base_path):
+            return base_path
+        
+        counter = 1
+        while True:
+            new_path = f"{base_path}_{counter:02d}"
+            if not os.path.exists(new_path):
+                return new_path
+            counter += 1
+
+    def create_folder_structure(self, main_path, template_content=None):
+        unique_main_path = self.create_unique_path(main_path)
+        
+        os.makedirs(unique_main_path, exist_ok=True)
+        print(f"Created main folder: {unique_main_path}")
+        
+        if template_content:
+            lines = template_content.strip().split('\n')
+            for line in lines:
+                line = line.strip()
+                if line:
+                    subfolder_path = os.path.join(unique_main_path, line)
+                    os.makedirs(subfolder_path, exist_ok=True)
+                    print(f"Created subfolder: {subfolder_path}")
+        
+        return unique_main_path
+
+    def insert_file(self, date, name, root, path, status_id, category_id=None, subcategory_id=None, template_id=None):
         cursor = self.connection.cursor()
         
         cursor.execute("""
-            INSERT INTO files (date, name, root, path, status_id, category_id, subcategory_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (date, name, root, path, status_id, category_id, subcategory_id))
+            INSERT INTO files (date, name, root, path, status_id, category_id, subcategory_id, template_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (date, name, root, path, status_id, category_id, subcategory_id, template_id))
         
         self.connection.commit()
         return cursor.lastrowid
@@ -139,11 +186,13 @@ class DatabaseManager:
         cursor = self.connection.cursor()
         cursor.execute("""
             SELECT f.*, s.name as status_name, s.color as status_color, 
-                   c.name as category_name, sc.name as subcategory_name
+                   c.name as category_name, sc.name as subcategory_name,
+                   t.name as template_name
             FROM files f
             LEFT JOIN statuses s ON f.status_id = s.id
             LEFT JOIN categories c ON f.category_id = c.id
             LEFT JOIN subcategories sc ON f.subcategory_id = sc.id
+            LEFT JOIN templates t ON f.template_id = t.id
             ORDER BY 
                 CASE 
                     WHEN f.date LIKE '%_%_%' THEN 
@@ -184,11 +233,13 @@ class DatabaseManager:
         search_pattern = f"%{query}%"
         cursor.execute("""
             SELECT f.*, s.name as status_name, s.color as status_color,
-                   c.name as category_name, sc.name as subcategory_name
+                   c.name as category_name, sc.name as subcategory_name,
+                   t.name as template_name
             FROM files f
             LEFT JOIN statuses s ON f.status_id = s.id
             LEFT JOIN categories c ON f.category_id = c.id
             LEFT JOIN subcategories sc ON f.subcategory_id = sc.id
+            LEFT JOIN templates t ON f.template_id = t.id
             WHERE f.name LIKE ? OR f.path LIKE ? OR c.name LIKE ? OR sc.name LIKE ?
             ORDER BY 
                 CASE 

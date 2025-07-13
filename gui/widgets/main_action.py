@@ -189,7 +189,7 @@ class MainActionDock(QDockWidget):
         template_row = QHBoxLayout()
         label_template = QLabel("Template", frame_far_right)
         combo_template = QComboBox(frame_far_right)
-        combo_template.addItems(["Template 1", "Template 2", "Template 3"])
+        combo_template.addItem("No Template")
         template_row.addWidget(label_template)
         template_row.addWidget(combo_template)
         frame_far_right_layout.addLayout(template_row)
@@ -229,6 +229,7 @@ class MainActionDock(QDockWidget):
         main_vlayout.addLayout(main_layout)
 
         name_field_widget = NameFieldWidget(container)
+        name_field_widget.set_db_manager(self.db_manager)
         main_vlayout.addWidget(name_field_widget)
 
         try:
@@ -244,10 +245,22 @@ class MainActionDock(QDockWidget):
         self._combo_category = combo_category
         self._combo_subcategory = combo_subcategory
         self._adjust_folder_width = adjust_folder_width
+        self._combo_template = combo_template
         self._name_field_widget = name_field_widget
-        self._date_check = date_check
-        self._markdown_check = markdown_check
-        self._open_explorer_check = open_explorer_check
+
+        def load_templates():
+            try:
+                self.db_manager.connect()
+                templates = self.db_manager.get_all_templates()
+                combo_template.clear()
+                combo_template.addItem("No Template")
+                for template in templates:
+                    combo_template.addItem(template['name'])
+                    combo_template.setItemData(combo_template.count() - 1, template['id'])
+            except Exception as e:
+                print(f"Error loading templates: {e}")
+            finally:
+                self.db_manager.close()
 
         def update_name_field_label():
             disk_label = combo_disk.currentText()
@@ -400,12 +413,21 @@ class MainActionDock(QDockWidget):
             self.config_manager.set("action_options.sanitize_name", name_field_widget.sanitize_check.isChecked())
             update_name_field_label()
 
+        def on_template_changed(index):
+            if index == 0:
+                name_field_widget.set_selected_template(None)
+            else:
+                template_id = combo_template.itemData(index)
+                name_field_widget.set_selected_template(template_id)
+                print(f"Selected template ID: {template_id}")
+
         combo_disk.currentIndexChanged.connect(on_disk_changed)
         combo_folder.currentIndexChanged.connect(on_folder_changed)
         combo_category.currentTextChanged.connect(on_category_changed)
         combo_category.lineEdit().returnPressed.connect(on_category_enter)
         combo_subcategory.currentTextChanged.connect(on_subcategory_changed)
         combo_subcategory.lineEdit().returnPressed.connect(on_subcategory_enter)
+        combo_template.currentIndexChanged.connect(on_template_changed)
 
         date_check.stateChanged.connect(on_date_check_changed)
         markdown_check.stateChanged.connect(on_markdown_check_changed)
@@ -420,6 +442,18 @@ class MainActionDock(QDockWidget):
         self._on_disk_changed = on_disk_changed
         
         load_categories()
+        load_templates()
+
+        # Connect project_created signal to central widget refresh if available
+        def refresh_central_widget():
+            main_window = self.parent()
+            while main_window:
+                if hasattr(main_window, "central_widget") and hasattr(main_window.central_widget, "refresh_table"):
+                    print("Refreshing central widget table after project creation")
+                    main_window.central_widget.refresh_table()
+                    break
+                main_window = main_window.parent()
+        name_field_widget.project_created.connect(refresh_central_widget)
 
     @Slot(list)
     def _on_disks_ready(self, disks):
