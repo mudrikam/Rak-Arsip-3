@@ -10,6 +10,7 @@ import os
 import random
 import datetime
 from pathlib import Path
+import re
 
 from .name_field import NameFieldWidget
 from database.db_manager import DatabaseManager
@@ -73,6 +74,11 @@ def sanitize_folder_name(name):
     forbidden = '<>:"/\\|?*'
     sanitized = name.replace(" ", "_")
     sanitized = "".join(c for c in sanitized if c not in forbidden)
+    return sanitized
+
+def sanitize_category_subcategory(name):
+    sanitized = name.replace(" ", "_")
+    sanitized = re.sub(r'[^A-Za-z0-9_]', '', sanitized)
     return sanitized
 
 class DiskScanThread(QThread):
@@ -248,6 +254,8 @@ class MainActionDock(QDockWidget):
             folder_label = combo_folder.currentText() if combo_folder.isEnabled() and combo_folder.currentIndex() >= 0 else ""
             category_text = combo_category.currentText().strip()
             subcategory_text = combo_subcategory.currentText().strip()
+            category_text = sanitize_category_subcategory(category_text)
+            subcategory_text = sanitize_category_subcategory(subcategory_text)
             date_path = ""
             if date_check.isChecked():
                 today = datetime.date.today()
@@ -265,6 +273,7 @@ class MainActionDock(QDockWidget):
             try:
                 self.db_manager.connect()
                 categories = self.db_manager.get_all_categories()
+                categories = [sanitize_category_subcategory(c) for c in categories]
                 combo_category.clear()
                 combo_category.addItem("")
                 combo_category.addItems(categories)
@@ -274,6 +283,7 @@ class MainActionDock(QDockWidget):
                 self.db_manager.close()
 
         def load_subcategories(category_name):
+            category_name = sanitize_category_subcategory(category_name)
             combo_subcategory.clear()
             combo_subcategory.addItem("")
             if not category_name:
@@ -283,6 +293,7 @@ class MainActionDock(QDockWidget):
             try:
                 self.db_manager.connect()
                 subcategories = self.db_manager.get_subcategories_by_category(category_name)
+                subcategories = [sanitize_category_subcategory(s) for s in subcategories]
                 combo_subcategory.addItems(subcategories)
                 combo_subcategory.setEnabled(True)
             except Exception as e:
@@ -314,68 +325,61 @@ class MainActionDock(QDockWidget):
 
         def on_category_changed():
             category_text = combo_category.currentText().strip()
+            category_text = sanitize_category_subcategory(category_text)
             if category_text and combo_category.findText(category_text) >= 0:
                 load_subcategories(category_text)
             update_name_field_label()
 
         def on_category_enter():
             category_text = combo_category.currentText().strip()
-            
+            category_text = sanitize_category_subcategory(category_text)
             if not category_text:
                 update_name_field_label()
                 combo_subcategory.setFocus()
                 return
-            
             try:
                 self.db_manager.connect()
                 category_id = self.db_manager.get_or_create_category(category_text)
                 self.db_manager.close()
-                
                 load_categories()
-                
                 new_index = combo_category.findText(category_text)
                 if new_index >= 0:
                     combo_category.setCurrentIndex(new_index)
-                    
             except Exception as e:
                 print(f"Error ensuring category: {e}")
                 if self.db_manager.connection:
                     self.db_manager.close()
-                
             load_subcategories(category_text)
             update_name_field_label()
             combo_subcategory.setFocus()
 
         def on_subcategory_changed():
             subcategory_text = combo_subcategory.currentText().strip()
+            subcategory_text = sanitize_category_subcategory(subcategory_text)
             update_name_field_label()
 
         def on_subcategory_enter():
             category_text = combo_category.currentText().strip()
             subcategory_text = combo_subcategory.currentText().strip()
-            
+            category_text = sanitize_category_subcategory(category_text)
+            subcategory_text = sanitize_category_subcategory(subcategory_text)
             if not category_text or not subcategory_text:
                 update_name_field_label()
                 name_field_widget.line_edit.setFocus()
                 return
-            
             try:
                 self.db_manager.connect()
                 category_id = self.db_manager.get_or_create_category(category_text)
                 subcategory_id = self.db_manager.get_or_create_subcategory(category_id, subcategory_text)
                 self.db_manager.close()
-                
                 load_subcategories(category_text)
-                
                 new_index = combo_subcategory.findText(subcategory_text)
                 if new_index >= 0:
                     combo_subcategory.setCurrentIndex(new_index)
-                    
             except Exception as e:
                 print(f"Error ensuring subcategory: {e}")
                 if self.db_manager.connection:
                     self.db_manager.close()
-                
             update_name_field_label()
             name_field_widget.line_edit.setFocus()
 
