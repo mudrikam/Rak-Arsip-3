@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QFrame, QVBoxLayout, QLineEdit, QCheckBox, QHBoxLayout, QLabel, QPushButton, QWidget, QMessageBox
+from PySide6.QtWidgets import QFrame, QVBoxLayout, QLineEdit, QCheckBox, QHBoxLayout, QLabel, QPushButton, QWidget, QMessageBox, QApplication
 from PySide6.QtGui import QIcon
 from PySide6.QtCore import Qt, Signal
 import qtawesome as qta
@@ -278,6 +278,10 @@ class NameFieldWidget(QFrame):
             
             # Open explorer if enabled
             self._open_explorer_if_enabled(actual_path)
+            
+            # Copy project name to clipboard
+            QApplication.clipboard().setText(name)
+            print(f"Copied project name to clipboard: {name}")
             
             self.folder_created.emit(
                 self._current_path_data.get('date', ''),
