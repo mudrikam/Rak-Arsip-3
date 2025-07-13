@@ -1,6 +1,13 @@
-from PySide6.QtWidgets import QDockWidget, QWidget, QVBoxLayout, QFrame, QLabel, QComboBox, QHBoxLayout
+from PySide6.QtWidgets import (
+    QDockWidget, QWidget, QVBoxLayout, QFrame, QLabel, QComboBox, QHBoxLayout,
+    QCheckBox, QPushButton
+)
+from PySide6.QtGui import QColor, QCursor
+from PySide6.QtCore import Qt, QEvent
+import qtawesome as qta
 import sys
 import os
+import random
 
 def get_available_disks():
     disks = []
@@ -59,29 +66,29 @@ class MainActionDock(QDockWidget):
     def __init__(self, parent=None):
         super().__init__("Main Action", parent)
         container = QWidget(self)
-        layout = QVBoxLayout(container)
-        frame = QFrame(container)
-        frame.setFrameShape(QFrame.StyledPanel)
-        frame_layout = QVBoxLayout(frame)
+        main_layout = QHBoxLayout(container)
 
-        # Disk selector row
+        # Frame kiri: Disk & Folder
+        frame_left = QFrame(container)
+        frame_left.setFrameShape(QFrame.StyledPanel)
+        frame_left_layout = QVBoxLayout(frame_left)
+
         disk_row = QHBoxLayout()
-        label_disk = QLabel("Disk", frame)
-        combo_disk = QComboBox(frame)
+        label_disk = QLabel("Disk", frame_left)
+        combo_disk = QComboBox(frame_left)
         disks = get_available_disks()
         combo_disk.addItems(disks)
         disk_row.addWidget(label_disk)
         disk_row.addWidget(combo_disk)
-        frame_layout.addLayout(disk_row)
+        frame_left_layout.addLayout(disk_row)
 
-        # Folder selector row
         folder_row = QHBoxLayout()
-        label_folder = QLabel("Folder", frame)
-        combo_folder = QComboBox(frame)
+        label_folder = QLabel("Folder", frame_left)
+        combo_folder = QComboBox(frame_left)
         combo_folder.setEnabled(False)
         folder_row.addWidget(label_folder)
         folder_row.addWidget(combo_folder)
-        frame_layout.addLayout(folder_row)
+        frame_left_layout.addLayout(folder_row)
 
         def on_disk_changed(index):
             if index < 0:
@@ -100,8 +107,91 @@ class MainActionDock(QDockWidget):
 
         combo_disk.currentIndexChanged.connect(on_disk_changed)
 
-        frame.setLayout(frame_layout)
-        layout.addWidget(frame)
-        layout.addStretch()
-        container.setLayout(layout)
+        frame_left.setLayout(frame_left_layout)
+        main_layout.addWidget(frame_left)
+
+        # Frame tengah: Category & Sub Category
+        frame_middle = QFrame(container)
+        frame_middle.setFrameShape(QFrame.StyledPanel)
+        frame_middle_layout = QVBoxLayout(frame_middle)
+
+        category_row = QHBoxLayout()
+        label_category = QLabel("Category", frame_middle)
+        combo_category = QComboBox(frame_middle)
+        combo_category.setEnabled(False)
+        category_row.addWidget(label_category)
+        category_row.addWidget(combo_category)
+        frame_middle_layout.addLayout(category_row)
+
+        subcategory_row = QHBoxLayout()
+        label_subcategory = QLabel("Sub Category", frame_middle)
+        combo_subcategory = QComboBox(frame_middle)
+        combo_subcategory.setEnabled(False)
+        subcategory_row.addWidget(label_subcategory)
+        subcategory_row.addWidget(combo_subcategory)
+        frame_middle_layout.addLayout(subcategory_row)
+
+        frame_middle.setLayout(frame_middle_layout)
+        main_layout.addWidget(frame_middle)
+
+        # Frame kanan: Checklist, Date, Markdown, Open Explorer (semua QCheckBox)
+        frame_right = QFrame(container)
+        frame_right.setFrameShape(QFrame.StyledPanel)
+        frame_right_layout = QVBoxLayout(frame_right)
+        date_check = QCheckBox("Date", frame_right)
+        markdown_check = QCheckBox("Markdown", frame_right)
+        open_explorer_check = QCheckBox("Open Explorer", frame_right)
+        frame_right_layout.addWidget(date_check)
+        frame_right_layout.addWidget(markdown_check)
+        frame_right_layout.addWidget(open_explorer_check)
+        frame_right.setLayout(frame_right_layout)
+        main_layout.addWidget(frame_right)
+
+        # Frame paling kanan: Template dropdown, color picker (qtawesome), no reset
+        frame_far_right = QFrame(container)
+        frame_far_right.setFrameShape(QFrame.StyledPanel)
+        frame_far_right_layout = QVBoxLayout(frame_far_right)
+
+        template_row = QHBoxLayout()
+        label_template = QLabel("Template", frame_far_right)
+        combo_template = QComboBox(frame_far_right)
+        combo_template.addItems(["Template 1", "Template 2", "Template 3"])
+        template_row.addWidget(label_template)
+        template_row.addWidget(combo_template)
+        frame_far_right_layout.addLayout(template_row)
+
+        color_row = QHBoxLayout()
+        label_theme = QLabel("Theme", frame_far_right)
+        color_picker_btn = QPushButton(frame_far_right)
+        color_picker_btn.setFixedSize(20, 20)
+        color_picker_btn.setIcon(qta.icon("fa6s.eye-dropper"))
+        color_picker_btn.setStyleSheet("background-color: #cccccc; border: 1px solid #888;")
+        color_row.addWidget(label_theme)
+        color_row.addWidget(color_picker_btn)
+        frame_far_right_layout.addLayout(color_row)
+
+        def set_random_color_from_cursor():
+            # Random hue, S=0.7, V=0.9
+            hue = random.randint(0, 359)
+            s = 0.7
+            v = 0.9
+            color = QColor()
+            color.setHsvF(hue / 359.0, s, v)
+            color_picker_btn.setStyleSheet(f"background-color: {color.name()}; border: 1px solid #888;")
+
+        container.setMouseTracking(True)
+        frame_far_right.setMouseTracking(True)
+        color_picker_btn.setMouseTracking(True)
+
+        def mouse_move_event(event):
+            set_random_color_from_cursor()
+
+        container.mouseMoveEvent = mouse_move_event
+        frame_far_right.mouseMoveEvent = mouse_move_event
+        color_picker_btn.mouseMoveEvent = mouse_move_event
+
+        frame_far_right.setLayout(frame_far_right_layout)
+        main_layout.addWidget(frame_far_right)
+
+        container.setLayout(main_layout)
         self.setWidget(container)
