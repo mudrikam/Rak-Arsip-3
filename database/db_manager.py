@@ -45,13 +45,11 @@ class DatabaseManager(QObject):
         cursor.execute("PRAGMA temp_store=memory")
         cursor.execute("PRAGMA mmap_size=268435456")
         self.connection.commit()
-        print("WAL mode enabled for database")
 
     def setup_file_watcher(self):
         self.file_watcher_timer = QTimer()
         self.file_watcher_timer.timeout.connect(self.check_temp_files)
         self.file_watcher_timer.start(1000)
-        print(f"File watcher started with session ID: {self.session_id}")
 
     def check_temp_files(self):
         try:
@@ -63,7 +61,6 @@ class DatabaseManager(QObject):
                     file_path = os.path.join(self.temp_dir, temp_file)
                     
                     if not self.session_id in temp_file:
-                        print(f"Detected external database change: {temp_file}")
                         self.data_changed.emit()
                         
                         try:
@@ -89,7 +86,6 @@ class DatabaseManager(QObject):
             with open(temp_path, 'w') as f:
                 f.write(f"Database change by session {self.session_id} at {timestamp}")
             
-            print(f"Created temp file: {temp_filename}")
         except Exception as e:
             print(f"Error creating temp file: {e}")
 
@@ -231,7 +227,6 @@ class DatabaseManager(QObject):
         unique_main_path = self.create_unique_path(main_path)
         
         os.makedirs(unique_main_path, exist_ok=True)
-        print(f"Created main folder: {unique_main_path}")
         
         if template_content:
             lines = template_content.strip().split('\n')
@@ -240,7 +235,6 @@ class DatabaseManager(QObject):
                 if line:
                     subfolder_path = os.path.join(unique_main_path, line)
                     os.makedirs(subfolder_path, exist_ok=True)
-                    print(f"Created subfolder: {subfolder_path}")
         
         return unique_main_path
 

@@ -26,17 +26,14 @@ class CentralWidget(QWidget):
         # Use the same database manager instance from the main window
         if hasattr(parent, 'main_action_dock') and hasattr(parent.main_action_dock, 'db_manager'):
             self.db_manager = parent.main_action_dock.db_manager
-            print("Using shared database manager from main action dock")
         else:
             basedir = Path(__file__).parent.parent.parent
             db_config_path = basedir / "configs" / "db_config.json"
             db_config_manager = ConfigManager(str(db_config_path))
             self.db_manager = DatabaseManager(db_config_manager, self.config_manager)
-            print("Created new database manager instance")
         
         # Connect database change signal for auto-refresh
         self.db_manager.data_changed.connect(self.auto_refresh_table)
-        print("Connected auto-refresh signal to central widget")
         
         layout = QVBoxLayout(self)
 
@@ -158,7 +155,6 @@ class CentralWidget(QWidget):
         self.load_data_from_database()
 
     def auto_refresh_table(self):
-        print("Auto-refreshing table due to external database changes")
         self.load_data_from_database()
 
     def copy_name(self):
@@ -348,6 +344,9 @@ class CentralWidget(QWidget):
                     combo = self.table.cellWidget(row, 4)
                     if combo:
                         self._set_status_text_color(combo, value)
+                    
+                    # Refresh table to show updated status immediately
+                    self.load_data_from_database()
                         
             except Exception as e:
                 print(f"Error updating status: {e}")
@@ -418,6 +417,11 @@ class CentralWidget(QWidget):
         menu.addAction(action_copy_name)
         menu.addAction(action_copy_path)
         menu.addAction(action_open_explorer)
+        menu.exec(self.table.viewport().mapToGlobal(pos))
+        menu.addAction(action_copy_name)
+        menu.addAction(action_copy_path)
+        menu.addAction(action_open_explorer)
+        menu.exec(self.table.viewport().mapToGlobal(pos))
         menu.exec(self.table.viewport().mapToGlobal(pos))
         menu.addAction(action_copy_name)
         menu.addAction(action_copy_path)
