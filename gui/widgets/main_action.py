@@ -8,6 +8,7 @@ import qtawesome as qta
 import sys
 import os
 import random
+import datetime
 
 from .name_field import NameFieldWidget
 
@@ -106,36 +107,6 @@ class MainActionDock(QDockWidget):
         combo_disk.resizeEvent = lambda event: (adjust_folder_width(), QComboBox.resizeEvent(combo_disk, event))
         adjust_folder_width()
 
-        def update_name_field_label():
-            disk_label = combo_disk.currentText()
-            folder_label = combo_folder.currentText() if combo_folder.isEnabled() and combo_folder.currentIndex() >= 0 else ""
-            self._name_field_widget.set_disk_and_folder(disk_label, folder_label)
-
-        def on_disk_changed(index):
-            if index < 0:
-                combo_folder.clear()
-                combo_folder.setEnabled(False)
-                update_name_field_label()
-                return
-            disk_label = combo_disk.currentText()
-            disk_path = extract_disk_path(disk_label)
-            folders = get_first_level_folders(disk_path)
-            combo_folder.clear()
-            if folders:
-                combo_folder.addItems(folders)
-                combo_folder.setEnabled(True)
-            else:
-                combo_folder.setEnabled(False)
-            adjust_folder_width()
-            update_name_field_label()
-
-        combo_disk.currentIndexChanged.connect(on_disk_changed)
-
-        def on_folder_changed(index):
-            update_name_field_label()
-
-        combo_folder.currentIndexChanged.connect(on_folder_changed)
-
         frame_left.setLayout(frame_left_layout)
         main_layout.addWidget(frame_left)
 
@@ -228,13 +199,53 @@ class MainActionDock(QDockWidget):
 
         self._combo_disk = combo_disk
         self._combo_folder = combo_folder
-        self._on_disk_changed = on_disk_changed
         self._adjust_folder_width = adjust_folder_width
         self._name_field_widget = name_field_widget
+        self._date_check = date_check
+
+        def update_name_field_label():
+            disk_label = combo_disk.currentText()
+            folder_label = combo_folder.currentText() if combo_folder.isEnabled() and combo_folder.currentIndex() >= 0 else ""
+            date_path = ""
+            if date_check.isChecked():
+                today = datetime.date.today()
+                month_name = today.strftime("%B")
+                date_path = f"{today.year}\\{month_name}\\{today.day:02}"
+            self._name_field_widget.set_disk_and_folder_with_date(disk_label, folder_label, date_path)
+
+        def on_disk_changed(index):
+            if index < 0:
+                combo_folder.clear()
+                combo_folder.setEnabled(False)
+                update_name_field_label()
+                return
+            disk_label = combo_disk.currentText()
+            disk_path = extract_disk_path(disk_label)
+            folders = get_first_level_folders(disk_path)
+            combo_folder.clear()
+            if folders:
+                combo_folder.addItems(folders)
+                combo_folder.setEnabled(True)
+            else:
+                combo_folder.setEnabled(False)
+            adjust_folder_width()
+            update_name_field_label()
+
+        def on_folder_changed(index):
+            update_name_field_label()
+
+        def on_date_check_changed(state):
+            update_name_field_label()
+
+        combo_disk.currentIndexChanged.connect(on_disk_changed)
+        combo_folder.currentIndexChanged.connect(on_folder_changed)
+        date_check.stateChanged.connect(on_date_check_changed)
 
         self._disk_thread = DiskScanThread()
         self._disk_thread.disks_found.connect(self._on_disks_ready)
         self._disk_thread.start()
+
+        self._on_disk_changed = on_disk_changed
 
     @Slot(list)
     def _on_disks_ready(self, disks):

@@ -28,7 +28,6 @@ class NameFieldWidget(QFrame):
         disk = (disk or "")
         if disk and ":\\" in disk:
             disk = disk.split(" ")[0]
-        # Jangan hilangkan spasi pada folder
         if disk and folder:
             if disk.endswith("\\") or disk.endswith("/"):
                 path = f"{disk}{folder}"
@@ -37,5 +36,27 @@ class NameFieldWidget(QFrame):
             self.sanitize_label.setText(path)
         elif disk:
             self.sanitize_label.setText(disk)
+        else:
+            self.sanitize_label.setText("-")
+
+    def set_disk_and_folder_with_date(self, disk, folder, date_path):
+        disk = (disk or "")
+        if disk and ":\\" in disk:
+            disk = disk.split(" ")[0]
+        path = ""
+        if disk and folder:
+            if disk.endswith("\\") or disk.endswith("/"):
+                path = f"{disk}{folder}"
+            else:
+                path = f"{disk}\\{folder}"
+            if date_path:
+                path = f"{path}\\{date_path}"
+            self.sanitize_label.setText(path)
+        elif disk:
+            if date_path:
+                path = f"{disk}\\{date_path}"
+                self.sanitize_label.setText(path)
+            else:
+                self.sanitize_label.setText(disk)
         else:
             self.sanitize_label.setText("-")
