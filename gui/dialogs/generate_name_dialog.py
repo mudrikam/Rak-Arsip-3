@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
-    QFrame, QFileDialog, QMessageBox, QApplication
+    QFrame, QFileDialog, QMessageBox, QApplication, QProgressBar
 )
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QPixmap, QDragEnterEvent, QDropEvent, QImage, QGuiApplication
@@ -10,6 +10,7 @@ import shutil
 import uuid
 from pathlib import Path
 from helpers.gemini_helper import GeminiHelper
+import textwrap
 
 class ImageDropLabel(QLabel):
     image_dropped = Signal(str)
@@ -19,7 +20,8 @@ class ImageDropLabel(QLabel):
         super().__init__(parent)
         self.setAcceptDrops(True)
         self.setAlignment(Qt.AlignCenter)
-        self.setMinimumSize(300, 200)
+        self.setMinimumSize(300, 120)
+        self.setMaximumHeight(130)
         self.setText("Drop image here or click to select")
         self.setWordWrap(True)
         
@@ -90,7 +92,8 @@ class GenerateNameDialog(QDialog):
         self.config_manager = config_manager
         self.setWindowTitle("Generate Project Name from Image")
         self.setWindowIcon(qta.icon("fa6s.star"))
-        self.setMinimumSize(400, 500)
+        self.setMinimumSize(400, 260)
+        self.setMaximumHeight(320)
         self.setModal(True)
         
         self.temp_image_path = None
@@ -111,19 +114,38 @@ class GenerateNameDialog(QDialog):
         
     def setup_ui(self):
         layout = QVBoxLayout(self)
+        layout.setSpacing(8)
+        layout.setContentsMargins(12, 12, 12, 12)
     
         self.image_frame = QFrame()
         self.image_frame.setFrameShape(QFrame.StyledPanel)
         image_layout = QVBoxLayout(self.image_frame)
+        image_layout.setContentsMargins(0, 0, 0, 0)
+        image_layout.setSpacing(4)
         
         self.image_label = ImageDropLabel()
         self.image_label.image_dropped.connect(self.load_image)
         self.image_label.image_pasted.connect(self.paste_image)
         image_layout.addWidget(self.image_label)
-        
+        self.image_frame.setLayout(image_layout)
         layout.addWidget(self.image_frame)
+
+        self.result_label = QLabel("")
+        self.result_label.setAlignment(Qt.AlignCenter)
+        self.result_label.setWordWrap(True)
+        self.result_label.setStyleSheet("font-size: 15px; color: #1976d2;")
+        self.result_label.setMaximumHeight(40)
+        layout.addWidget(self.result_label)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setMinimum(0)
+        self.progress_bar.setMaximum(0)
+        self.progress_bar.setVisible(False)
+        self.progress_bar.setMaximumHeight(18)
+        layout.addWidget(self.progress_bar)
         
         button_layout = QHBoxLayout()
+        button_layout.setSpacing(6)
         
         self.generate_btn = QPushButton("Generate Name from Image")
         self.generate_btn.setIcon(qta.icon("fa6s.wand-magic-sparkles"))
@@ -181,7 +203,7 @@ class GenerateNameDialog(QDialog):
             shutil.copy2(file_path, self.temp_image_path)
             pixmap = QPixmap(str(self.temp_image_path))
             if not pixmap.isNull():
-                scaled_pixmap = pixmap.scaled(280, 180, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                scaled_pixmap = pixmap.scaled(280, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation)
                 self.image_label.setPixmap(scaled_pixmap)
                 self.image_label.setText("")
                 self.generate_btn.setEnabled(True)
@@ -200,7 +222,7 @@ class GenerateNameDialog(QDialog):
             self.temp_image_path = temp_path
             pixmap = QPixmap.fromImage(image)
             if not pixmap.isNull():
-                scaled_pixmap = pixmap.scaled(280, 180, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                scaled_pixmap = pixmap.scaled(280, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation)
                 self.image_label.setPixmap(scaled_pixmap)
                 self.image_label.setText("")
                 self.generate_btn.setEnabled(True)
@@ -216,6 +238,7 @@ class GenerateNameDialog(QDialog):
         self.image_label.setText("Drop image here or click to select")
         self.generate_btn.setEnabled(False)
         self.ok_btn.setEnabled(False)
+        self.result_label.setText("")
         self.generated_name = ""
         if self.temp_image_path and self.temp_image_path.exists():
             try:
@@ -230,6 +253,8 @@ class GenerateNameDialog(QDialog):
             return
         self.generate_btn.setEnabled(False)
         self.generate_btn.setText("Generating...")
+        self.progress_bar.setVisible(True)
+        self.result_label.setText("")
         self.generation_thread = NameGenerationThread(str(self.temp_image_path), self.gemini_helper)
         self.generation_thread.name_generated.connect(self.on_name_generated)
         self.generation_thread.error_occurred.connect(self.on_generation_error)
@@ -240,12 +265,20 @@ class GenerateNameDialog(QDialog):
         self.generate_btn.setEnabled(True)
         self.generate_btn.setText("Generate Name from Image")
         self.ok_btn.setEnabled(True)
-        QMessageBox.information(self, "Success", f"Generated name: {name}")
+        self.progress_bar.setVisible(False)
+        self.result_label.setText(self._wrap_text(name, 32))
         
     def on_generation_error(self, error):
         self.generate_btn.setEnabled(True)
         self.generate_btn.setText("Generate Name from Image")
-        QMessageBox.critical(self, "Error", f"Failed to generate name: {error}")
+        self.progress_bar.setVisible(False)
+        self.result_label.setText("Failed to generate name.")
+        
+    def _wrap_text(self, text, width):
+        if not text:
+            return ""
+        lines = textwrap.wrap(text, width=width)
+        return "\n".join(lines)
         
     def get_generated_name(self):
         return self.generated_name

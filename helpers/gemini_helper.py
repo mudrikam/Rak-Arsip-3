@@ -57,7 +57,7 @@ class GeminiHelper:
                 sanitized_name = self.sanitize_name(generated_name)
                 return sanitized_name
             except ImportError:
-                raise Exception("Google GenAI library not installed. Install with: pip install google-generativeai")
+                raise Exception("Google GenAI library not installed. Install with: pip install google-genai")
         except Exception as e:
             print(f"Error generating name from image: {e}")
             raise e

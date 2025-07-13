@@ -9,7 +9,7 @@
     "action_options": {
         "date": true,
         "markdown": true,
-        "open_explorer": false,
+        "open_explorer": true,
         "sanitize_name": true
     },
     "status_options": {

@@ -25,10 +25,10 @@ class NameFieldWidget(QFrame):
         self.line_edit.setPlaceholderText("Project Name...")
         input_row.addWidget(self.line_edit)
 
-        self.make_btn = QPushButton("Make", self)
+        self.make_btn = QPushButton("Generate", self)
         self.make_btn.setIcon(qta.icon("fa6s.play"))
         self.make_btn.setFixedSize(80, 36)
-        self.make_btn.setToolTip("Make")
+        self.make_btn.setToolTip("Generate")
         self.make_btn.setCursor(Qt.PointingHandCursor)
         self.make_btn.setStyleSheet("""
             QPushButton {
@@ -45,7 +45,7 @@ class NameFieldWidget(QFrame):
         input_row.addWidget(self.make_btn)
 
         self.star_btn = QPushButton(self)
-        self.star_btn.setIcon(qta.icon("fa6s.star"))
+        self.star_btn.setIcon(qta.icon("fa6s.star", color="#FFAE00"))
         self.star_btn.setFixedSize(36, 36)
         self.star_btn.setToolTip("Generate Name from Image")
         self.star_btn.setCursor(Qt.PointingHandCursor)
