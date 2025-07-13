@@ -1,11 +1,13 @@
-from PySide6.QtWidgets import QFrame, QVBoxLayout, QLineEdit, QCheckBox, QHBoxLayout, QLabel, QPushButton, QWidget, QMessageBox, QApplication
+from PySide6.QtWidgets import QFrame, QVBoxLayout, QLineEdit, QCheckBox, QHBoxLayout, QLabel, QPushButton, QWidget, QMessageBox, QApplication, QDialog
 from PySide6.QtGui import QIcon
 from PySide6.QtCore import Qt, Signal
 import qtawesome as qta
 import os
 import sys
 import subprocess
+from pathlib import Path
 from helpers.markdown_generator import MarkdownGenerator
+from gui.dialogs.generate_name_dialog import GenerateNameDialog
 
 class NameFieldWidget(QFrame):
     folder_created = Signal(str, str, str, str, str, str, int)  # date, name, root, path, category, subcategory, template_id
@@ -45,7 +47,7 @@ class NameFieldWidget(QFrame):
         self.star_btn = QPushButton(self)
         self.star_btn.setIcon(qta.icon("fa6s.star"))
         self.star_btn.setFixedSize(36, 36)
-        self.star_btn.setToolTip("Star")
+        self.star_btn.setToolTip("Generate Name from Image")
         self.star_btn.setCursor(Qt.PointingHandCursor)
         self.star_btn.setStyleSheet("border: none;")
         input_row.addWidget(self.star_btn)
@@ -78,11 +80,13 @@ class NameFieldWidget(QFrame):
         self.selected_template_id = None
         self.config_manager = None
         self.markdown_generator = MarkdownGenerator()
+        self.pending_image_path = None
 
         self.line_edit.textChanged.connect(self._on_text_changed)
         self.sanitize_check.stateChanged.connect(self._on_sanitize_check_changed)
         self.clear_btn.clicked.connect(self._on_clear_clicked)
         self.make_btn.clicked.connect(self._on_make_clicked)
+        self.star_btn.clicked.connect(self._on_star_clicked)
         self._block_signal = False
 
     def set_db_manager(self, db_manager):
@@ -201,8 +205,58 @@ class NameFieldWidget(QFrame):
                 self.line_edit.setText(sanitized)
                 self._block_signal = False
 
+    def _on_star_clicked(self):
+        config_manager = self.config_manager or self.get_config_manager_from_parent()
+        if not config_manager:
+            QMessageBox.warning(self, "Error", "Configuration manager not available")
+            return
+            
+        dialog = GenerateNameDialog(config_manager, self)
+        
+        if dialog.exec() == QDialog.Accepted:
+            generated_name = dialog.get_generated_name()
+            if generated_name:
+                self.line_edit.setText(generated_name)
+                self.pending_image_path = dialog.get_temp_image_path()
+                print(f"Generated name: {generated_name}")
+                print(f"Pending image: {self.pending_image_path}")
+
     def _on_clear_clicked(self):
         self.line_edit.clear()
+        try:
+            basedir = Path(__file__).parent.parent.parent
+            temp_path = basedir / "temp" / "images"
+            if temp_path.exists() and temp_path.is_dir():
+                for file in temp_path.iterdir():
+                    if file.is_file() and file.suffix.lower() in [".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tiff", ".webp"]:
+                        print(f"Deleting temp image: {file}")
+                        try:
+                            file.unlink()
+                        except Exception as e:
+                            print(f"Failed to delete {file}: {e}")
+                for sub in temp_path.iterdir():
+                    if sub.is_dir():
+                        for subfile in sub.iterdir():
+                            if subfile.is_file() and subfile.suffix.lower() in [".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tiff", ".webp"]:
+                                print(f"Deleting temp image in subdir: {subfile}")
+                                try:
+                                    subfile.unlink()
+                                except Exception as e:
+                                    print(f"Failed to delete {subfile}: {e}")
+                        try:
+                            sub.rmdir()
+                        except Exception as e:
+                            print(f"Failed to remove subdir {sub}: {e}")
+        except Exception as e:
+            print(f"Error clearing temp images: {e}")
+        if self.pending_image_path:
+            try:
+                if os.path.exists(self.pending_image_path):
+                    print(f"Deleting pending image: {self.pending_image_path}")
+                    os.remove(self.pending_image_path)
+            except Exception as e:
+                print(f"Failed to delete pending image: {e}")
+            self.pending_image_path = None
 
     def _on_make_clicked(self):
         if not self.db_manager:
@@ -246,6 +300,25 @@ class NameFieldWidget(QFrame):
             
             actual_path = self.db_manager.create_folder_structure(path, template_content)
             
+            # Move pending image to project folder if exists
+            if self.pending_image_path and os.path.exists(self.pending_image_path):
+                try:
+                    from pathlib import Path
+                    import shutil
+                    
+                    preview_folder = Path(actual_path) / "Preview"
+                    preview_folder.mkdir(exist_ok=True)
+                    
+                    file_extension = Path(self.pending_image_path).suffix
+                    final_image_path = preview_folder / f"{name}{file_extension}"
+                    
+                    shutil.move(self.pending_image_path, str(final_image_path))
+                    print(f"Moved image to: {final_image_path}")
+                    self.pending_image_path = None
+                    
+                except Exception as e:
+                    print(f"Error moving image to project: {e}")
+            
             draft_status_id = self.db_manager.get_status_id("Draft")
             if not draft_status_id:
                 print("Error: Draft status not found")
@@ -274,13 +347,9 @@ class NameFieldWidget(QFrame):
             
             print(f"Created project: ID={file_id}, Path={actual_path}")
             
-            # Create markdown file if enabled
             self._create_markdown_file(actual_path, name, actual_path)
-            
-            # Open explorer if enabled
             self._open_explorer_if_enabled(actual_path)
             
-            # Copy project name to clipboard
             QApplication.clipboard().setText(name)
             print(f"Copied project name to clipboard: {name}")
             

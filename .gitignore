@@ -209,3 +209,4 @@ __marimo__/
 tests/
 database/archieve_database.db
 database/temp/
+temp/
