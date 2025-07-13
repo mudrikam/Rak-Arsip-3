@@ -1,13 +1,17 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QHeaderView,
-    QHBoxLayout, QLineEdit, QPushButton, QLabel, QSpacerItem, QSizePolicy, QComboBox
+    QHBoxLayout, QLineEdit, QPushButton, QLabel, QSpacerItem, QSizePolicy, QComboBox,
+    QMenu, QApplication
 )
-from PySide6.QtGui import QColor, QAction, QFontMetrics
-from PySide6.QtCore import Signal
+from PySide6.QtGui import QColor, QAction, QFontMetrics, QCursor, QKeySequence, QShortcut
+from PySide6.QtCore import Signal, Qt, QTimer
 import qtawesome as qta
 from database.db_manager import DatabaseManager
 from manager.config_manager import ConfigManager
 from pathlib import Path
+import subprocess
+import sys
+import os
 
 class CentralWidget(QWidget):
     row_selected = Signal(dict)
@@ -17,6 +21,7 @@ class CentralWidget(QWidget):
         self.config_manager = parent.config_manager
         self.status_config = self.config_manager.get("status_options")
         self.status_options = list(self.status_config.keys())
+        self.selected_row_data = None
         
         basedir = Path(__file__).parent.parent.parent
         db_config_path = basedir / "configs" / "db_config.json"
@@ -86,7 +91,42 @@ class CentralWidget(QWidget):
         self.next_btn.clicked.connect(self.next_page)
         self.table.itemSelectionChanged.connect(self.on_row_selected)
 
+        self.table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self.show_context_menu)
+
+        copy_name_shortcut = QShortcut(QKeySequence("Ctrl+C"), self)
+        copy_name_shortcut.activated.connect(self.copy_name)
+        
+        copy_path_shortcut = QShortcut(QKeySequence("Ctrl+X"), self)
+        copy_path_shortcut.activated.connect(self.copy_path)
+        
+        open_explorer_shortcut = QShortcut(QKeySequence("Ctrl+E"), self)
+        open_explorer_shortcut.activated.connect(self.open_explorer)
+
         self.load_data_from_database()
+
+    def copy_name(self):
+        if self.selected_row_data:
+            QApplication.clipboard().setText(str(self.selected_row_data['name']))
+
+    def copy_path(self):
+        if self.selected_row_data:
+            QApplication.clipboard().setText(str(self.selected_row_data['path']))
+
+    def open_explorer(self):
+        if self.selected_row_data:
+            path = str(self.selected_row_data['path'])
+            if sys.platform == "win32":
+                if os.path.isfile(path):
+                    subprocess.Popen(f'explorer /select,"{path}"')
+                elif os.path.isdir(path):
+                    subprocess.Popen(f'explorer "{path}"')
+                else:
+                    parent_dir = os.path.dirname(path)
+                    if os.path.exists(parent_dir):
+                        subprocess.Popen(f'explorer "{parent_dir}"')
+            else:
+                subprocess.Popen(["xdg-open", path if os.path.exists(path) else os.path.dirname(path)])
 
     def load_data_from_database(self):
         try:
@@ -214,6 +254,7 @@ class CentralWidget(QWidget):
             if date_item:
                 row_data = date_item.data(256)
                 if row_data:
+                    self.selected_row_data = row_data
                     self.row_selected.emit(row_data)
 
     def _set_status_text_color(self, combo, status):
@@ -269,3 +310,53 @@ class CentralWidget(QWidget):
         if self.current_page < total_pages:
             self.current_page += 1
             self.update_table()
+
+    def show_context_menu(self, pos):
+        index = self.table.indexAt(pos)
+        if not index.isValid():
+            return
+        row = index.row()
+        item = self.table.item(row, 0)
+        if not item:
+            return
+        row_data = item.data(256)
+        if not row_data:
+            return
+
+        menu = QMenu(self.table)
+        icon_copy_name = qta.icon("fa6s.copy")
+        icon_copy_path = qta.icon("fa6s.folder-open")
+        icon_open_explorer = qta.icon("fa6s.folder-tree")
+
+        action_copy_name = QAction(icon_copy_name, "Copy Name\tCtrl+C", self)
+        action_copy_path = QAction(icon_copy_path, "Copy Path\tCtrl+X", self)
+        action_open_explorer = QAction(icon_open_explorer, "Open in Explorer\tCtrl+E", self)
+
+        def do_copy_name():
+            QApplication.clipboard().setText(str(row_data['name']))
+
+        def do_copy_path():
+            QApplication.clipboard().setText(str(row_data['path']))
+
+        def do_open_explorer():
+            path = str(row_data['path'])
+            if sys.platform == "win32":
+                if os.path.isfile(path):
+                    subprocess.Popen(f'explorer /select,"{path}"')
+                elif os.path.isdir(path):
+                    subprocess.Popen(f'explorer "{path}"')
+                else:
+                    parent_dir = os.path.dirname(path)
+                    if os.path.exists(parent_dir):
+                        subprocess.Popen(f'explorer "{parent_dir}"')
+            else:
+                subprocess.Popen(["xdg-open", path if os.path.exists(path) else os.path.dirname(path)])
+
+        action_copy_name.triggered.connect(do_copy_name)
+        action_copy_path.triggered.connect(do_copy_path)
+        action_open_explorer.triggered.connect(do_open_explorer)
+
+        menu.addAction(action_copy_name)
+        menu.addAction(action_copy_path)
+        menu.addAction(action_open_explorer)
+        menu.exec(self.table.viewport().mapToGlobal(pos))
