@@ -1,4 +1,6 @@
 from PySide6.QtWidgets import QFrame, QVBoxLayout, QLineEdit, QCheckBox, QHBoxLayout, QLabel
+from PySide6.QtGui import QIcon
+import qtawesome as qta
 
 class NameFieldWidget(QFrame):
     def __init__(self, parent=None):
@@ -11,8 +13,12 @@ class NameFieldWidget(QFrame):
         layout.addWidget(self.line_edit)
         sanitize_row = QHBoxLayout()
         self.sanitize_check = QCheckBox("Sanitize Name", self)
+        self.folder_icon_label = QLabel(self)
+        self.folder_icon_label.setPixmap(qta.icon("fa6s.folder", color="#1976d2").pixmap(20, 20))
         self.sanitize_label = QLabel("-", self)
+        self.sanitize_label.setStyleSheet("color: #1976d2;")
         sanitize_row.addWidget(self.sanitize_check)
+        sanitize_row.addWidget(self.folder_icon_label)
         sanitize_row.addWidget(self.sanitize_label)
         sanitize_row.addStretch()
         layout.addLayout(sanitize_row)
@@ -20,11 +26,9 @@ class NameFieldWidget(QFrame):
 
     def set_disk_and_folder(self, disk, folder):
         disk = (disk or "")
-        # Ambil hanya drive letter (misal D:\) tanpa label volume
         if disk and ":\\" in disk:
             disk = disk.split(" ")[0]
-        disk = disk.replace(" ", "")
-        folder = (folder or "").replace(" ", "")
+        # Jangan hilangkan spasi pada folder
         if disk and folder:
             if disk.endswith("\\") or disk.endswith("/"):
                 path = f"{disk}{folder}"

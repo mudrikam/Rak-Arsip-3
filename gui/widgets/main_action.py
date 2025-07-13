@@ -41,11 +41,12 @@ def get_available_disks():
         bitmask = windll.kernel32.GetLogicalDrives()
         for letter in string.ascii_uppercase:
             if bitmask & 1:
-                label = get_volume_label(letter)
-                if label:
-                    disks.append(f"{letter}:\\ ({label})")
-                else:
-                    disks.append(f"{letter}:\\")
+                if letter != "C":
+                    label = get_volume_label(letter)
+                    if label:
+                        disks.append(f"{letter}:\\ ({label})")
+                    else:
+                        disks.append(f"{letter}:\\")
             bitmask >>= 1
     else:
         disks.append("/")
@@ -77,7 +78,6 @@ class MainActionDock(QDockWidget):
         main_vlayout = QVBoxLayout(container)
 
         main_layout = QHBoxLayout()
-        # Frame kiri: Disk & Folder
         frame_left = QFrame(container)
         frame_left.setFrameShape(QFrame.StyledPanel)
         frame_left_layout = QVBoxLayout(frame_left)
@@ -86,6 +86,7 @@ class MainActionDock(QDockWidget):
         label_disk = QLabel("Disk", frame_left)
         combo_disk = QComboBox(frame_left)
         combo_disk.setMinimumWidth(180)
+        combo_disk.addItem("Scanning...")
         disk_row.addWidget(label_disk)
         disk_row.addWidget(combo_disk)
         frame_left_layout.addLayout(disk_row)
@@ -138,7 +139,6 @@ class MainActionDock(QDockWidget):
         frame_left.setLayout(frame_left_layout)
         main_layout.addWidget(frame_left)
 
-        # Frame tengah: Category & Sub Category
         frame_middle = QFrame(container)
         frame_middle.setFrameShape(QFrame.StyledPanel)
         frame_middle_layout = QVBoxLayout(frame_middle)
@@ -162,7 +162,6 @@ class MainActionDock(QDockWidget):
         frame_middle.setLayout(frame_middle_layout)
         main_layout.addWidget(frame_middle)
 
-        # Frame kanan: Checklist, Date, Markdown, Open Explorer (semua QCheckBox)
         frame_right = QFrame(container)
         frame_right.setFrameShape(QFrame.StyledPanel)
         frame_right_layout = QVBoxLayout(frame_right)
@@ -175,7 +174,6 @@ class MainActionDock(QDockWidget):
         frame_right.setLayout(frame_right_layout)
         main_layout.addWidget(frame_right)
 
-        # Frame paling kanan: Template dropdown, color picker (qtawesome), no reset
         frame_far_right = QFrame(container)
         frame_far_right.setFrameShape(QFrame.StyledPanel)
         frame_far_right_layout = QVBoxLayout(frame_far_right)
@@ -241,13 +239,15 @@ class MainActionDock(QDockWidget):
     @Slot(list)
     def _on_disks_ready(self, disks):
         self._combo_disk.clear()
-        self._combo_disk.addItems(disks)
-        self._combo_disk.setEnabled(True)
-        self._adjust_folder_width()
         if disks:
+            self._combo_disk.addItems(disks)
+            self._combo_disk.setEnabled(True)
+            self._adjust_folder_width()
             self._combo_disk.setCurrentIndex(0)
             self._on_disk_changed(0)
         else:
+            self._combo_disk.addItem("Scanning...")
+            self._combo_disk.setEnabled(False)
             self._combo_folder.clear()
             self._combo_folder.setEnabled(False)
             self._on_disk_changed(0)
