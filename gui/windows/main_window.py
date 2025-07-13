@@ -27,6 +27,8 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.central_widget)
         self.properties_widget = PropertiesWidget(self)
         self.addDockWidget(Qt.RightDockWidgetArea, self.properties_widget)
+        
+        self.central_widget.row_selected.connect(self.properties_widget.update_properties)
 
     def center_on_screen(self):
         screen = QApplication.primaryScreen()
