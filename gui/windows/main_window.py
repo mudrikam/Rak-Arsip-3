@@ -18,13 +18,19 @@ class MainWindow(QMainWindow):
         self.resize(window_config["width"], window_config["height"])
         set_window_icon(self, window_config["icon"])
         self.center_on_screen()
+        
         self.menu_bar = MainMenu(self.config_manager, self)
         self.setMenuBar(self.menu_bar)
         self.menu_bar.exit_action.triggered.connect(self.close)
+        
+        # Create main action dock first so central widget can access its database manager
         self.main_action_dock = MainActionDock(self.config_manager, self)
         self.addDockWidget(Qt.TopDockWidgetArea, self.main_action_dock)
+        
+        # Create central widget after main action dock
         self.central_widget = CentralWidget(self)
         self.setCentralWidget(self.central_widget)
+        
         self.properties_widget = PropertiesWidget(self)
         self.addDockWidget(Qt.RightDockWidgetArea, self.properties_widget)
         

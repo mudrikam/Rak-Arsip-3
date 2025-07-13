@@ -1,33 +1,103 @@
 import sqlite3
 import os
 import json
+import time
+import threading
 from pathlib import Path
+from PySide6.QtCore import QObject, Signal, QTimer
 
-class DatabaseManager:
+class DatabaseManager(QObject):
+    data_changed = Signal()
+    
     def __init__(self, config_manager, window_config_manager):
+        super().__init__()
         self.config_manager = config_manager
         self.window_config_manager = window_config_manager
         self.db_config = config_manager.get("database")
         self.tables_config = config_manager.get("tables")
         self.db_path = self.db_config["path"]
         self.connection = None
+        self.session_id = str(int(time.time() * 1000))
+        self.temp_dir = os.path.join(os.path.dirname(self.db_path), "temp")
         self.ensure_database_exists()
+        self.setup_file_watcher()
         
     def ensure_database_exists(self):
         db_dir = os.path.dirname(self.db_path)
         if db_dir and not os.path.exists(db_dir):
             os.makedirs(db_dir)
         
+        if not os.path.exists(self.temp_dir):
+            os.makedirs(self.temp_dir)
+        
         if self.db_config.get("create_if_not_exists", True):
             self.connect()
+            self.enable_wal_mode()
             self.create_tables()
             self.initialize_statuses()
             self.close()
+
+    def enable_wal_mode(self):
+        cursor = self.connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA cache_size=10000")
+        cursor.execute("PRAGMA temp_store=memory")
+        cursor.execute("PRAGMA mmap_size=268435456")
+        self.connection.commit()
+        print("WAL mode enabled for database")
+
+    def setup_file_watcher(self):
+        self.file_watcher_timer = QTimer()
+        self.file_watcher_timer.timeout.connect(self.check_temp_files)
+        self.file_watcher_timer.start(1000)
+        print(f"File watcher started with session ID: {self.session_id}")
+
+    def check_temp_files(self):
+        try:
+            if not os.path.exists(self.temp_dir):
+                return
+            
+            for temp_file in os.listdir(self.temp_dir):
+                if temp_file.startswith("db_change_") and temp_file.endswith(".tmp"):
+                    file_path = os.path.join(self.temp_dir, temp_file)
+                    
+                    if not self.session_id in temp_file:
+                        print(f"Detected external database change: {temp_file}")
+                        self.data_changed.emit()
+                        
+                        try:
+                            os.remove(file_path)
+                        except:
+                            pass
+                    else:
+                        file_age = time.time() - os.path.getctime(file_path)
+                        if file_age > 5:
+                            try:
+                                os.remove(file_path)
+                            except:
+                                pass
+        except Exception as e:
+            print(f"Error checking temp files: {e}")
+
+    def create_temp_file(self):
+        try:
+            timestamp = int(time.time() * 1000)
+            temp_filename = f"db_change_{self.session_id}_{timestamp}.tmp"
+            temp_path = os.path.join(self.temp_dir, temp_filename)
+            
+            with open(temp_path, 'w') as f:
+                f.write(f"Database change by session {self.session_id} at {timestamp}")
+            
+            print(f"Created temp file: {temp_filename}")
+        except Exception as e:
+            print(f"Error creating temp file: {e}")
 
     def connect(self):
         if self.connection is None:
             self.connection = sqlite3.connect(self.db_path)
             self.connection.row_factory = sqlite3.Row
+            self.enable_wal_mode()
         return self.connection
 
     def close(self):
@@ -97,6 +167,7 @@ class DatabaseManager:
         
         cursor.execute("INSERT INTO categories (name) VALUES (?)", (category_name,))
         self.connection.commit()
+        self.create_temp_file()
         return cursor.lastrowid
 
     def get_or_create_subcategory(self, category_id, subcategory_name):
@@ -116,6 +187,7 @@ class DatabaseManager:
             (category_id, subcategory_name)
         )
         self.connection.commit()
+        self.create_temp_file()
         return cursor.lastrowid
 
     def get_status_id(self, status_name):
@@ -141,6 +213,7 @@ class DatabaseManager:
             (name, content)
         )
         self.connection.commit()
+        self.create_temp_file()
         return cursor.lastrowid
 
     def create_unique_path(self, base_path):
@@ -180,6 +253,7 @@ class DatabaseManager:
         """, (date, name, root, path, status_id, category_id, subcategory_id, template_id))
         
         self.connection.commit()
+        self.create_temp_file()
         return cursor.lastrowid
 
     def get_all_files(self):
@@ -283,3 +357,4 @@ class DatabaseManager:
             (status_id, file_id)
         )
         self.connection.commit()
+        self.create_temp_file()

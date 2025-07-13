@@ -23,10 +23,20 @@ class CentralWidget(QWidget):
         self.status_options = list(self.status_config.keys())
         self.selected_row_data = None
         
-        basedir = Path(__file__).parent.parent.parent
-        db_config_path = basedir / "configs" / "db_config.json"
-        db_config_manager = ConfigManager(str(db_config_path))
-        self.db_manager = DatabaseManager(db_config_manager, self.config_manager)
+        # Use the same database manager instance from the main window
+        if hasattr(parent, 'main_action_dock') and hasattr(parent.main_action_dock, 'db_manager'):
+            self.db_manager = parent.main_action_dock.db_manager
+            print("Using shared database manager from main action dock")
+        else:
+            basedir = Path(__file__).parent.parent.parent
+            db_config_path = basedir / "configs" / "db_config.json"
+            db_config_manager = ConfigManager(str(db_config_path))
+            self.db_manager = DatabaseManager(db_config_manager, self.config_manager)
+            print("Created new database manager instance")
+        
+        # Connect database change signal for auto-refresh
+        self.db_manager.data_changed.connect(self.auto_refresh_table)
+        print("Connected auto-refresh signal to central widget")
         
         layout = QVBoxLayout(self)
 
@@ -145,6 +155,10 @@ class CentralWidget(QWidget):
         open_explorer_shortcut = QShortcut(QKeySequence("Ctrl+E"), self)
         open_explorer_shortcut.activated.connect(self.open_explorer)
 
+        self.load_data_from_database()
+
+    def auto_refresh_table(self):
+        print("Auto-refreshing table due to external database changes")
         self.load_data_from_database()
 
     def copy_name(self):
