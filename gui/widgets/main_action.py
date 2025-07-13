@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (
     QCheckBox, QPushButton
 )
 from PySide6.QtGui import QColor, QCursor
-from PySide6.QtCore import Qt, QEvent
+from PySide6.QtCore import Qt, QEvent, QThread, Signal, Slot
 import qtawesome as qta
 import sys
 import os
@@ -62,6 +62,12 @@ def get_first_level_folders(disk_path):
     except Exception:
         return []
 
+class DiskScanThread(QThread):
+    disks_found = Signal(list)
+    def run(self):
+        disks = get_available_disks()
+        self.disks_found.emit(disks)
+
 class MainActionDock(QDockWidget):
     def __init__(self, parent=None):
         super().__init__("Main Action", parent)
@@ -76,8 +82,7 @@ class MainActionDock(QDockWidget):
         disk_row = QHBoxLayout()
         label_disk = QLabel("Disk", frame_left)
         combo_disk = QComboBox(frame_left)
-        disks = get_available_disks()
-        combo_disk.addItems(disks)
+        combo_disk.setMinimumWidth(180)
         disk_row.addWidget(label_disk)
         disk_row.addWidget(combo_disk)
         frame_left_layout.addLayout(disk_row)
@@ -86,9 +91,16 @@ class MainActionDock(QDockWidget):
         label_folder = QLabel("Folder", frame_left)
         combo_folder = QComboBox(frame_left)
         combo_folder.setEnabled(False)
+        combo_folder.setMinimumWidth(180)
         folder_row.addWidget(label_folder)
         folder_row.addWidget(combo_folder)
         frame_left_layout.addLayout(folder_row)
+
+        def adjust_folder_width():
+            combo_folder.setMinimumWidth(combo_disk.width())
+
+        combo_disk.resizeEvent = lambda event: (adjust_folder_width(), QComboBox.resizeEvent(combo_disk, event))
+        adjust_folder_width()
 
         def on_disk_changed(index):
             if index < 0:
@@ -104,6 +116,7 @@ class MainActionDock(QDockWidget):
                 combo_folder.setEnabled(True)
             else:
                 combo_folder.setEnabled(False)
+            adjust_folder_width()
 
         combo_disk.currentIndexChanged.connect(on_disk_changed)
 
@@ -124,7 +137,7 @@ class MainActionDock(QDockWidget):
         frame_middle_layout.addLayout(category_row)
 
         subcategory_row = QHBoxLayout()
-        label_subcategory = QLabel("Sub Category", frame_middle)
+        label_subcategory = QLabel("Sub", frame_middle)
         combo_subcategory = QComboBox(frame_middle)
         combo_subcategory.setEnabled(False)
         subcategory_row.addWidget(label_subcategory)
@@ -195,3 +208,25 @@ class MainActionDock(QDockWidget):
 
         container.setLayout(main_layout)
         self.setWidget(container)
+
+        self._combo_disk = combo_disk
+        self._combo_folder = combo_folder
+        self._on_disk_changed = on_disk_changed
+        self._adjust_folder_width = adjust_folder_width
+
+        self._disk_thread = DiskScanThread()
+        self._disk_thread.disks_found.connect(self._on_disks_ready)
+        self._disk_thread.start()
+
+    @Slot(list)
+    def _on_disks_ready(self, disks):
+        self._combo_disk.clear()
+        self._combo_disk.addItems(disks)
+        self._combo_disk.setEnabled(True)
+        self._adjust_folder_width()
+        if disks:
+            self._combo_disk.setCurrentIndex(0)
+            self._on_disk_changed(0)
+        else:
+            self._combo_folder.clear()
+            self._combo_folder.setEnabled(False)
