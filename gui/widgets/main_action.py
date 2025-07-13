@@ -9,6 +9,8 @@ import sys
 import os
 import random
 
+from .name_field import NameFieldWidget
+
 def get_available_disks():
     disks = []
     if sys.platform == "win32":
@@ -72,8 +74,9 @@ class MainActionDock(QDockWidget):
     def __init__(self, parent=None):
         super().__init__("Main Action", parent)
         container = QWidget(self)
-        main_layout = QHBoxLayout(container)
+        main_vlayout = QVBoxLayout(container)
 
+        main_layout = QHBoxLayout()
         # Frame kiri: Disk & Folder
         frame_left = QFrame(container)
         frame_left.setFrameShape(QFrame.StyledPanel)
@@ -206,7 +209,14 @@ class MainActionDock(QDockWidget):
         frame_far_right.setLayout(frame_far_right_layout)
         main_layout.addWidget(frame_far_right)
 
-        container.setLayout(main_layout)
+        # Tambahkan main_layout (baris atas) ke main_vlayout
+        main_vlayout.addLayout(main_layout)
+
+        # Frame bawah: gunakan widget modular dari name_field.py
+        name_field_widget = NameFieldWidget(container)
+        main_vlayout.addWidget(name_field_widget)
+
+        container.setLayout(main_vlayout)
         self.setWidget(container)
 
         self._combo_disk = combo_disk
@@ -230,3 +240,4 @@ class MainActionDock(QDockWidget):
         else:
             self._combo_folder.clear()
             self._combo_folder.setEnabled(False)
+            self._on_disk_changed(0)
