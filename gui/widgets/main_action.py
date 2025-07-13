@@ -102,9 +102,21 @@ class MainActionDock(QDockWidget):
         main_vlayout = QVBoxLayout(container)
 
         main_layout = QHBoxLayout()
+
+        # Disk/Folder section with header
         frame_left = QFrame(container)
         frame_left.setFrameShape(QFrame.StyledPanel)
         frame_left_layout = QVBoxLayout(frame_left)
+
+        disk_header = QHBoxLayout()
+        disk_header_icon = QLabel()
+        disk_header_icon.setPixmap(qta.icon("fa6s.hard-drive", color="#666").pixmap(16, 16))
+        disk_header_label = QLabel("Disk & Folder")
+        disk_header_label.setStyleSheet("font-weight: bold; color: #666; font-size: 12px;")
+        disk_header.addWidget(disk_header_icon)
+        disk_header.addWidget(disk_header_label)
+        disk_header.addStretch()
+        frame_left_layout.addLayout(disk_header)
 
         disk_row = QHBoxLayout()
         disk_icon = QLabel()
@@ -139,9 +151,20 @@ class MainActionDock(QDockWidget):
         frame_left.setLayout(frame_left_layout)
         main_layout.addWidget(frame_left)
 
+        # Category/Subcategory section with header
         frame_middle = QFrame(container)
         frame_middle.setFrameShape(QFrame.StyledPanel)
         frame_middle_layout = QVBoxLayout(frame_middle)
+
+        category_header = QHBoxLayout()
+        category_header_icon = QLabel()
+        category_header_icon.setPixmap(qta.icon("fa6s.folder-tree", color="#666").pixmap(16, 16))
+        category_header_label = QLabel("Category & Subcategory")
+        category_header_label.setStyleSheet("font-weight: bold; color: #666; font-size: 12px;")
+        category_header.addWidget(category_header_icon)
+        category_header.addWidget(category_header_label)
+        category_header.addStretch()
+        frame_middle_layout.addLayout(category_header)
 
         category_row = QHBoxLayout()
         category_icon = QLabel()
@@ -175,9 +198,20 @@ class MainActionDock(QDockWidget):
         frame_middle.setLayout(frame_middle_layout)
         main_layout.addWidget(frame_middle)
 
+        # Template/Theme section with header
         frame_far_right = QFrame(container)
         frame_far_right.setFrameShape(QFrame.StyledPanel)
         frame_far_right_layout = QVBoxLayout(frame_far_right)
+
+        template_header = QHBoxLayout()
+        template_header_icon = QLabel()
+        template_header_icon.setPixmap(qta.icon("fa6s.file-lines", color="#666").pixmap(16, 16))
+        template_header_label = QLabel("Template & Theme")
+        template_header_label.setStyleSheet("font-weight: bold; color: #666; font-size: 12px;")
+        template_header.addWidget(template_header_icon)
+        template_header.addWidget(template_header_label)
+        template_header.addStretch()
+        frame_far_right_layout.addLayout(template_header)
 
         template_row = QHBoxLayout()
         template_icon = QLabel()
@@ -223,6 +257,7 @@ class MainActionDock(QDockWidget):
         frame_far_right.setLayout(frame_far_right_layout)
         main_layout.addWidget(frame_far_right)
 
+        # Options section (already has header)
         frame_right = QFrame(container)
         frame_right.setFrameShape(QFrame.StyledPanel)
         frame_right_layout = QVBoxLayout(frame_right)
