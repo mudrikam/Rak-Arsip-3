@@ -51,16 +51,16 @@ class CentralWidget(QWidget):
         
         top_row.addLayout(search_section)
 
-        self.refresh_btn = QPushButton("Refresh", self)
-        self.refresh_btn.setIcon(qta.icon("fa6s.arrows-rotate"))
-        self.refresh_btn.setMinimumHeight(32)
-        top_row.addWidget(self.refresh_btn)
-
         self.clear_search_btn = QPushButton("Clear", self)
         self.clear_search_btn.setIcon(qta.icon("fa6s.xmark"))
         self.clear_search_btn.setMinimumHeight(32)
         self.clear_search_btn.clicked.connect(lambda: self.search_edit.clear())
         top_row.addWidget(self.clear_search_btn)
+
+        self.refresh_btn = QPushButton("Refresh", self)
+        self.refresh_btn.setIcon(qta.icon("fa6s.arrows-rotate"))
+        self.refresh_btn.setMinimumHeight(32)
+        top_row.addWidget(self.refresh_btn)
 
         top_row.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
         layout.addLayout(top_row)
