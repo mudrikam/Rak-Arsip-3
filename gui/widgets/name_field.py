@@ -17,3 +17,21 @@ class NameFieldWidget(QFrame):
         sanitize_row.addStretch()
         layout.addLayout(sanitize_row)
         self.setLayout(layout)
+
+    def set_disk_and_folder(self, disk, folder):
+        disk = (disk or "")
+        # Ambil hanya drive letter (misal D:\) tanpa label volume
+        if disk and ":\\" in disk:
+            disk = disk.split(" ")[0]
+        disk = disk.replace(" ", "")
+        folder = (folder or "").replace(" ", "")
+        if disk and folder:
+            if disk.endswith("\\") or disk.endswith("/"):
+                path = f"{disk}{folder}"
+            else:
+                path = f"{disk}\\{folder}"
+            self.sanitize_label.setText(path)
+        elif disk:
+            self.sanitize_label.setText(disk)
+        else:
+            self.sanitize_label.setText("-")

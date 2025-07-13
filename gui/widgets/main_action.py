@@ -105,10 +105,16 @@ class MainActionDock(QDockWidget):
         combo_disk.resizeEvent = lambda event: (adjust_folder_width(), QComboBox.resizeEvent(combo_disk, event))
         adjust_folder_width()
 
+        def update_name_field_label():
+            disk_label = combo_disk.currentText()
+            folder_label = combo_folder.currentText() if combo_folder.isEnabled() and combo_folder.currentIndex() >= 0 else ""
+            self._name_field_widget.set_disk_and_folder(disk_label, folder_label)
+
         def on_disk_changed(index):
             if index < 0:
                 combo_folder.clear()
                 combo_folder.setEnabled(False)
+                update_name_field_label()
                 return
             disk_label = combo_disk.currentText()
             disk_path = extract_disk_path(disk_label)
@@ -120,8 +126,14 @@ class MainActionDock(QDockWidget):
             else:
                 combo_folder.setEnabled(False)
             adjust_folder_width()
+            update_name_field_label()
 
         combo_disk.currentIndexChanged.connect(on_disk_changed)
+
+        def on_folder_changed(index):
+            update_name_field_label()
+
+        combo_folder.currentIndexChanged.connect(on_folder_changed)
 
         frame_left.setLayout(frame_left_layout)
         main_layout.addWidget(frame_left)
@@ -187,7 +199,6 @@ class MainActionDock(QDockWidget):
         frame_far_right_layout.addLayout(color_row)
 
         def set_random_color_from_cursor():
-            # Random hue, S=0.7, V=0.9
             hue = random.randint(0, 359)
             s = 0.7
             v = 0.9
@@ -209,10 +220,8 @@ class MainActionDock(QDockWidget):
         frame_far_right.setLayout(frame_far_right_layout)
         main_layout.addWidget(frame_far_right)
 
-        # Tambahkan main_layout (baris atas) ke main_vlayout
         main_vlayout.addLayout(main_layout)
 
-        # Frame bawah: gunakan widget modular dari name_field.py
         name_field_widget = NameFieldWidget(container)
         main_vlayout.addWidget(name_field_widget)
 
@@ -223,6 +232,7 @@ class MainActionDock(QDockWidget):
         self._combo_folder = combo_folder
         self._on_disk_changed = on_disk_changed
         self._adjust_folder_width = adjust_folder_width
+        self._name_field_widget = name_field_widget
 
         self._disk_thread = DiskScanThread()
         self._disk_thread.disks_found.connect(self._on_disks_ready)
