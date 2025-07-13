@@ -3,6 +3,8 @@ from PySide6.QtCore import Qt, QRect, QCoreApplication
 from helpers.window_helper import get_window_config, set_app_user_model_id, set_window_icon
 from gui.widgets.main_menu import MainMenu
 from gui.widgets.main_action import MainActionDock
+from gui.widgets.central_widget import CentralWidget
+from gui.widgets.properties_widget import PropertiesWidget
 import os
 import sys
 
@@ -21,7 +23,10 @@ class MainWindow(QMainWindow):
         self.menu_bar.exit_action.triggered.connect(self.close)
         self.main_action_dock = MainActionDock(self.config_manager, self)
         self.addDockWidget(Qt.TopDockWidgetArea, self.main_action_dock)
-        self.setCentralWidget(QWidget(self))
+        self.central_widget = CentralWidget(self)
+        self.setCentralWidget(self.central_widget)
+        self.properties_widget = PropertiesWidget(self)
+        self.addDockWidget(Qt.RightDockWidgetArea, self.properties_widget)
 
     def center_on_screen(self):
         screen = QApplication.primaryScreen()
