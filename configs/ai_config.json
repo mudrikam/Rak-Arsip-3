@@ -6,7 +6,7 @@
         "temperature": 0.7
     },
     "prompts": {
-        "name_generation": "Based on this image, generate a creative, descriptive project name in English. The name should be 3-5 words maximum, suitable for a design project folder. Use underscores instead of spaces. Examples: Modern_Kitchen_Design, Urban_Street_Art, Vintage_Car_Restoration. Just return the name without any explanation."
+        "name_generation": "Generate a concise, creative English project folder name (max 100 characters, use underscores for spaces) based on the image. Do NOT mention specific colors, brands, or product names. The name should combine: main object, scene/solid background, lighting (light/dark/etc), angle (top/isometric/etc), dominant material (wood/metal/concrete/etc), and shoot style (floating/top view/isometric/etc). Do NOT use numbering or step-by-step answers. Only return the final folder name, e.g. Modern_Floating_Chair_TopView_Metallic_Scene. No explanation, just the name."
     },
     "temp_folder": "temp/images"
 }
