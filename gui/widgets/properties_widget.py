@@ -1,13 +1,15 @@
-from PySide6.QtWidgets import QDockWidget, QWidget, QVBoxLayout, QLabel, QFrame
+from PySide6.QtWidgets import QDockWidget, QWidget, QVBoxLayout, QLabel, QFrame, QHBoxLayout
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
+import qtawesome as qta
 import os
 from pathlib import Path
 import textwrap
 
 class PropertiesWidget(QDockWidget):
     def __init__(self, parent=None):
-        super().__init__("Properties", parent)
+        super().__init__("Project Properties", parent)
+        self.setWindowIcon(qta.icon("fa6s.circle-info"))
         self.parent_window = parent
         container = QWidget(self)
         layout = QVBoxLayout(container)
@@ -20,17 +22,44 @@ class PropertiesWidget(QDockWidget):
         self.image_label.setText("No Preview")
         layout.addWidget(self.image_frame)
 
+        date_row = QHBoxLayout()
+        date_icon = QLabel()
+        date_icon.setPixmap(qta.icon("fa6s.calendar", color="#666").pixmap(16, 16))
         self.date_label = QLabel("Date: -", container)
-        layout.addWidget(self.date_label)
+        date_row.addWidget(date_icon)
+        date_row.addWidget(self.date_label)
+        date_row.addStretch()
+        layout.addLayout(date_row)
 
+        root_row = QHBoxLayout()
+        root_icon = QLabel()
+        root_icon.setPixmap(qta.icon("fa6s.folder", color="#666").pixmap(16, 16))
+        self.root_label = QLabel("Root: -", container)
+        root_row.addWidget(root_icon)
+        root_row.addWidget(self.root_label)
+        root_row.addStretch()
+        layout.addLayout(root_row)
+
+        name_row = QHBoxLayout()
+        name_icon = QLabel()
+        name_icon.setPixmap(qta.icon("fa6s.file-lines", color="#666").pixmap(16, 16))
         self.name_label = QLabel("Name: -", container)
         self.name_label.setWordWrap(True)
         self.name_label.setMinimumWidth(180)
         self.name_label.setMaximumWidth(200)
-        layout.addWidget(self.name_label)
+        name_row.addWidget(name_icon)
+        name_row.addWidget(self.name_label)
+        name_row.addStretch()
+        layout.addLayout(name_row)
 
+        status_row = QHBoxLayout()
+        status_icon = QLabel()
+        status_icon.setPixmap(qta.icon("fa6s.circle-info", color="#666").pixmap(16, 16))
         self.status_label = QLabel("Status: -", container)
-        layout.addWidget(self.status_label)
+        status_row.addWidget(status_icon)
+        status_row.addWidget(self.status_label)
+        status_row.addStretch()
+        layout.addLayout(status_row)
 
         layout.addStretch()
         container.setLayout(layout)
@@ -41,14 +70,14 @@ class PropertiesWidget(QDockWidget):
 
     def update_properties(self, row_data):
         self.date_label.setText(f"Date: {row_data.get('date', '-')}")
+        root = row_data.get('root', '-')
+        self.root_label.setText(f"Root: {root}")
         name = row_data.get('name', '-')
         wrapped_name = self._wrap_long_word(name, 22)
         self.name_label.setText(f"Name: {wrapped_name}")
-        
         status = row_data.get('status', '-')
         self.status_label.setText(f"Status: {status}")
         self._apply_status_color(status)
-        
         self.load_preview_image(row_data.get('path', ''), row_data.get('name', ''))
 
     def _apply_status_color(self, status):
@@ -75,7 +104,6 @@ class PropertiesWidget(QDockWidget):
         return "\n".join(textwrap.wrap(text, width=width))
 
     def _find_first_image_fast(self, directory, file_name, max_depth=3, current_depth=0):
-        """Fast search that stops immediately when any image is found"""
         if current_depth > max_depth:
             return None
         
@@ -146,4 +174,3 @@ class PropertiesWidget(QDockWidget):
     def set_no_preview(self):
         self.image_label.clear()
         self.image_label.setText("No Preview")
-                

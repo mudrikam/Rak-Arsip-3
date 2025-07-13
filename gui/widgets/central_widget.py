@@ -31,24 +31,57 @@ class CentralWidget(QWidget):
         layout = QVBoxLayout(self)
 
         top_row = QHBoxLayout()
+        
+        search_section = QHBoxLayout()
+        search_icon_label = QLabel()
+        search_icon_label.setPixmap(qta.icon("fa6s.magnifying-glass", color="#666").pixmap(16, 16))
+        search_section.addWidget(search_icon_label)
+        
         self.search_edit = QLineEdit(self)
-        self.search_edit.setPlaceholderText("Search...")
-        search_icon = qta.icon("fa6s.magnifying-glass")
-        search_action = QAction(self)
-        search_action.setIcon(search_icon)
-        self.search_edit.addAction(search_action, QLineEdit.LeadingPosition)
-        top_row.addWidget(self.search_edit)
+        self.search_edit.setPlaceholderText("Search projects...")
+        self.search_edit.setMinimumHeight(32)
+        search_section.addWidget(self.search_edit)
+        
+        top_row.addLayout(search_section)
 
         self.refresh_btn = QPushButton("Refresh", self)
-        self.refresh_btn.setIcon(qta.icon("fa6s.rotate"))
+        self.refresh_btn.setIcon(qta.icon("fa6s.arrows-rotate"))
+        self.refresh_btn.setMinimumHeight(32)
         top_row.addWidget(self.refresh_btn)
+
+        self.clear_search_btn = QPushButton("Clear", self)
+        self.clear_search_btn.setIcon(qta.icon("fa6s.xmark"))
+        self.clear_search_btn.setMinimumHeight(32)
+        self.clear_search_btn.clicked.connect(lambda: self.search_edit.clear())
+        top_row.addWidget(self.clear_search_btn)
 
         top_row.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
         layout.addLayout(top_row)
 
         self.table = QTableWidget(self)
         self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(["Date", "Name", "Root", "Path", "Status"])
+        
+        date_header = QTableWidgetItem("Date")
+        date_header.setIcon(qta.icon("fa6s.calendar"))
+        
+        name_header = QTableWidgetItem("Name")
+        name_header.setIcon(qta.icon("fa6s.file"))
+        
+        root_header = QTableWidgetItem("Root")
+        root_header.setIcon(qta.icon("fa6s.folder"))
+        
+        path_header = QTableWidgetItem("Path")
+        path_header.setIcon(qta.icon("fa6s.folder-tree"))
+        
+        status_header = QTableWidgetItem("Status")
+        status_header.setIcon(qta.icon("fa6s.circle-info"))
+        
+        self.table.setHorizontalHeaderItem(0, date_header)
+        self.table.setHorizontalHeaderItem(1, name_header)
+        self.table.setHorizontalHeaderItem(2, root_header)
+        self.table.setHorizontalHeaderItem(3, path_header)
+        self.table.setHorizontalHeaderItem(4, status_header)
+        
         self._all_data = []
         self.page_size = 20
         self.current_page = 1
@@ -67,17 +100,26 @@ class CentralWidget(QWidget):
         layout.addWidget(self.table)
 
         pagination_row = QHBoxLayout()
+        
+        pagination_icon = QLabel()
+        pagination_icon.setPixmap(qta.icon("fa6s.bars", color="#666").pixmap(16, 16))
+        pagination_row.addWidget(pagination_icon)
+        
         self.prev_btn = QPushButton("Prev", self)
-        self.prev_btn.setIcon(qta.icon("fa6s.angle-left"))
+        self.prev_btn.setIcon(qta.icon("fa6s.chevron-left"))
         self.next_btn = QPushButton("Next", self)
-        self.next_btn.setIcon(qta.icon("fa6s.angle-right"))
+        self.next_btn.setIcon(qta.icon("fa6s.chevron-right"))
         self.page_label = QLabel(self)
         pagination_row.addWidget(self.prev_btn)
         pagination_row.addWidget(self.page_label)
         pagination_row.addWidget(self.next_btn)
 
+        stats_icon = QLabel()
+        stats_icon.setPixmap(qta.icon("fa6s.chart-simple", color="#666").pixmap(16, 16))
+        pagination_row.addWidget(stats_icon)
+        
         self.stats_label = QLabel(self)
-        self.stats_label.setStyleSheet("color: #666; font-size: 12px; margin-left: 20px;")
+        self.stats_label.setStyleSheet("color: #666; font-size: 12px; margin-left: 5px;")
         pagination_row.addWidget(self.stats_label)
 
         pagination_row.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
@@ -219,8 +261,11 @@ class CentralWidget(QWidget):
             date_item.setData(256, row_data)
             self.table.setItem(row_idx, 0, date_item)
             
-            self.table.setItem(row_idx, 1, QTableWidgetItem(row_data['name']))
-            self.table.setItem(row_idx, 2, QTableWidgetItem(row_data['root']))
+            name_item = QTableWidgetItem(row_data['name'])
+            self.table.setItem(row_idx, 1, name_item)
+            
+            root_item = QTableWidgetItem(row_data['root'])
+            self.table.setItem(row_idx, 2, root_item)
             
             truncated_path = self._truncate_path_by_width(row_data['path'], path_column_width)
             path_item = QTableWidgetItem(truncated_path)
@@ -356,6 +401,10 @@ class CentralWidget(QWidget):
         action_copy_path.triggered.connect(do_copy_path)
         action_open_explorer.triggered.connect(do_open_explorer)
 
+        menu.addAction(action_copy_name)
+        menu.addAction(action_copy_path)
+        menu.addAction(action_open_explorer)
+        menu.exec(self.table.viewport().mapToGlobal(pos))
         menu.addAction(action_copy_name)
         menu.addAction(action_copy_path)
         menu.addAction(action_open_explorer)
