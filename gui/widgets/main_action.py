@@ -65,7 +65,7 @@ def extract_disk_path(disk_label):
 def get_first_level_folders(disk_path):
     try:
         items = os.listdir(disk_path)
-        folders = [item for item in items if os.path.isdir(os.path.join(disk_path, item))]
+        folders = [item for item in items if os.path.isdir(os.path.join(disk_path, item)) and item != "$RECYCLE.BIN"]
         return folders
     except Exception:
         return []
