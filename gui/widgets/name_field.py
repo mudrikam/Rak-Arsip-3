@@ -55,12 +55,12 @@ class NameFieldWidget(QFrame):
         layout.addLayout(input_row)
 
         sanitize_row = QHBoxLayout()
-        self.clear_btn = QPushButton(self)
-        self.clear_btn.setIcon(qta.icon("fa6s.xmark"))
-        self.clear_btn.setFixedSize(28, 28)
+        self.clear_btn = QPushButton("Clear", self)
+        self.clear_btn.setIcon(qta.icon("fa6s.broom"))
+        self.clear_btn.setFixedSize(60, 28)
         self.clear_btn.setToolTip("Clear")
         self.clear_btn.setCursor(Qt.PointingHandCursor)
-        self.clear_btn.setStyleSheet("border: none;")
+        
         self.sanitize_check = QCheckBox("Sanitize Name", self)
         self.folder_icon_label = QLabel(self)
         self.folder_icon_label.setPixmap(qta.icon("fa6s.folder", color="#1976d2").pixmap(20, 20))
