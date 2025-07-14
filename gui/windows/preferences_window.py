@@ -1,14 +1,15 @@
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget, QGroupBox,
     QCheckBox, QListWidget, QListWidgetItem, QPushButton, QLineEdit,
-    QTextEdit, QLabel, QMessageBox, QFileDialog, QInputDialog
+    QTextEdit, QLabel, QMessageBox, QFileDialog, QInputDialog, QListView, QAbstractItemView
 )
 from PySide6.QtCore import Qt
 import qtawesome as qta
 import csv
 import os
-from datetime import datetime
+from datetime import datetime, date
 from pathlib import Path
+import shutil
 
 class PreferencesWindow(QDialog):
     def __init__(self, config_manager, db_manager, parent=None):
@@ -300,7 +301,16 @@ class PreferencesWindow(QDialog):
         self.backup_db_btn.setIcon(qta.icon("fa6s.database"))
         self.backup_db_btn.clicked.connect(self.backup_database_now)
         backup_layout.addWidget(self.backup_db_btn)
-        
+
+        self.db_backup_list_label = QLabel("Database Backups (last 7 days):")
+        backup_layout.addWidget(self.db_backup_list_label)
+        self.db_backup_list_widget = QListWidget()
+        self.db_backup_list_widget.setSelectionMode(QAbstractItemView.NoSelection)
+        backup_layout.addWidget(self.db_backup_list_widget)
+        self.db_backup_list_widget.setMinimumHeight(180)
+        self.db_backup_list_widget.setMaximumHeight(220)
+        self.db_backup_list_widget.setAlternatingRowColors(True)
+
         restore_group = QGroupBox("Database Restore")
         restore_layout = QVBoxLayout(restore_group)
         
@@ -321,10 +331,82 @@ class PreferencesWindow(QDialog):
         
         self.tab_widget.addTab(tab, qta.icon("fa6s.database"), "Backup/Restore")
 
+        self.refresh_db_backup_list()
+
+    def refresh_db_backup_list(self):
+        self.db_backup_list_widget.clear()
+        db_path = self.db_manager.db_path
+        backup_dir = os.path.join(os.path.dirname(db_path), "db_backups")
+        if not os.path.exists(backup_dir):
+            return
+        backup_files = []
+        for fname in os.listdir(backup_dir):
+            if fname.startswith("archive_database_") and fname.endswith(".db"):
+                fpath = os.path.join(backup_dir, fname)
+                backup_files.append((fpath, os.path.getmtime(fpath)))
+        backup_files.sort(key=lambda x: x[1], reverse=True)
+        for fpath, mtime in backup_files:
+            dt = datetime.fromtimestamp(mtime)
+            days_old = self._get_days_old_from_filename(fpath)
+            fname = os.path.basename(fpath)
+            item_widget = QWidget()
+            item_layout = QHBoxLayout(item_widget)
+            item_layout.setContentsMargins(2, 2, 2, 2)
+            label = QLabel(f"{fname}  ({dt.strftime('%Y-%m-%d %H:%M:%S')})")
+            if days_old == 0:
+                label.setStyleSheet("color: #1976d2;")
+            else:
+                label.setStyleSheet("color: #666;")
+            item_layout.addWidget(label)
+            item_layout.addStretch()
+            restore_btn = QPushButton("Restore")
+            restore_btn.setIcon(qta.icon("fa6s.rotate-left"))
+            restore_btn.setProperty("backup_path", fpath)
+            restore_btn.setProperty("backup_days_old", days_old)
+            restore_btn.clicked.connect(self.restore_db_backup_clicked)
+            item_layout.addWidget(restore_btn)
+            item_widget.setLayout(item_layout)
+            list_item = QListWidgetItem()
+            list_item.setSizeHint(item_widget.sizeHint())
+            self.db_backup_list_widget.addItem(list_item)
+            self.db_backup_list_widget.setItemWidget(list_item, item_widget)
+
+    def _get_days_old_from_filename(self, db_file_path):
+        fname = os.path.basename(db_file_path)
+        # Expected format: archive_database_YYYYMMDD.db
+        try:
+            base = fname.replace("archive_database_", "").replace(".db", "")
+            dt = datetime.strptime(base, "%Y%m%d").date()
+            days_old = (date.today() - dt).days
+            return days_old if days_old >= 0 else 0
+        except Exception:
+            return 0
+
+    def restore_db_backup_clicked(self):
+        sender = self.sender()
+        backup_path = sender.property("backup_path")
+        backup_days_old = sender.property("backup_days_old")
+        db_path = self.db_manager.db_path
+        db_dir = os.path.dirname(db_path)
+        old_db_path = os.path.join(db_dir, "archive_database_old.db")
+        dt = datetime.fromtimestamp(os.path.getmtime(backup_path))
+        age_str = f"{backup_days_old} day{'s' if backup_days_old != 1 else ''}"
+        msg = f"This backup is {age_str} old (based on filename, backup file created {dt.strftime('%Y-%m-%d %H:%M:%S')}).\nAre you sure you want to restore this backup?\n\nThe current database will be saved as archive_database_old.db."
+        reply = QMessageBox.question(self, "Restore Database Backup", msg)
+        if reply == QMessageBox.Yes:
+            try:
+                if os.path.exists(db_path):
+                    shutil.copy2(db_path, old_db_path)
+                shutil.copy2(backup_path, db_path)
+                QMessageBox.information(self, "Success", "Database restored from backup.\nPlease restart the application for changes to take effect.")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to restore database: {e}")
+
     def backup_database_now(self):
         backup_path = self.db_manager.manual_backup_database()
         if backup_path:
             QMessageBox.information(self, "Success", f"Database backup created:\n{backup_path}")
+            self.refresh_db_backup_list()
         else:
             QMessageBox.critical(self, "Error", "Failed to create database backup.")
 
@@ -338,9 +420,9 @@ class PreferencesWindow(QDialog):
             pass
         self.gemini_api_edit.setText(self._get_gemini_api_key())
         self.gemini_status_label.setText("")
-        
         self.load_categories()
         self.load_templates()
+        self.refresh_db_backup_list()
 
     def load_categories(self):
         self.categories_list.clear()
