@@ -295,6 +295,11 @@ class PreferencesWindow(QDialog):
         self.backup_btn = QPushButton("Export Database to CSV")
         self.backup_btn.setIcon(qta.icon("fa6s.download"))
         backup_layout.addWidget(self.backup_btn)
+
+        self.backup_db_btn = QPushButton("Backup Database Now")
+        self.backup_db_btn.setIcon(qta.icon("fa6s.database"))
+        self.backup_db_btn.clicked.connect(self.backup_database_now)
+        backup_layout.addWidget(self.backup_db_btn)
         
         restore_group = QGroupBox("Database Restore")
         restore_layout = QVBoxLayout(restore_group)
@@ -315,6 +320,13 @@ class PreferencesWindow(QDialog):
         self.restore_btn.clicked.connect(self.restore_database)
         
         self.tab_widget.addTab(tab, qta.icon("fa6s.database"), "Backup/Restore")
+
+    def backup_database_now(self):
+        backup_path = self.db_manager.manual_backup_database()
+        if backup_path:
+            QMessageBox.information(self, "Success", f"Database backup created:\n{backup_path}")
+        else:
+            QMessageBox.critical(self, "Error", "Failed to create database backup.")
 
     def load_data(self):
         try:

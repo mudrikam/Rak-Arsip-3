@@ -4,6 +4,7 @@ import json
 import time
 import threading
 from pathlib import Path
+from datetime import datetime, timedelta
 from PySide6.QtCore import QObject, Signal, QTimer
 
 class DatabaseManager(QObject):
@@ -21,6 +22,7 @@ class DatabaseManager(QObject):
         self.temp_dir = os.path.join(os.path.dirname(self.db_path), "temp")
         self.ensure_database_exists()
         self.setup_file_watcher()
+        self.auto_backup_database_daily()
         
     def ensure_database_exists(self):
         db_dir = os.path.dirname(self.db_path)
@@ -32,7 +34,6 @@ class DatabaseManager(QObject):
         
         if self.db_config.get("create_if_not_exists", True):
             self.connect()
-            self.enable_wal_mode()
             self.create_tables()
             self.initialize_statuses()
             self.close()
@@ -40,10 +41,11 @@ class DatabaseManager(QObject):
     def enable_wal_mode(self):
         cursor = self.connection.cursor()
         cursor.execute("PRAGMA journal_mode=WAL")
-        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA synchronous=FULL")
         cursor.execute("PRAGMA cache_size=10000")
-        cursor.execute("PRAGMA temp_store=memory")
+        cursor.execute("PRAGMA temp_store=MEMORY")
         cursor.execute("PRAGMA mmap_size=268435456")
+        cursor.execute("PRAGMA busy_timeout=3000")
         self.connection.commit()
 
     def setup_file_watcher(self):
@@ -55,14 +57,11 @@ class DatabaseManager(QObject):
         try:
             if not os.path.exists(self.temp_dir):
                 return
-            
             for temp_file in os.listdir(self.temp_dir):
                 if temp_file.startswith("db_change_") and temp_file.endswith(".tmp"):
                     file_path = os.path.join(self.temp_dir, temp_file)
-                    
                     if not self.session_id in temp_file:
                         self.data_changed.emit()
-                        
                         try:
                             os.remove(file_path)
                         except:
@@ -82,10 +81,8 @@ class DatabaseManager(QObject):
             timestamp = int(time.time() * 1000)
             temp_filename = f"db_change_{self.session_id}_{timestamp}.tmp"
             temp_path = os.path.join(self.temp_dir, temp_filename)
-            
             with open(temp_path, 'w') as f:
                 f.write(f"Database change by session {self.session_id} at {timestamp}")
-            
         except Exception as e:
             print(f"Error creating temp file: {e}")
 
@@ -103,37 +100,30 @@ class DatabaseManager(QObject):
 
     def create_tables(self):
         cursor = self.connection.cursor()
-        
         for table_name, columns in self.tables_config.items():
             column_defs = []
             foreign_keys = []
-            
             for column_name, column_def in columns.items():
                 if column_name.startswith("FOREIGN KEY"):
                     foreign_keys.append(f"{column_name} {column_def}")
                 else:
                     column_defs.append(f"{column_name} {column_def}")
-            
             all_defs = column_defs + foreign_keys
             create_sql = f"CREATE TABLE IF NOT EXISTS {table_name} ({', '.join(all_defs)})"
             cursor.execute(create_sql)
-        
         self.connection.commit()
 
     def initialize_statuses(self):
         cursor = self.connection.cursor()
-        
         cursor.execute("SELECT COUNT(*) FROM statuses")
         if cursor.fetchone()[0] > 0:
             return
-        
         status_config = self.window_config_manager.get("status_options")
         for status_name, config in status_config.items():
             cursor.execute(
                 "INSERT INTO statuses (name, color, font_weight) VALUES (?, ?, ?)",
                 (status_name, config["color"], config["font_weight"])
             )
-        
         self.connection.commit()
 
     def get_all_categories(self):
@@ -154,13 +144,10 @@ class DatabaseManager(QObject):
 
     def get_or_create_category(self, category_name):
         cursor = self.connection.cursor()
-        
         cursor.execute("SELECT id FROM categories WHERE name = ?", (category_name,))
         result = cursor.fetchone()
-        
         if result:
             return result[0]
-        
         cursor.execute("INSERT INTO categories (name) VALUES (?)", (category_name,))
         self.connection.commit()
         self.create_temp_file()
@@ -168,16 +155,13 @@ class DatabaseManager(QObject):
 
     def get_or_create_subcategory(self, category_id, subcategory_name):
         cursor = self.connection.cursor()
-        
         cursor.execute(
             "SELECT id FROM subcategories WHERE category_id = ? AND name = ?",
             (category_id, subcategory_name)
         )
         result = cursor.fetchone()
-        
         if result:
             return result[0]
-        
         cursor.execute(
             "INSERT INTO subcategories (category_id, name) VALUES (?, ?)",
             (category_id, subcategory_name)
@@ -215,7 +199,6 @@ class DatabaseManager(QObject):
     def create_unique_path(self, base_path):
         if not os.path.exists(base_path):
             return base_path
-        
         counter = 1
         while True:
             new_path = f"{base_path}_{counter:02d}"
@@ -225,9 +208,7 @@ class DatabaseManager(QObject):
 
     def create_folder_structure(self, main_path, template_content=None):
         unique_main_path = self.create_unique_path(main_path)
-        
         os.makedirs(unique_main_path, exist_ok=True)
-        
         if template_content:
             lines = template_content.strip().split('\n')
             for line in lines:
@@ -235,17 +216,14 @@ class DatabaseManager(QObject):
                 if line:
                     subfolder_path = os.path.join(unique_main_path, line)
                     os.makedirs(subfolder_path, exist_ok=True)
-        
         return unique_main_path
 
     def insert_file(self, date, name, root, path, status_id, category_id=None, subcategory_id=None, template_id=None):
         cursor = self.connection.cursor()
-        
         cursor.execute("""
             INSERT INTO files (date, name, root, path, status_id, category_id, subcategory_id, template_id)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (date, name, root, path, status_id, category_id, subcategory_id, template_id))
-        
         self.connection.commit()
         self.create_temp_file()
         return cursor.lastrowid
@@ -400,3 +378,76 @@ class DatabaseManager(QObject):
         cursor.execute("DELETE FROM files WHERE id = ?", (file_id,))
         self.connection.commit()
         self.create_temp_file()
+
+    def auto_backup_database_daily(self):
+        backup_dir = os.path.join(os.path.dirname(self.db_path), "db_backups")
+        os.makedirs(backup_dir, exist_ok=True)
+        today_str = datetime.now().strftime("%Y%m%d")
+        backup_filename = f"archive_database_{today_str}.db"
+        backup_path = os.path.join(backup_dir, backup_filename)
+        lock_path = os.path.join(self.temp_dir, "backup.lock")
+        if os.path.exists(lock_path):
+            print("Backup sedang berlangsung oleh sesi lain.")
+            return
+        self.cleanup_old_backups(backup_dir)
+        try:
+            with open(lock_path, "w") as f:
+                f.write(self.session_id)
+            self.close()
+            src = self.db_path
+            if os.path.exists(src):
+                import shutil
+                shutil.copy2(src, backup_path)
+        except Exception as e:
+            print(f"Error creating daily backup: {e}")
+        finally:
+            try:
+                os.remove(lock_path)
+            except:
+                pass
+
+    def manual_backup_database(self):
+        backup_dir = os.path.join(os.path.dirname(self.db_path), "db_backups")
+        os.makedirs(backup_dir, exist_ok=True)
+        today_str = datetime.now().strftime("%Y%m%d")
+        backup_filename = f"archive_database_{today_str}.db"
+        backup_path = os.path.join(backup_dir, backup_filename)
+        lock_path = os.path.join(self.temp_dir, "backup.lock")
+        if os.path.exists(lock_path):
+            print("Backup sedang berlangsung oleh sesi lain.")
+            return None
+        self.cleanup_old_backups(backup_dir)
+        try:
+            with open(lock_path, "w") as f:
+                f.write(self.session_id)
+            self.close()
+            src = self.db_path
+            if os.path.exists(src):
+                import shutil
+                shutil.copy2(src, backup_path)
+            return backup_path
+        except Exception as e:
+            print(f"Error creating manual backup: {e}")
+            return None
+        finally:
+            try:
+                os.remove(lock_path)
+            except:
+                pass
+
+    def cleanup_old_backups(self, backup_dir):
+        try:
+            backups = []
+            for fname in os.listdir(backup_dir):
+                if fname.startswith("archive_database_") and fname.endswith(".db"):
+                    fpath = os.path.join(backup_dir, fname)
+                    backups.append((fpath, os.path.getmtime(fpath)))
+            backups.sort(key=lambda x: x[1])
+            while len(backups) >= 7:
+                try:
+                    os.remove(backups[0][0])
+                    backups.pop(0)
+                except Exception as e:
+                    print(f"Error removing old backup: {e}")
+        except Exception as e:
+            print(f"Error cleaning up backups: {e}")
