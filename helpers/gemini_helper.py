@@ -37,20 +37,24 @@ class GeminiHelper:
             if not api_key or api_key == "YOUR_GEMINI_API_KEY_HERE":
                 raise Exception("Gemini API key not configured in ai_config.json")
             model = gemini_config.get("model", "gemini-2.5-flash")
-            prompt = self.ai_config.get("prompts", {}).get("name_generation", "Generate a project name for this image")
+            prompt = self.ai_config.get("prompts", {}).get("name_generation")
             try:
                 import google.genai as genai
+                from google.genai import types
 
-                genai.configure(api_key=api_key)
-                client = genai.GenerativeModel(model)
+                client = genai.Client(api_key=api_key)
                 with open(image_path, 'rb') as f:
                     image_bytes = f.read()
-                image_part = {
-                    "mime_type": self.get_mime_type(image_path),
-                    "data": image_bytes
-                }
-                response = client.generate_content(
-                    [image_part, prompt]
+                image_part = types.Part.from_bytes(
+                    data=image_bytes,
+                    mime_type=self.get_mime_type(image_path)
+                )
+                response = client.models.generate_content(
+                    model=model,
+                    contents=[
+                        image_part,
+                        prompt
+                    ]
                 )
                 generated_name = response.text.strip()
                 sanitized_name = self.sanitize_name(generated_name)

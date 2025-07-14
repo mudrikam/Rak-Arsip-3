@@ -153,10 +153,13 @@ class PreferencesWindow(QDialog):
             self.gemini_status_label.setStyleSheet("color: #d32f2f; font-weight: bold;")
             return
         try:
-            import google.generativeai as genai
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel("gemini-2.0-flash")
-            response = model.generate_content("Say hello")
+            import google.genai as genai
+            from google.genai import types
+            client = genai.Client(api_key=api_key)
+            response = client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=["Say hello"]
+            )
             if hasattr(response, "text") and response.text:
                 self.gemini_status_label.setText("Gemini API is active.")
                 self.gemini_status_label.setStyleSheet("color: #43a047; font-weight: bold;")
@@ -617,4 +620,5 @@ class PreferencesWindow(QDialog):
             QMessageBox.information(self, "Success", "Preferences saved successfully.")
             self.accept()
         except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to save preferences: {e}")
             QMessageBox.critical(self, "Error", f"Failed to save preferences: {e}")
