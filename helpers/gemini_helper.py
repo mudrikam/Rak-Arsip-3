@@ -39,13 +39,12 @@ class GeminiHelper:
             model = gemini_config.get("model", "gemini-2.5-flash")
             prompt = self.ai_config.get("prompts", {}).get("name_generation", "Generate a project name for this image")
             try:
-                import google.generativeai as genai
+                import google.genai as genai
 
                 genai.configure(api_key=api_key)
                 client = genai.GenerativeModel(model)
                 with open(image_path, 'rb') as f:
                     image_bytes = f.read()
-                # Use dict for image part, not types.Part
                 image_part = {
                     "mime_type": self.get_mime_type(image_path),
                     "data": image_bytes
