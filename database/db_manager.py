@@ -394,3 +394,9 @@ class DatabaseManager(QObject):
         cursor.execute("DELETE FROM templates WHERE id = ?", (template_id,))
         self.connection.commit()
         self.create_temp_file()
+
+    def delete_file(self, file_id):
+        cursor = self.connection.cursor()
+        cursor.execute("DELETE FROM files WHERE id = ?", (file_id,))
+        self.connection.commit()
+        self.create_temp_file()

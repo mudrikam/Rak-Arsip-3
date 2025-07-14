@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QHeaderView,
     QHBoxLayout, QLineEdit, QPushButton, QLabel, QSpacerItem, QSizePolicy, QComboBox,
-    QMenu, QApplication
+    QMenu, QApplication, QMessageBox
 )
 from PySide6.QtGui import QColor, QAction, QFontMetrics, QCursor, QKeySequence, QShortcut
 from PySide6.QtCore import Signal, Qt, QTimer
@@ -385,10 +385,11 @@ class CentralWidget(QWidget):
         icon_copy_name = qta.icon("fa6s.copy")
         icon_copy_path = qta.icon("fa6s.folder-open")
         icon_open_explorer = qta.icon("fa6s.folder-tree")
-
+        icon_delete = qta.icon("fa6s.trash")
         action_copy_name = QAction(icon_copy_name, "Copy Name\tCtrl+C", self)
         action_copy_path = QAction(icon_copy_path, "Copy Path\tCtrl+X", self)
         action_open_explorer = QAction(icon_open_explorer, "Open in Explorer\tCtrl+E", self)
+        action_delete = QAction(icon_delete, "Delete Record", self)
 
         def do_copy_name():
             QApplication.clipboard().setText(str(row_data['name']))
@@ -410,10 +411,38 @@ class CentralWidget(QWidget):
             else:
                 subprocess.Popen(["xdg-open", path if os.path.exists(path) else os.path.dirname(path)])
 
+        def do_delete_record():
+            confirm1 = QMessageBox.question(
+                self,
+                "Delete Record",
+                "Delete this record?\nThis action cannot be undone.",
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if confirm1 == QMessageBox.Yes:
+                confirm2 = QMessageBox.question(
+                    self,
+                    "Are you sure?",
+                    "Are you sure you want to permanently delete this record?",
+                    QMessageBox.Yes | QMessageBox.No
+                )
+                if confirm2 == QMessageBox.Yes:
+                    try:
+                        self.db_manager.connect()
+                        self.db_manager.delete_file(row_data['id'])
+                        self.load_data_from_database()
+                        QMessageBox.information(self, "Success", "Record deleted.")
+                    except Exception as e:
+                        QMessageBox.critical(self, "Error", f"Failed to delete record: {e}")
+                    finally:
+                        self.db_manager.close()
+
         action_copy_name.triggered.connect(do_copy_name)
         action_copy_path.triggered.connect(do_copy_path)
         action_open_explorer.triggered.connect(do_open_explorer)
+        action_delete.triggered.connect(do_delete_record)
         menu.addAction(action_copy_name)
         menu.addAction(action_copy_path)
         menu.addAction(action_open_explorer)
+        menu.addSeparator()
+        menu.addAction(action_delete)
         menu.exec(self.table.viewport().mapToGlobal(pos))
