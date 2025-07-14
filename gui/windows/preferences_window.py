@@ -73,7 +73,6 @@ class PreferencesWindow(QDialog):
         group.setLayout(group_layout)
         layout.addWidget(group)
 
-        # Gemini API Key Section
         gemini_group = QGroupBox("Gemini API Key")
         gemini_layout = QVBoxLayout(gemini_group)
         gemini_row = QHBoxLayout()
@@ -422,9 +421,18 @@ class PreferencesWindow(QDialog):
         
         category_name = current_item.text()
         reply = QMessageBox.question(self, "Delete Category", 
-                                   f"Delete category '{category_name}'?\nThis will also delete all subcategories and associated files.")
+                                   f"Delete category '{category_name}'?\nThis will also delete all subcategories.")
         if reply == QMessageBox.Yes:
-            QMessageBox.information(self, "Info", "Category deletion requires manual database modification.")
+            try:
+                self.db_manager.connect()
+                self.db_manager.delete_category(category_name)
+                self.load_categories()
+                self.subcategories_list.clear()
+                QMessageBox.information(self, "Success", f"Category '{category_name}' deleted.")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to delete category: {e}")
+            finally:
+                self.db_manager.close()
 
     def add_subcategory(self):
         current_category = self.categories_list.currentItem()
@@ -456,14 +464,24 @@ class PreferencesWindow(QDialog):
 
     def delete_subcategory(self):
         current_item = self.subcategories_list.currentItem()
-        if not current_item:
+        category_item = self.categories_list.currentItem()
+        if not current_item or not category_item:
             return
         
         subcategory_name = current_item.text()
+        category_name = category_item.text()
         reply = QMessageBox.question(self, "Delete Subcategory", 
-                                   f"Delete subcategory '{subcategory_name}'?\nThis will affect associated files.")
+                                   f"Delete subcategory '{subcategory_name}'?")
         if reply == QMessageBox.Yes:
-            QMessageBox.information(self, "Info", "Subcategory deletion requires manual database modification.")
+            try:
+                self.db_manager.connect()
+                self.db_manager.delete_subcategory(category_name, subcategory_name)
+                self.load_subcategories()
+                QMessageBox.information(self, "Success", f"Subcategory '{subcategory_name}' deleted.")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to delete subcategory: {e}")
+            finally:
+                self.db_manager.close()
 
     def add_template(self):
         self.template_name_edit.clear()
@@ -483,7 +501,17 @@ class PreferencesWindow(QDialog):
         template_name = current_item.text()
         reply = QMessageBox.question(self, "Delete Template", f"Delete template '{template_name}'?")
         if reply == QMessageBox.Yes:
-            QMessageBox.information(self, "Info", "Template deletion requires manual database modification.")
+            try:
+                self.db_manager.connect()
+                self.db_manager.delete_template(template_name)
+                self.load_templates()
+                self.template_name_edit.clear()
+                self.template_content_edit.clear()
+                QMessageBox.information(self, "Success", f"Template '{template_name}' deleted.")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to delete template: {e}")
+            finally:
+                self.db_manager.close()
 
     def save_template(self):
         name = self.template_name_edit.text().strip()
@@ -620,5 +648,4 @@ class PreferencesWindow(QDialog):
             QMessageBox.information(self, "Success", "Preferences saved successfully.")
             self.accept()
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to save preferences: {e}")
             QMessageBox.critical(self, "Error", f"Failed to save preferences: {e}")

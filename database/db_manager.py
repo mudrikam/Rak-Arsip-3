@@ -352,3 +352,45 @@ class DatabaseManager(QObject):
         )
         self.connection.commit()
         self.create_temp_file()
+
+    def delete_category(self, category_name):
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT id FROM categories WHERE name = ?", (category_name,))
+        result = cursor.fetchone()
+        if not result:
+            return
+        category_id = result[0]
+        cursor.execute("UPDATE files SET category_id = NULL WHERE category_id = ?", (category_id,))
+        cursor.execute("DELETE FROM subcategories WHERE category_id = ?", (category_id,))
+        cursor.execute("DELETE FROM categories WHERE id = ?", (category_id,))
+        self.connection.commit()
+        self.create_temp_file()
+
+    def delete_subcategory(self, category_name, subcategory_name):
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT id FROM categories WHERE name = ?", (category_name,))
+        category = cursor.fetchone()
+        if not category:
+            return
+        category_id = category[0]
+        cursor.execute("SELECT id FROM subcategories WHERE category_id = ? AND name = ?", (category_id, subcategory_name))
+        subcategory = cursor.fetchone()
+        if not subcategory:
+            return
+        subcategory_id = subcategory[0]
+        cursor.execute("UPDATE files SET subcategory_id = NULL WHERE subcategory_id = ?", (subcategory_id,))
+        cursor.execute("DELETE FROM subcategories WHERE id = ?", (subcategory_id,))
+        self.connection.commit()
+        self.create_temp_file()
+
+    def delete_template(self, template_name):
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT id FROM templates WHERE name = ?", (template_name,))
+        result = cursor.fetchone()
+        if not result:
+            return
+        template_id = result[0]
+        cursor.execute("UPDATE files SET template_id = NULL WHERE template_id = ?", (template_id,))
+        cursor.execute("DELETE FROM templates WHERE id = ?", (template_id,))
+        self.connection.commit()
+        self.create_temp_file()
