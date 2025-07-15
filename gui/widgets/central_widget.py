@@ -331,7 +331,11 @@ class CentralWidget(QWidget):
         last_date = "-"
         if self._all_data:
             last_date = self._all_data[0]['date']
-        self.stats_label.setText(f"Total: {total_records} | Last: {last_date}")
+        if self.search_edit.text().strip():
+            found_records = len(self.filtered_data)
+            self.stats_label.setText(f"Total: {total_records} | Last: {last_date} | Found: {found_records} Records")
+        else:
+            self.stats_label.setText(f"Total: {total_records} | Last: {last_date}")
 
     def on_row_selected(self):
         current_row = self.table.currentRow()
