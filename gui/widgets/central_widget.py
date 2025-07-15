@@ -110,10 +110,19 @@ class CentralWidget(QWidget):
         # Make table selection highlight the entire row and disable cell editing
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
-
-        # Double click on any cell opens explorer for that row
         self.table.cellDoubleClicked.connect(self._on_table_double_click)
         self.table.cellClicked.connect(self._on_table_cell_clicked)
+
+        # Set pointing hand cursor on cell hover
+        self.table.setMouseTracking(True)
+        def table_mouseMoveEvent(event):
+            index = self.table.indexAt(event.pos())
+            if index.isValid():
+                self.table.viewport().setCursor(Qt.PointingHandCursor)
+            else:
+                self.table.viewport().setCursor(Qt.ArrowCursor)
+            return QTableWidget.mouseMoveEvent(self.table, event)
+        self.table.mouseMoveEvent = table_mouseMoveEvent
 
         pagination_row = QHBoxLayout()
         
