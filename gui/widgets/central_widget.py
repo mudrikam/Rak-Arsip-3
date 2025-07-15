@@ -12,6 +12,7 @@ from pathlib import Path
 import subprocess
 import sys
 import os
+import shutil
 
 class CentralWidget(QWidget):
     row_selected = Signal(dict)
@@ -474,15 +475,22 @@ class CentralWidget(QWidget):
                 confirm2 = QMessageBox.question(
                     self,
                     "Are you sure?",
-                    "Are you sure you want to permanently delete this record?",
+                    "Are you sure you want to permanently delete this record and its project folder?",
                     QMessageBox.Yes | QMessageBox.No
                 )
                 if confirm2 == QMessageBox.Yes:
                     try:
                         self.db_manager.connect()
                         self.db_manager.delete_file(row_data['id'])
+                        # Delete only the last folder and its contents
+                        project_path = str(row_data['path'])
+                        if os.path.isdir(project_path):
+                            try:
+                                shutil.rmtree(project_path)
+                            except Exception as e:
+                                print(f"Error deleting project folder: {e}")
                         self.load_data_from_database()
-                        QMessageBox.information(self, "Success", "Record deleted.")
+                        QMessageBox.information(self, "Success", "Record and project folder deleted.")
                     except Exception as e:
                         QMessageBox.critical(self, "Error", f"Failed to delete record: {e}")
                     finally:
