@@ -44,6 +44,10 @@
         "Finished": {
             "color": "#43a047",
             "font_weight": "bold"
+        },
+        "Need Upload": {
+            "color": "#e91e63",
+            "font_weight": "bold"
         }
     },
     "about": {
