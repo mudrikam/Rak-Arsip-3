@@ -106,6 +106,14 @@ class CentralWidget(QWidget):
         header.resizeSection(4, 120)
         layout.addWidget(self.table)
 
+        # Make table selection highlight the entire row and disable cell editing
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+
+        # Double click on any cell opens explorer for that row
+        self.table.cellDoubleClicked.connect(self._on_table_double_click)
+        self.table.cellClicked.connect(self._on_table_cell_clicked)
+
         pagination_row = QHBoxLayout()
         
         pagination_icon = QLabel()
@@ -179,6 +187,19 @@ class CentralWidget(QWidget):
                         subprocess.Popen(f'explorer "{parent_dir}"')
             else:
                 subprocess.Popen(["xdg-open", path if os.path.exists(path) else os.path.dirname(path)])
+
+    def _on_table_double_click(self, row, column):
+        # Open explorer for the selected row
+        item = self.table.item(row, 0)
+        if item:
+            row_data = item.data(256)
+            if row_data:
+                self.selected_row_data = row_data
+                self.open_explorer()
+
+    def _on_table_cell_clicked(self, row, column):
+        # Select the entire row when any cell is clicked
+        self.table.selectRow(row)
 
     def load_data_from_database(self):
         try:
