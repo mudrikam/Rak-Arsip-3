@@ -45,11 +45,10 @@ class NameFieldWidget(QFrame):
         input_row.addWidget(self.make_btn)
 
         self.star_btn = QPushButton(self)
-        self.star_btn.setIcon(qta.icon("fa6s.star", color="#FFAE00"))
+        self.star_btn.setIcon(qta.icon("fa6s.wand-magic-sparkles", color="#FFAE00"))
         self.star_btn.setFixedSize(36, 36)
         self.star_btn.setToolTip("Generate Name from Image")
         self.star_btn.setCursor(Qt.PointingHandCursor)
-        self.star_btn.setStyleSheet("border: none;")
         input_row.addWidget(self.star_btn)
 
         layout.addLayout(input_row)
