@@ -47,9 +47,10 @@ class CentralWidget(QWidget):
         self.search_edit = QLineEdit(self)
         self.search_edit.setPlaceholderText("Search projects...")
         self.search_edit.setMinimumHeight(32)
-        search_section.addWidget(self.search_edit)
+        self.search_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        search_section.addWidget(self.search_edit, 1)
         
-        top_row.addLayout(search_section)
+        top_row.addLayout(search_section, 1)
 
         self.clear_search_btn = QPushButton("Clear", self)
         self.clear_search_btn.setIcon(qta.icon("fa6s.xmark"))
