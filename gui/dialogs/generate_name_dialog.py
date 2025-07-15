@@ -21,7 +21,7 @@ class ImageDropLabel(QLabel):
         self.setAcceptDrops(True)
         self.setAlignment(Qt.AlignCenter)
         self.setMinimumSize(300, 120)
-        self.setMaximumHeight(130)
+        self.setMaximumHeight(150)
         self.setText("Drop image here or click to select")
         self.setWordWrap(True)
         
@@ -92,7 +92,7 @@ class GenerateNameDialog(QDialog):
         self.config_manager = config_manager
         self.setWindowTitle("Generate Project Name from Image")
         self.setWindowIcon(qta.icon("fa6s.star"))
-        self.setMinimumSize(400, 260)
+        self.setMinimumSize(400, 280)
         self.setMaximumHeight(320)
         self.setModal(True)
         
@@ -273,7 +273,7 @@ class GenerateNameDialog(QDialog):
         self.generate_btn.setEnabled(True)
         self.generate_btn.setText("Generate Name from Image")
         self.progress_bar.setVisible(False)
-        self.result_label.setStyleSheet("font-size: 15px; color: #d32f2f;")
+        self.result_label.setStyleSheet("font-size: 12px; color: #d32f2f;")
         self.result_label.setText(error)
 
     def _wrap_text(self, text, width):
