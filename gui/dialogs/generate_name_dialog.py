@@ -80,9 +80,9 @@ class NameGenerationThread(QThread):
             if generated_name:
                 self.name_generated.emit(generated_name)
             else:
-                self.error_occurred.emit("Failed to generate name from image")
+                self.error_occurred.emit("Failed to generate name from image (no name returned by Gemini API)")
         except Exception as e:
-            self.error_occurred.emit(str(e))
+            self.error_occurred.emit(f"Failed to generate name: {e}")
 
 class GenerateNameDialog(QDialog):
     name_generated = Signal(str)
@@ -266,14 +266,16 @@ class GenerateNameDialog(QDialog):
         self.generate_btn.setText("Generate Name from Image")
         self.ok_btn.setEnabled(True)
         self.progress_bar.setVisible(False)
+        self.result_label.setStyleSheet("font-size: 15px; color: #1976d2;")
         self.result_label.setText(self._wrap_text(name, 32))
         
     def on_generation_error(self, error):
         self.generate_btn.setEnabled(True)
         self.generate_btn.setText("Generate Name from Image")
         self.progress_bar.setVisible(False)
-        self.result_label.setText("Failed to generate name.")
-        
+        self.result_label.setStyleSheet("font-size: 15px; color: #d32f2f;")
+        self.result_label.setText(error)
+
     def _wrap_text(self, text, width):
         if not text:
             return ""
