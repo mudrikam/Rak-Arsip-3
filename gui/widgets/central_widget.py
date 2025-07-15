@@ -49,7 +49,16 @@ class CentralWidget(QWidget):
         self.search_edit.setMinimumHeight(32)
         self.search_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         search_section.addWidget(self.search_edit, 1)
-        
+
+        self.paste_search_btn = QPushButton()
+        self.paste_search_btn.setIcon(qta.icon("fa6s.paste"))
+        self.paste_search_btn.setMinimumHeight(32)
+        self.paste_search_btn.setMaximumHeight(32)
+        self.paste_search_btn.setFixedWidth(50)
+        self.paste_search_btn.setToolTip("Paste from clipboard")
+        self.paste_search_btn.clicked.connect(self.paste_to_search)
+        search_section.addWidget(self.paste_search_btn)
+
         top_row.addLayout(search_section, 1)
 
         self.clear_search_btn = QPushButton("Clear", self)
@@ -132,8 +141,10 @@ class CentralWidget(QWidget):
         
         self.prev_btn = QPushButton("Prev", self)
         self.prev_btn.setIcon(qta.icon("fa6s.chevron-left"))
+        self.prev_btn.setMinimumHeight(32)
         self.next_btn = QPushButton("Next", self)
         self.next_btn.setIcon(qta.icon("fa6s.chevron-right"))
+        self.next_btn.setMinimumHeight(32)
         self.page_label = QLabel(self)
         pagination_row.addWidget(self.prev_btn)
         pagination_row.addWidget(self.page_label)
@@ -171,6 +182,12 @@ class CentralWidget(QWidget):
         open_explorer_shortcut.activated.connect(self.open_explorer)
 
         self.load_data_from_database()
+
+    def paste_to_search(self):
+        clipboard = QApplication.clipboard()
+        text = clipboard.text()
+        if text:
+            self.search_edit.setText(text)
 
     def auto_refresh_table(self):
         self.load_data_from_database()
