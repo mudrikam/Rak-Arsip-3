@@ -71,6 +71,7 @@ def get_first_level_folders(disk_path):
             and item != "$RECYCLE.BIN"
             and not item.startswith(".")
         ]
+        folders.sort(key=lambda x: x.lower())
         return folders
     except Exception:
         return []
