@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
-    QFrame, QFileDialog, QMessageBox, QApplication, QProgressBar
+    QFrame, QFileDialog, QMessageBox, QApplication, QProgressBar, QLineEdit
 )
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QPixmap, QDragEnterEvent, QDropEvent, QImage, QGuiApplication
@@ -143,7 +143,7 @@ class GenerateNameDialog(QDialog):
         self.progress_bar.setVisible(False)
         self.progress_bar.setMaximumHeight(18)
         layout.addWidget(self.progress_bar)
-        
+
         button_layout = QHBoxLayout()
         button_layout.setSpacing(6)
         
@@ -166,6 +166,18 @@ class GenerateNameDialog(QDialog):
         layout.addLayout(button_layout)
         
         dialog_buttons = QHBoxLayout()
+        # Tambahkan tombol test API dan label status di kiri
+        self.test_api_btn = QPushButton()
+        self.test_api_btn.setIcon(qta.icon("fa6s.plug-circle-check"))
+        self.test_api_btn.setToolTip("Test Gemini API Key")
+        self.test_api_btn.setMinimumHeight(32)
+        self.test_api_btn.setMaximumHeight(32)
+        self.test_api_btn.setFixedWidth(50)
+        self.test_api_btn.clicked.connect(self.test_gemini_api)
+        self.api_status_label = QLabel("")
+        self.api_status_label.setStyleSheet("color: #1976d2; font-weight: bold;")
+        dialog_buttons.addWidget(self.test_api_btn)
+        dialog_buttons.addWidget(self.api_status_label)
         dialog_buttons.addStretch()
         
         self.ok_btn = QPushButton("OK")
@@ -183,6 +195,38 @@ class GenerateNameDialog(QDialog):
         
         self.generated_name = ""
         self.setLayout(layout)
+
+    def test_gemini_api(self):
+        try:
+            ai_config = self.gemini_helper.ai_config
+            api_key = ai_config.get("gemini", {}).get("api_key", "")
+            if not api_key:
+                self.api_status_label.setText("API Key is empty.")
+                self.api_status_label.setStyleSheet("color: #d32f2f; font-weight: bold;")
+                return
+            try:
+                import google.genai as genai
+                from google.genai import types
+                client = genai.Client(api_key=api_key)
+                response = client.models.generate_content(
+                    model=ai_config.get("gemini", {}).get("model", "gemini-2.0-flash"),
+                    contents=["Say hello"]
+                )
+                if hasattr(response, "text") and response.text:
+                    self.api_status_label.setText("Gemini API is active.")
+                    self.api_status_label.setStyleSheet("color: #43a047; font-weight: bold;")
+                else:
+                    self.api_status_label.setText("No response from Gemini API.")
+                    self.api_status_label.setStyleSheet("color: #d32f2f; font-weight: bold;")
+            except ImportError:
+                self.api_status_label.setText("google-genai not installed.")
+                self.api_status_label.setStyleSheet("color: #d32f2f; font-weight: bold;")
+            except Exception as e:
+                self.api_status_label.setText(f"Error: {e}")
+                self.api_status_label.setStyleSheet("color: #d32f2f; font-weight: bold;")
+        except Exception as e:
+            self.api_status_label.setText(f"Error: {e}")
+            self.api_status_label.setStyleSheet("color: #d32f2f; font-weight: bold;")
 
     def on_paste_clicked(self):
         clipboard = QGuiApplication.clipboard()
