@@ -52,6 +52,16 @@ class PropertiesWidget(QDockWidget):
         name_row.addStretch()
         layout.addLayout(name_row)
 
+        # Category/Subcategory row (single row with slash)
+        cat_row = QHBoxLayout()
+        cat_icon = QLabel()
+        cat_icon.setPixmap(qta.icon("fa6s.folder-tree", color="#666").pixmap(16, 16))
+        self.cat_combined_label = QLabel("-", container)
+        cat_row.addWidget(cat_icon)
+        cat_row.addWidget(self.cat_combined_label)
+        cat_row.addStretch()
+        layout.addLayout(cat_row)
+
         status_row = QHBoxLayout()
         status_icon = QLabel()
         status_icon.setPixmap(qta.icon("fa6s.circle-info", color="#666").pixmap(16, 16))
@@ -75,6 +85,16 @@ class PropertiesWidget(QDockWidget):
         name = row_data.get('name', '-')
         wrapped_name = self._wrap_long_word(name, 22)
         self.name_label.setText(f"{wrapped_name}")
+        category = row_data.get('category', '-')
+        subcategory = row_data.get('subcategory', '-')
+        if category and subcategory and category != "-" and subcategory != "-":
+            self.cat_combined_label.setText(f"{category}/{subcategory}")
+        elif category and category != "-":
+            self.cat_combined_label.setText(f"{category}")
+        elif subcategory and subcategory != "-":
+            self.cat_combined_label.setText(f"/{subcategory}")
+        else:
+            self.cat_combined_label.setText("-")
         status = row_data.get('status', '-')
         self.status_label.setText(f"{status}")
         self._apply_status_color(status)
