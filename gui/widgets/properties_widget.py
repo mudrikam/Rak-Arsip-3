@@ -64,7 +64,7 @@ class PropertiesWidget(QDockWidget):
         layout.addStretch()
         container.setLayout(layout)
         self.setWidget(container)
-        self.setFixedWidth(220)
+        self.setFixedWidth(200)
         
         self.supported_formats = ['.png', '.jpg', '.jpeg', '.bmp', '.gif', '.tiff', '.webp', '.tif']
 
