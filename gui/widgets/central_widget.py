@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QHeaderView,
     QHBoxLayout, QLineEdit, QPushButton, QLabel, QSpacerItem, QSizePolicy, QComboBox,
-    QMenu, QApplication, QMessageBox
+    QMenu, QApplication, QMessageBox, QDialog, QVBoxLayout as QVBoxLayout2, QRadioButton, QButtonGroup, QDialogButtonBox
 )
 from PySide6.QtGui import QColor, QAction, QFontMetrics, QCursor, QKeySequence, QShortcut
 from PySide6.QtCore import Signal, Qt, QTimer
@@ -13,6 +13,7 @@ import subprocess
 import sys
 import os
 import shutil
+from gui.dialogs.short_dialog import SortDialog
 
 class CentralWidget(QWidget):
     row_selected = Signal(dict)
@@ -23,6 +24,9 @@ class CentralWidget(QWidget):
         self.status_config = self.config_manager.get("status_options")
         self.status_options = list(self.status_config.keys())
         self.selected_row_data = None
+        self.sort_field = "date"
+        self.sort_order = "desc"
+        self.sort_status_value = None
         
         # Use the same database manager instance from the main window
         if hasattr(parent, 'main_action_dock') and hasattr(parent.main_action_dock, 'db_manager'):
@@ -74,6 +78,13 @@ class CentralWidget(QWidget):
         self.refresh_btn.setMinimumHeight(32)
         self.refresh_btn.setToolTip("Reload project table")
         top_row.addWidget(self.refresh_btn)
+
+        self.sort_btn = QPushButton("Sort By", self)
+        self.sort_btn.setIcon(qta.icon("fa6s.arrow-down-wide-short"))
+        self.sort_btn.setMinimumHeight(32)
+        self.sort_btn.setToolTip("Sort table data")
+        self.sort_btn.clicked.connect(self.show_sort_dialog)
+        top_row.addWidget(self.sort_btn)
 
         top_row.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
         layout.addLayout(top_row)
@@ -508,3 +519,22 @@ class CentralWidget(QWidget):
         menu.addSeparator()
         menu.addAction(action_delete)
         menu.exec(self.table.viewport().mapToGlobal(pos))
+
+    def show_sort_dialog(self):
+        dlg = SortDialog(self.status_options, self)
+        if dlg.exec() == QDialog.Accepted:
+            field, order, status_value = dlg.get_sort_option(self.status_options)
+            self.sort_field = field
+            self.sort_order = order
+            self.sort_status_value = status_value
+            self.apply_sort()
+
+    def apply_sort(self):
+        self.filtered_data = SortDialog.sort_data(
+            self.filtered_data,
+            self.sort_field,
+            self.sort_order,
+            self.sort_status_value
+        )
+        self.current_page = 1
+        self.update_table()
