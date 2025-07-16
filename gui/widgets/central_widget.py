@@ -530,6 +530,14 @@ class CentralWidget(QWidget):
             self.apply_sort()
 
     def apply_sort(self):
+        # If status_value is set, filter like search (only show that status)
+        if self.sort_field == "status" and self.sort_status_value:
+            self.filtered_data = [
+                row for row in self._all_data
+                if row.get("status") == self.sort_status_value
+            ]
+        else:
+            self.filtered_data = self._all_data.copy()
         self.filtered_data = SortDialog.sort_data(
             self.filtered_data,
             self.sort_field,
