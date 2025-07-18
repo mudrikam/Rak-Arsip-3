@@ -16,6 +16,10 @@ import shutil
 from gui.dialogs.short_dialog import SortDialog
 from helpers.show_statusbar_helper import show_statusbar_message
 
+class NoWheelComboBox(QComboBox):
+    def wheelEvent(self, event):
+        event.ignore()
+
 class CentralWidget(QWidget):
     row_selected = Signal(dict)
     
@@ -123,12 +127,9 @@ class CentralWidget(QWidget):
 
         self.table.setMouseTracking(True)
         def table_mouseMoveEvent(event):
-            # Disable hover selection: only change cursor, do not change selection
             index = self.table.indexAt(event.pos())
-            if index.isValid():
-                self.table.viewport().setCursor(Qt.PointingHandCursor)
-            else:
-                self.table.viewport().setCursor(Qt.ArrowCursor)
+            self.table.viewport().setCursor(Qt.PointingHandCursor if index.isValid() else Qt.ArrowCursor)
+            # Do not change selection on hover
             return QTableWidget.mouseMoveEvent(self.table, event)
         self.table.mouseMoveEvent = table_mouseMoveEvent
 
@@ -325,17 +326,17 @@ class CentralWidget(QWidget):
             path_item = QTableWidgetItem(truncated_path)
             path_item.setToolTip(row_data['path'])
             self.table.setItem(row_idx, 3, path_item)
-            combo = QComboBox(self.table)
+            combo = NoWheelComboBox(self.table)
             combo.addItems(self.status_options)
             combo.setCurrentText(row_data['status'])
             self._set_status_text_color(combo, row_data['status'])
             combo.currentTextChanged.connect(lambda val, row=row_idx: self._on_status_changed(row, val))
+            combo.setFocusPolicy(Qt.StrongFocus)
             self.table.setCellWidget(row_idx, 4, combo)
         self.page_label.setText(f"Page {self.current_page} / {total_pages}")
         self.prev_btn.setEnabled(self.current_page > 1)
         self.next_btn.setEnabled(self.current_page < total_pages)
         self.update_stats_label()
-        # Restore selection if possible
         if self._selected_row_index is not None and 0 <= self._selected_row_index < self.table.rowCount():
             self.table.selectRow(self._selected_row_index)
 
