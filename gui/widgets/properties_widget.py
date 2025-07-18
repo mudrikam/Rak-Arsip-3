@@ -1,6 +1,6 @@
-from PySide6.QtWidgets import QDockWidget, QWidget, QVBoxLayout, QLabel, QFrame, QHBoxLayout
+from PySide6.QtWidgets import QDockWidget, QWidget, QVBoxLayout, QLabel, QFrame, QHBoxLayout, QApplication
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QPixmap, QCursor
 import qtawesome as qta
 import os
 from pathlib import Path
@@ -32,27 +32,30 @@ class PropertiesWidget(QDockWidget):
         layout.addLayout(date_row)
 
         root_row = QHBoxLayout()
-        root_icon = QLabel()
-        root_icon.setPixmap(qta.icon("fa6s.folder", color="#666").pixmap(16, 16))
+        self.root_icon = QLabel()
+        self.root_icon.setPixmap(qta.icon("fa6s.folder", color="#666").pixmap(16, 16))
+        self.root_icon.setCursor(Qt.PointingHandCursor)
         self.root_label = QLabel("-", container)
-        root_row.addWidget(root_icon)
+        self.root_label.setCursor(Qt.PointingHandCursor)
+        root_row.addWidget(self.root_icon)
         root_row.addWidget(self.root_label)
         root_row.addStretch()
         layout.addLayout(root_row)
 
         name_row = QHBoxLayout()
-        name_icon = QLabel()
-        name_icon.setPixmap(qta.icon("fa6s.file-lines", color="#666").pixmap(16, 16))
+        self.name_icon = QLabel()
+        self.name_icon.setPixmap(qta.icon("fa6s.file-lines", color="#666").pixmap(16, 16))
+        self.name_icon.setCursor(Qt.PointingHandCursor)
         self.name_label = QLabel("-", container)
         self.name_label.setWordWrap(True)
         self.name_label.setMinimumWidth(180)
         self.name_label.setMaximumWidth(200)
-        name_row.addWidget(name_icon)
+        self.name_label.setCursor(Qt.PointingHandCursor)
+        name_row.addWidget(self.name_icon)
         name_row.addWidget(self.name_label)
         name_row.addStretch()
         layout.addLayout(name_row)
 
-        # Category/Subcategory row (single row with slash)
         cat_row = QHBoxLayout()
         cat_icon = QLabel()
         cat_icon.setPixmap(qta.icon("fa6s.folder-tree", color="#666").pixmap(16, 16))
@@ -78,7 +81,14 @@ class PropertiesWidget(QDockWidget):
         
         self.supported_formats = ['.png', '.jpg', '.jpeg', '.bmp', '.gif', '.tiff', '.webp', '.tif']
 
+        self._current_row_data = None
+        self.root_icon.mousePressEvent = self._on_root_icon_clicked
+        self.root_label.mousePressEvent = self._on_root_icon_clicked
+        self.name_icon.mousePressEvent = self._on_name_icon_clicked
+        self.name_label.mousePressEvent = self._on_name_icon_clicked
+
     def update_properties(self, row_data):
+        self._current_row_data = row_data
         self.date_label.setText(f"{row_data.get('date', '-')}")
         root = row_data.get('root', '-')
         self.root_label.setText(f"{root}")
@@ -99,6 +109,31 @@ class PropertiesWidget(QDockWidget):
         self.status_label.setText(f"{status}")
         self._apply_status_color(status)
         self.load_preview_image(row_data.get('path', ''), row_data.get('name', ''))
+
+    def _show_statusbar_message(self, message):
+        main_window = self.parent_window
+        if hasattr(main_window, "statusBar"):
+            statusbar = main_window.statusBar()
+            if statusbar:
+                statusbar.showMessage(message, 2000)
+
+    def _on_root_icon_clicked(self, event):
+        if self._current_row_data:
+            path = self._current_row_data.get('path', '')
+            if path:
+                QApplication.clipboard().setText(str(path))
+                self._show_statusbar_message(f"Path copied: {path}")
+            else:
+                self._show_statusbar_message("No path to copy")
+
+    def _on_name_icon_clicked(self, event):
+        if self._current_row_data:
+            name = self._current_row_data.get('name', '')
+            if name:
+                QApplication.clipboard().setText(str(name))
+                self._show_statusbar_message(f"Name copied: {name}")
+            else:
+                self._show_statusbar_message("No name to copy")
 
     def _apply_status_color(self, status):
         if hasattr(self.parent_window, 'config_manager'):

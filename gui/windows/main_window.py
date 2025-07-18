@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QMainWindow, QApplication, QWidget
+from PySide6.QtWidgets import QMainWindow, QApplication, QWidget, QStatusBar
 from PySide6.QtCore import Qt, QRect, QCoreApplication
 from helpers.window_helper import get_window_config, set_app_user_model_id, set_window_icon
 from gui.widgets.main_menu import MainMenu
@@ -35,6 +35,9 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.RightDockWidgetArea, self.properties_widget)
         
         self.central_widget.row_selected.connect(self.properties_widget.update_properties)
+
+        self.status_bar = QStatusBar(self)
+        self.setStatusBar(self.status_bar)
 
     def center_on_screen(self):
         screen = QApplication.primaryScreen()
