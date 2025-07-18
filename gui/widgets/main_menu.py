@@ -54,4 +54,4 @@ class MainMenu(QMenuBar):
         dialog.exec()
 
     def open_repo(self):
-        webbrowser.open("https://github.com/")
+        webbrowser.open("https://github.com/mudrikam/Rak-Arsip-3")
