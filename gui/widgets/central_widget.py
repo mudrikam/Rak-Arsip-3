@@ -180,6 +180,7 @@ class CentralWidget(QWidget):
         text = clipboard.text()
         if text:
             self.search_edit.setText(text)
+            self.apply_search()
             show_statusbar_message(self, f"Pasted to search: {text}")
 
     def auto_refresh_table(self):
@@ -251,7 +252,7 @@ class CentralWidget(QWidget):
                     'category': row['category_name'],
                     'subcategory': row['subcategory_name']
                 })
-            if keep_search and hasattr(self, 'search_edit') and self.search_edit.text().strip():
+            if (keep_search or True) and hasattr(self, 'search_edit') and self.search_edit.text().strip():
                 self.apply_search(refresh_only=True)
             else:
                 self.filtered_data = self._all_data.copy()
@@ -268,7 +269,7 @@ class CentralWidget(QWidget):
             self.db_manager.close()
 
     def refresh_table(self):
-        self.load_data_from_database()
+        self.load_data_from_database(keep_search=True)
         show_statusbar_message(self, "Table refreshed")
 
     def apply_search(self, refresh_only=False):
