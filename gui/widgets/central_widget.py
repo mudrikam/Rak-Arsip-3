@@ -29,8 +29,8 @@ class CentralWidget(QWidget):
         self.sort_order = "desc"
         self.sort_status_value = None
         self._main_window = parent if isinstance(parent, QWidget) else None
-        
-        # Use the same database manager instance from the main window
+        self._selected_row_index = None
+
         if hasattr(parent, 'main_action_dock') and hasattr(parent.main_action_dock, 'db_manager'):
             self.db_manager = parent.main_action_dock.db_manager
         else:
@@ -39,24 +39,20 @@ class CentralWidget(QWidget):
             db_config_manager = ConfigManager(str(db_config_path))
             self.db_manager = DatabaseManager(db_config_manager, self.config_manager)
         
-        # Connect database change signal for auto-refresh
         self.db_manager.data_changed.connect(self.auto_refresh_table)
         
         layout = QVBoxLayout(self)
 
         top_row = QHBoxLayout()
-        
         search_section = QHBoxLayout()
         search_icon_label = QLabel()
         search_icon_label.setPixmap(qta.icon("fa6s.magnifying-glass", color="#666").pixmap(16, 16))
         search_section.addWidget(search_icon_label)
-        
         self.search_edit = QLineEdit(self)
         self.search_edit.setPlaceholderText("Search projects...")
         self.search_edit.setMinimumHeight(32)
         self.search_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         search_section.addWidget(self.search_edit, 1)
-
         self.paste_search_btn = QPushButton()
         self.paste_search_btn.setIcon(qta.icon("fa6s.paste"))
         self.paste_search_btn.setMinimumHeight(32)
@@ -65,56 +61,44 @@ class CentralWidget(QWidget):
         self.paste_search_btn.setToolTip("Paste from clipboard")
         self.paste_search_btn.clicked.connect(self.paste_to_search)
         search_section.addWidget(self.paste_search_btn)
-
         top_row.addLayout(search_section, 1)
-
         self.clear_search_btn = QPushButton("Clear", self)
         self.clear_search_btn.setIcon(qta.icon("fa6s.xmark"))
         self.clear_search_btn.setMinimumHeight(32)
         self.clear_search_btn.setToolTip("Clear search field")
         self.clear_search_btn.clicked.connect(lambda: self.search_edit.clear())
         top_row.addWidget(self.clear_search_btn)
-
         self.refresh_btn = QPushButton("Refresh", self)
         self.refresh_btn.setIcon(qta.icon("fa6s.arrows-rotate"))
         self.refresh_btn.setMinimumHeight(32)
         self.refresh_btn.setToolTip("Reload project table")
         top_row.addWidget(self.refresh_btn)
-
         self.sort_btn = QPushButton("Sort By", self)
         self.sort_btn.setIcon(qta.icon("fa6s.arrow-down-wide-short"))
         self.sort_btn.setMinimumHeight(32)
         self.sort_btn.setToolTip("Sort table data")
         self.sort_btn.clicked.connect(self.show_sort_dialog)
         top_row.addWidget(self.sort_btn)
-
         top_row.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
         layout.addLayout(top_row)
 
         self.table = QTableWidget(self)
         self.table.setColumnCount(5)
-        
         date_header = QTableWidgetItem("Date")
         date_header.setIcon(qta.icon("fa6s.calendar"))
-        
         name_header = QTableWidgetItem("Name")
         name_header.setIcon(qta.icon("fa6s.file"))
-        
         root_header = QTableWidgetItem("Root")
         root_header.setIcon(qta.icon("fa6s.folder"))
-        
         path_header = QTableWidgetItem("Path")
         path_header.setIcon(qta.icon("fa6s.folder-tree"))
-        
         status_header = QTableWidgetItem("Status")
         status_header.setIcon(qta.icon("fa6s.circle-info"))
-        
         self.table.setHorizontalHeaderItem(0, date_header)
         self.table.setHorizontalHeaderItem(1, name_header)
         self.table.setHorizontalHeaderItem(2, root_header)
         self.table.setHorizontalHeaderItem(3, path_header)
         self.table.setHorizontalHeaderItem(4, status_header)
-        
         self._all_data = []
         self.page_size = 20
         self.current_page = 1
@@ -132,15 +116,14 @@ class CentralWidget(QWidget):
         header.resizeSection(4, 120)
         layout.addWidget(self.table)
 
-        # Make table selection highlight the entire row and disable cell editing
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.cellDoubleClicked.connect(self._on_table_double_click)
         self.table.cellClicked.connect(self._on_table_cell_clicked)
 
-        # Set pointing hand cursor on cell hover
         self.table.setMouseTracking(True)
         def table_mouseMoveEvent(event):
+            # Disable hover selection: only change cursor, do not change selection
             index = self.table.indexAt(event.pos())
             if index.isValid():
                 self.table.viewport().setCursor(Qt.PointingHandCursor)
@@ -150,11 +133,9 @@ class CentralWidget(QWidget):
         self.table.mouseMoveEvent = table_mouseMoveEvent
 
         pagination_row = QHBoxLayout()
-        
         pagination_icon = QLabel()
         pagination_icon.setPixmap(qta.icon("fa6s.bars", color="#666").pixmap(16, 16))
         pagination_row.addWidget(pagination_icon)
-        
         self.prev_btn = QPushButton("Prev", self)
         self.prev_btn.setIcon(qta.icon("fa6s.chevron-left"))
         self.prev_btn.setMinimumHeight(32)
@@ -165,15 +146,12 @@ class CentralWidget(QWidget):
         pagination_row.addWidget(self.prev_btn)
         pagination_row.addWidget(self.page_label)
         pagination_row.addWidget(self.next_btn)
-
         stats_icon = QLabel()
         stats_icon.setPixmap(qta.icon("fa6s.chart-simple", color="#666").pixmap(16, 16))
         pagination_row.addWidget(stats_icon)
-        
         self.stats_label = QLabel(self)
         self.stats_label.setStyleSheet("color: #666; font-size: 12px; margin-left: 5px;")
         pagination_row.addWidget(self.stats_label)
-
         pagination_row.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
         layout.addLayout(pagination_row)
 
@@ -184,16 +162,13 @@ class CentralWidget(QWidget):
         self.prev_btn.clicked.connect(self.prev_page)
         self.next_btn.clicked.connect(self.next_page)
         self.table.itemSelectionChanged.connect(self.on_row_selected)
-
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self.show_context_menu)
 
         copy_name_shortcut = QShortcut(QKeySequence("Ctrl+C"), self)
         copy_name_shortcut.activated.connect(self.copy_name)
-        
         copy_path_shortcut = QShortcut(QKeySequence("Ctrl+X"), self)
         copy_path_shortcut.activated.connect(self.copy_path)
-        
         open_explorer_shortcut = QShortcut(QKeySequence("Ctrl+E"), self)
         open_explorer_shortcut.activated.connect(self.open_explorer)
 
@@ -244,6 +219,7 @@ class CentralWidget(QWidget):
             row_data = item.data(256)
             if row_data:
                 self.selected_row_data = row_data
+                self._selected_row_index = row
                 self.open_explorer()
                 show_statusbar_message(self, f"Double-clicked: Opened {row_data['path']}")
 
@@ -253,6 +229,8 @@ class CentralWidget(QWidget):
         if item:
             row_data = item.data(256)
             if row_data:
+                self.selected_row_data = row_data
+                self._selected_row_index = row
                 show_statusbar_message(self, f"Selected row: {row_data['name']}")
 
     def load_data_from_database(self):
@@ -306,20 +284,15 @@ class CentralWidget(QWidget):
     def _truncate_path_by_width(self, path, column_width):
         if not path:
             return ""
-        
         font_metrics = QFontMetrics(self.table.font())
         ellipsis = "..."
         ellipsis_width = font_metrics.horizontalAdvance(ellipsis)
         available_width = column_width - 10
-        
         if font_metrics.horizontalAdvance(path) <= available_width:
             return path
-        
         if available_width <= ellipsis_width:
             return ellipsis
-        
         available_for_text = available_width - ellipsis_width
-        
         for i in range(1, len(path)):
             truncated = path[:i]
             if font_metrics.horizontalAdvance(truncated) <= available_for_text:
@@ -329,7 +302,6 @@ class CentralWidget(QWidget):
                     return path[:i-1] + ellipsis
                 else:
                     return ellipsis
-        
         return path
 
     def update_table(self):
@@ -339,38 +311,33 @@ class CentralWidget(QWidget):
         start = (self.current_page - 1) * self.page_size
         end = start + self.page_size
         page_data = self.filtered_data[start:end]
-
         self.table.setRowCount(len(page_data))
         path_column_width = self.table.columnWidth(3)
-        
         for row_idx, row_data in enumerate(page_data):
             date_item = QTableWidgetItem(row_data['date'])
             date_item.setData(256, row_data)
             self.table.setItem(row_idx, 0, date_item)
-            
             name_item = QTableWidgetItem(row_data['name'])
             self.table.setItem(row_idx, 1, name_item)
-            
             root_item = QTableWidgetItem(row_data['root'])
             self.table.setItem(row_idx, 2, root_item)
-            
             truncated_path = self._truncate_path_by_width(row_data['path'], path_column_width)
             path_item = QTableWidgetItem(truncated_path)
             path_item.setToolTip(row_data['path'])
             self.table.setItem(row_idx, 3, path_item)
-            
             combo = QComboBox(self.table)
             combo.addItems(self.status_options)
             combo.setCurrentText(row_data['status'])
             self._set_status_text_color(combo, row_data['status'])
             combo.currentTextChanged.connect(lambda val, row=row_idx: self._on_status_changed(row, val))
             self.table.setCellWidget(row_idx, 4, combo)
-            
         self.page_label.setText(f"Page {self.current_page} / {total_pages}")
         self.prev_btn.setEnabled(self.current_page > 1)
         self.next_btn.setEnabled(self.current_page < total_pages)
-        
         self.update_stats_label()
+        # Restore selection if possible
+        if self._selected_row_index is not None and 0 <= self._selected_row_index < self.table.rowCount():
+            self.table.selectRow(self._selected_row_index)
 
     def update_stats_label(self):
         total_records = len(self._all_data)
@@ -391,6 +358,7 @@ class CentralWidget(QWidget):
                 row_data = date_item.data(256)
                 if row_data:
                     self.selected_row_data = row_data
+                    self._selected_row_index = current_row
                     self.row_selected.emit(row_data)
 
     def _set_status_text_color(self, combo, status):
@@ -408,27 +376,21 @@ class CentralWidget(QWidget):
             row_data = self.filtered_data[global_row]
             old_status = row_data['status']
             row_data['status'] = value
-            
             try:
                 self.db_manager.connect()
                 status_id = self.db_manager.get_status_id(value)
                 if status_id:
                     self.db_manager.update_file_status(row_data['id'], status_id)
                     row_data['status_id'] = status_id
-                    
                     for data_row in self._all_data:
                         if data_row['id'] == row_data['id']:
                             data_row['status'] = value
                             data_row['status_id'] = status_id
                             break
-                            
                     combo = self.table.cellWidget(row, 4)
                     if combo:
                         self._set_status_text_color(combo, value)
-                    
-                    # Refresh table to show updated status immediately
                     self.load_data_from_database()
-                        
             except Exception as e:
                 print(f"Error updating status: {e}")
                 row_data['status'] = old_status
