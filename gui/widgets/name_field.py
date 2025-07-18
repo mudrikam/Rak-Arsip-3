@@ -88,6 +88,13 @@ class NameFieldWidget(QFrame):
         self.star_btn.clicked.connect(self._on_star_clicked)
         self._block_signal = False
 
+    def _show_statusbar_message(self, message):
+        main_window = self.window()
+        if hasattr(main_window, "statusBar"):
+            statusbar = main_window.statusBar()
+            if statusbar:
+                statusbar.showMessage(message, 2000)
+
     def set_db_manager(self, db_manager):
         self.db_manager = db_manager
         print(f"Database manager set: {self.db_manager is not None}")
@@ -194,6 +201,7 @@ class NameFieldWidget(QFrame):
                 self._block_signal = True
                 self.line_edit.setText(sanitized)
                 self._block_signal = False
+                self._show_statusbar_message(f"Sanitized name: {sanitized}")
 
     def _on_sanitize_check_changed(self, state):
         if self.sanitize_check.isChecked():
@@ -203,11 +211,13 @@ class NameFieldWidget(QFrame):
                 self._block_signal = True
                 self.line_edit.setText(sanitized)
                 self._block_signal = False
+                self._show_statusbar_message(f"Sanitized name: {sanitized}")
 
     def _on_star_clicked(self):
         config_manager = self.config_manager or self.get_config_manager_from_parent()
         if not config_manager:
             QMessageBox.warning(self, "Error", "Configuration manager not available")
+            self._show_statusbar_message("Configuration manager not available")
             return
             
         dialog = GenerateNameDialog(config_manager, self)
@@ -217,11 +227,13 @@ class NameFieldWidget(QFrame):
             if generated_name:
                 self.line_edit.setText(generated_name)
                 self.pending_image_path = dialog.get_temp_image_path()
+                self._show_statusbar_message(f"Generated name from image: {generated_name}")
                 print(f"Generated name: {generated_name}")
                 print(f"Pending image: {self.pending_image_path}")
 
     def _on_clear_clicked(self):
         self.line_edit.clear()
+        self._show_statusbar_message("Project name cleared")
         try:
             basedir = Path(__file__).parent.parent.parent
             temp_path = basedir / "temp" / "images"
@@ -264,23 +276,27 @@ class NameFieldWidget(QFrame):
         if not self.db_manager:
             print("Error: Database manager not found in parent hierarchy")
             QMessageBox.warning(self, "Error", "Database manager not set!")
+            self._show_statusbar_message("Database manager not set!")
             return
             
         if not self._current_path_data:
             print("Error: Path data not available")
             QMessageBox.warning(self, "Error", "Path data not available!")
+            self._show_statusbar_message("Path data not available!")
             return
             
         name = self.line_edit.text().strip()
         if not name:
             print("Error: No name entered")
             QMessageBox.warning(self, "Error", "Please enter a name!")
+            self._show_statusbar_message("Please enter a name!")
             return
             
         path = self.sanitize_label.text()
         if path == "-":
             print("Error: Path not available")
             QMessageBox.warning(self, "Error", "Path not available!")
+            self._show_statusbar_message("Path not available!")
             return
 
         print(f"Attempting to create project with path: {path}")
@@ -322,6 +338,7 @@ class NameFieldWidget(QFrame):
             if not draft_status_id:
                 print("Error: Draft status not found")
                 QMessageBox.warning(self, "Error", "Draft status not found in database!")
+                self._show_statusbar_message("Draft status not found in database!")
                 return
             
             category_id = None
@@ -350,6 +367,7 @@ class NameFieldWidget(QFrame):
             self._open_explorer_if_enabled(actual_path)
             
             QApplication.clipboard().setText(name)
+            self._show_statusbar_message(f"Project created and name copied: {name}")
             print(f"Copied project name to clipboard: {name}")
             
             self.folder_created.emit(
@@ -367,6 +385,7 @@ class NameFieldWidget(QFrame):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to create project: {str(e)}")
             print(f"Error creating project: {e}")
+            self._show_statusbar_message(f"Failed to create project: {str(e)}")
         finally:
             self.db_manager.close()
 

@@ -1,10 +1,12 @@
 from PySide6.QtWidgets import QDockWidget, QWidget, QVBoxLayout, QLabel, QFrame, QHBoxLayout, QApplication
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap, QCursor
+from PySide6.QtGui import QPixmap, QCursor, QMouseEvent
 import qtawesome as qta
 import os
 from pathlib import Path
 import textwrap
+import sys
+import subprocess
 
 class PropertiesWidget(QDockWidget):
     def __init__(self, parent=None):
@@ -23,10 +25,12 @@ class PropertiesWidget(QDockWidget):
         layout.addWidget(self.image_frame)
 
         date_row = QHBoxLayout()
-        date_icon = QLabel()
-        date_icon.setPixmap(qta.icon("fa6s.calendar", color="#666").pixmap(16, 16))
+        self.date_icon = QLabel()
+        self.date_icon.setPixmap(qta.icon("fa6s.calendar", color="#666").pixmap(16, 16))
+        self.date_icon.setCursor(Qt.PointingHandCursor)
         self.date_label = QLabel("-", container)
-        date_row.addWidget(date_icon)
+        self.date_label.setCursor(Qt.PointingHandCursor)
+        date_row.addWidget(self.date_icon)
         date_row.addWidget(self.date_label)
         date_row.addStretch()
         layout.addLayout(date_row)
@@ -57,10 +61,12 @@ class PropertiesWidget(QDockWidget):
         layout.addLayout(name_row)
 
         cat_row = QHBoxLayout()
-        cat_icon = QLabel()
-        cat_icon.setPixmap(qta.icon("fa6s.folder-tree", color="#666").pixmap(16, 16))
+        self.cat_icon = QLabel()
+        self.cat_icon.setPixmap(qta.icon("fa6s.folder-tree", color="#666").pixmap(16, 16))
+        self.cat_icon.setCursor(Qt.PointingHandCursor)
         self.cat_combined_label = QLabel("-", container)
-        cat_row.addWidget(cat_icon)
+        self.cat_combined_label.setCursor(Qt.PointingHandCursor)
+        cat_row.addWidget(self.cat_icon)
         cat_row.addWidget(self.cat_combined_label)
         cat_row.addStretch()
         layout.addLayout(cat_row)
@@ -85,7 +91,11 @@ class PropertiesWidget(QDockWidget):
         self.root_icon.mousePressEvent = self._on_root_icon_clicked
         self.root_label.mousePressEvent = self._on_root_icon_clicked
         self.name_icon.mousePressEvent = self._on_name_icon_clicked
-        self.name_label.mousePressEvent = self._on_name_icon_clicked
+        self.name_label.mousePressEvent = self._on_name_label_mouse_event
+        self.date_icon.mousePressEvent = self._on_date_icon_clicked
+        self.date_label.mousePressEvent = self._on_date_icon_clicked
+        self.cat_icon.mousePressEvent = self._on_cat_icon_clicked
+        self.cat_combined_label.mousePressEvent = self._on_cat_icon_clicked
 
     def update_properties(self, row_data):
         self._current_row_data = row_data
@@ -134,6 +144,90 @@ class PropertiesWidget(QDockWidget):
                 self._show_statusbar_message(f"Name copied: {name}")
             else:
                 self._show_statusbar_message("No name to copy")
+
+    def _on_name_label_mouse_event(self, event):
+        if event.type() == QMouseEvent.MouseButtonDblClick:
+            if self._current_row_data:
+                full_path = self._current_row_data.get('path', '')
+                if full_path and Path(full_path).exists():
+                    if sys.platform == "win32":
+                        subprocess.Popen(f'explorer "{str(full_path)}"')
+                    else:
+                        subprocess.Popen(["xdg-open", str(full_path)])
+                    self._show_statusbar_message(f"Opened path: {full_path}")
+                else:
+                    self._show_statusbar_message("Path not found")
+        elif event.type() == QMouseEvent.MouseButtonPress:
+            self._on_name_icon_clicked(event)
+
+    def _on_date_icon_clicked(self, event):
+        if self._current_row_data:
+            full_path = self._current_row_data.get('path', '')
+            date_str = self._current_row_data.get('date', '')
+            if full_path and date_str:
+                path_obj = Path(full_path)
+                parts = list(path_obj.parts)
+                date_parts = date_str.split('_')
+                if len(date_parts) == 3:
+                    day, month, year = date_parts
+                    try:
+                        year_idx = parts.index(year)
+                        month_idx = parts.index(month)
+                        day_idx = parts.index(day)
+                        if year_idx > month_idx > day_idx:
+                            target_parts = parts[:year_idx+1]
+                        else:
+                            target_parts = parts[:day_idx+1]
+                        target_path = Path(*target_parts)
+                    except ValueError:
+                        try:
+                            day_idx = parts.index(day)
+                            target_parts = parts[:day_idx+1]
+                            target_path = Path(*target_parts)
+                        except ValueError:
+                            target_path = path_obj.parent
+                else:
+                    target_path = path_obj.parent
+                if target_path.exists():
+                    if sys.platform == "win32":
+                        subprocess.Popen(f'explorer "{str(target_path)}"')
+                    else:
+                        subprocess.Popen(["xdg-open", str(target_path)])
+                    self._show_statusbar_message(f"Opened folder: {target_path}")
+                else:
+                    self._show_statusbar_message("Target folder not found")
+            else:
+                self._show_statusbar_message("No path or date to open")
+
+    def _on_cat_icon_clicked(self, event):
+        if self._current_row_data:
+            full_path = self._current_row_data.get('path', '')
+            category = self._current_row_data.get('category', '')
+            subcategory = self._current_row_data.get('subcategory', '')
+            if full_path and category:
+                path_obj = Path(full_path)
+                parts = list(path_obj.parts)
+                try:
+                    if subcategory and subcategory != "-":
+                        sub_idx = parts.index(subcategory)
+                        target_parts = parts[:sub_idx+1]
+                        target_path = Path(*target_parts)
+                    else:
+                        cat_idx = parts.index(category)
+                        target_parts = parts[:cat_idx+1]
+                        target_path = Path(*target_parts)
+                except ValueError:
+                    target_path = path_obj.parent
+                if target_path.exists():
+                    if sys.platform == "win32":
+                        subprocess.Popen(f'explorer \"{str(target_path)}\"')
+                    else:
+                        subprocess.Popen(["xdg-open", str(target_path)])
+                    self._show_statusbar_message(f"Opened folder: {target_path}")
+                else:
+                    self._show_statusbar_message("Target folder not found")
+            else:
+                self._show_statusbar_message("No category/subcategory to open")
 
     def _apply_status_color(self, status):
         if hasattr(self.parent_window, 'config_manager'):
