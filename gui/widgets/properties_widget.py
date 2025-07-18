@@ -7,6 +7,7 @@ from pathlib import Path
 import textwrap
 import sys
 import subprocess
+from helpers.show_statusbar_helper import show_statusbar_message
 
 class PropertiesWidget(QDockWidget):
     def __init__(self, parent=None):
@@ -121,11 +122,7 @@ class PropertiesWidget(QDockWidget):
         self.load_preview_image(row_data.get('path', ''), row_data.get('name', ''))
 
     def _show_statusbar_message(self, message):
-        main_window = self.parent_window
-        if hasattr(main_window, "statusBar"):
-            statusbar = main_window.statusBar()
-            if statusbar:
-                statusbar.showMessage(message, 2000)
+        show_statusbar_message(self, message)
 
     def _on_root_icon_clicked(self, event):
         if self._current_row_data:

@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QDialogButtonBox
 import qtawesome as qta
+from helpers.show_statusbar_helper import show_statusbar_message
 
 class SortDialog(QDialog):
     def __init__(self, status_options, parent=None):
@@ -49,7 +50,7 @@ class SortDialog(QDialog):
         layout.addLayout(order_row)
 
         self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        self.button_box.accepted.connect(self.accept)
+        self.button_box.accepted.connect(self._on_accept)
         self.button_box.rejected.connect(self.reject)
         layout.addWidget(self.button_box)
 
@@ -62,6 +63,16 @@ class SortDialog(QDialog):
         # Enable status combo only if "Status" is selected
         field = self.sort_fields[self.field_combo.currentIndex()][1]
         self.status_combo.setEnabled(field == "status")
+
+    def _on_accept(self):
+        field_idx = self.field_combo.currentIndex()
+        field = self.sort_fields[field_idx][1]
+        order = "asc" if self.order_combo.currentIndex() == 0 else "desc"
+        status_value = None
+        if field == "status" and self.status_combo.currentIndex() > 0:
+            status_value = self.status_options[self.status_combo.currentIndex() - 1]
+        show_statusbar_message(self, f"Sort dialog accepted: field={field}, order={order}, status={status_value if status_value else 'All'}")
+        self.accept()
 
     def get_sort_option(self, status_options):
         field_idx = self.field_combo.currentIndex()

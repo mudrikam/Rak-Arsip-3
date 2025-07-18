@@ -10,6 +10,7 @@ import shutil
 import uuid
 from pathlib import Path
 from helpers.gemini_helper import GeminiHelper
+from helpers.show_statusbar_helper import show_statusbar_message
 import textwrap
 
 class ImageDropLabel(QLabel):
@@ -200,6 +201,7 @@ class GenerateNameDialog(QDialog):
             if not api_key:
                 self.api_status_label.setText("API Key is empty.")
                 self.api_status_label.setStyleSheet("color: #d32f2f; font-weight: bold;")
+                show_statusbar_message(self, "Gemini API Key is empty.")
                 return
             try:
                 import google.genai as genai
@@ -212,26 +214,33 @@ class GenerateNameDialog(QDialog):
                 if hasattr(response, "text") and response.text:
                     self.api_status_label.setText("Gemini API is active.")
                     self.api_status_label.setStyleSheet("color: #43a047; font-weight: bold;")
+                    show_statusbar_message(self, "Gemini API is active.")
                 else:
                     self.api_status_label.setText("No response from Gemini API.")
                     self.api_status_label.setStyleSheet("color: #d32f2f; font-weight: bold;")
+                    show_statusbar_message(self, "No response from Gemini API.")
             except ImportError:
                 self.api_status_label.setText("google-genai not installed.")
                 self.api_status_label.setStyleSheet("color: #d32f2f; font-weight: bold;")
+                show_statusbar_message(self, "google-genai not installed.")
             except Exception as e:
                 self.api_status_label.setText(f"Error: {e}")
                 self.api_status_label.setStyleSheet("color: #d32f2f; font-weight: bold;")
+                show_statusbar_message(self, f"Gemini API error: {e}")
         except Exception as e:
             self.api_status_label.setText(f"Error: {e}")
             self.api_status_label.setStyleSheet("color: #d32f2f; font-weight: bold;")
+            show_statusbar_message(self, f"Gemini API error: {e}")
 
     def on_paste_clicked(self):
         clipboard = QGuiApplication.clipboard()
         image = clipboard.image()
         if not image.isNull():
             self.paste_image(image)
+            show_statusbar_message(self, "Image pasted from clipboard.")
         else:
             QMessageBox.warning(self, "Paste Image", "Clipboard does not contain an image.")
+            show_statusbar_message(self, "Clipboard does not contain an image.")
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -248,12 +257,15 @@ class GenerateNameDialog(QDialog):
                 self.image_label.setPixmap(scaled_pixmap)
                 self.image_label.setText("")
                 self.generate_btn.setEnabled(True)
+                show_statusbar_message(self, f"Image loaded: {file_path}")
             else:
                 QMessageBox.warning(self, "Error", "Failed to load image")
                 self.clear_image()
+                show_statusbar_message(self, "Failed to load image.")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to load image: {e}")
             self.clear_image()
+            show_statusbar_message(self, f"Failed to load image: {e}")
 
     def paste_image(self, image):
         try:
@@ -267,12 +279,15 @@ class GenerateNameDialog(QDialog):
                 self.image_label.setPixmap(scaled_pixmap)
                 self.image_label.setText("")
                 self.generate_btn.setEnabled(True)
+                show_statusbar_message(self, "Image pasted and loaded.")
             else:
                 QMessageBox.warning(self, "Error", "Failed to paste image")
                 self.clear_image()
+                show_statusbar_message(self, "Failed to paste image.")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to paste image: {e}")
             self.clear_image()
+            show_statusbar_message(self, f"Failed to paste image: {e}")
             
     def clear_image(self):
         self.image_label.clear()
@@ -287,10 +302,12 @@ class GenerateNameDialog(QDialog):
                 self.temp_image_path = None
             except:
                 pass
-                
+        show_statusbar_message(self, "Image cleared.")
+
     def generate_name(self):
         if not self.temp_image_path or not self.temp_image_path.exists():
             QMessageBox.warning(self, "Error", "No image selected")
+            show_statusbar_message(self, "No image selected for name generation.")
             return
         self.generate_btn.setEnabled(False)
         self.generate_btn.setText("Generating...")
@@ -300,7 +317,8 @@ class GenerateNameDialog(QDialog):
         self.generation_thread.name_generated.connect(self.on_name_generated)
         self.generation_thread.error_occurred.connect(self.on_generation_error)
         self.generation_thread.start()
-        
+        show_statusbar_message(self, "Generating name from image...")
+
     def on_name_generated(self, name):
         self.generated_name = name
         self.generate_btn.setEnabled(True)
@@ -309,13 +327,15 @@ class GenerateNameDialog(QDialog):
         self.progress_bar.setVisible(False)
         self.result_label.setStyleSheet("font-size: 15px; color: #1976d2;")
         self.result_label.setText(self._wrap_text(name, 32))
-        
+        show_statusbar_message(self, f"Name generated: {name}")
+
     def on_generation_error(self, error):
         self.generate_btn.setEnabled(True)
         self.generate_btn.setText("Generate Name from Image")
         self.progress_bar.setVisible(False)
         self.result_label.setStyleSheet("font-size: 12px; color: #d32f2f;")
         self.result_label.setText(error)
+        show_statusbar_message(self, f"Name generation error: {error}")
 
     def _wrap_text(self, text, width):
         if not text:
@@ -339,9 +359,11 @@ class GenerateNameDialog(QDialog):
             final_image_path = preview_folder / f"{project_name}{file_extension}"
             shutil.move(str(self.temp_image_path), str(final_image_path))
             self.temp_image_path = None
+            show_statusbar_message(self, f"Image moved to project: {final_image_path}")
             return str(final_image_path)
         except Exception as e:
             print(f"Error moving image to project: {e}")
+            show_statusbar_message(self, f"Error moving image to project: {e}")
             return None
             
     def closeEvent(self, event):

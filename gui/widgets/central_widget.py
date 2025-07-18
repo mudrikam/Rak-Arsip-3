@@ -14,6 +14,7 @@ import sys
 import os
 import shutil
 from gui.dialogs.short_dialog import SortDialog
+from helpers.show_statusbar_helper import show_statusbar_message
 
 class CentralWidget(QWidget):
     row_selected = Signal(dict)
@@ -27,6 +28,7 @@ class CentralWidget(QWidget):
         self.sort_field = "date"
         self.sort_order = "desc"
         self.sort_status_value = None
+        self._main_window = parent if isinstance(parent, QWidget) else None
         
         # Use the same database manager instance from the main window
         if hasattr(parent, 'main_action_dock') and hasattr(parent.main_action_dock, 'db_manager'):
@@ -202,17 +204,23 @@ class CentralWidget(QWidget):
         text = clipboard.text()
         if text:
             self.search_edit.setText(text)
+            show_statusbar_message(self, f"Pasted to search: {text}")
 
     def auto_refresh_table(self):
         self.load_data_from_database()
+        show_statusbar_message(self, "Table auto-refreshed")
 
     def copy_name(self):
         if self.selected_row_data:
-            QApplication.clipboard().setText(str(self.selected_row_data['name']))
+            name = str(self.selected_row_data['name'])
+            QApplication.clipboard().setText(name)
+            show_statusbar_message(self, f"Name copied: {name}")
 
     def copy_path(self):
         if self.selected_row_data:
-            QApplication.clipboard().setText(str(self.selected_row_data['path']))
+            path = str(self.selected_row_data['path'])
+            QApplication.clipboard().setText(path)
+            show_statusbar_message(self, f"Path copied: {path}")
 
     def open_explorer(self):
         if self.selected_row_data:
@@ -228,26 +236,30 @@ class CentralWidget(QWidget):
                         subprocess.Popen(f'explorer "{parent_dir}"')
             else:
                 subprocess.Popen(["xdg-open", path if os.path.exists(path) else os.path.dirname(path)])
+            show_statusbar_message(self, f"Opened in explorer: {path}")
 
     def _on_table_double_click(self, row, column):
-        # Open explorer for the selected row
         item = self.table.item(row, 0)
         if item:
             row_data = item.data(256)
             if row_data:
                 self.selected_row_data = row_data
                 self.open_explorer()
+                show_statusbar_message(self, f"Double-clicked: Opened {row_data['path']}")
 
     def _on_table_cell_clicked(self, row, column):
-        # Select the entire row when any cell is clicked
         self.table.selectRow(row)
+        item = self.table.item(row, 0)
+        if item:
+            row_data = item.data(256)
+            if row_data:
+                show_statusbar_message(self, f"Selected row: {row_data['name']}")
 
     def load_data_from_database(self):
         try:
             self.db_manager.connect()
             rows = self.db_manager.get_all_files()
             self._all_data = []
-            
             for row in rows:
                 self._all_data.append({
                     'id': row['id'],
@@ -260,21 +272,22 @@ class CentralWidget(QWidget):
                     'category': row['category_name'],
                     'subcategory': row['subcategory_name']
                 })
-            
             self.filtered_data = self._all_data.copy()
             self.current_page = 1
             self.update_table()
-            
+            show_statusbar_message(self, "Loaded data from database")
         except Exception as e:
             print(f"Error loading data from database: {e}")
             self._all_data = []
             self.filtered_data = []
             self.update_table()
+            show_statusbar_message(self, f"Error loading data: {e}")
         finally:
             self.db_manager.close()
 
     def refresh_table(self):
         self.load_data_from_database()
+        show_statusbar_message(self, "Table refreshed")
 
     def apply_search(self):
         query = self.search_edit.text().lower()
@@ -283,8 +296,10 @@ class CentralWidget(QWidget):
                 row for row in self._all_data
                 if any(query in str(value).lower() for value in row.values() if value)
             ]
+            show_statusbar_message(self, f"Search applied: {query}")
         else:
             self.filtered_data = self._all_data.copy()
+            show_statusbar_message(self, "Search cleared")
         self.current_page = 1
         self.update_table()
 
@@ -459,9 +474,11 @@ class CentralWidget(QWidget):
 
         def do_copy_name():
             QApplication.clipboard().setText(str(row_data['name']))
+            show_statusbar_message(self, f"Name copied: {row_data['name']}")
 
         def do_copy_path():
             QApplication.clipboard().setText(str(row_data['path']))
+            show_statusbar_message(self, f"Path copied: {row_data['path']}")
 
         def do_open_explorer():
             path = str(row_data['path'])
@@ -476,6 +493,7 @@ class CentralWidget(QWidget):
                         subprocess.Popen(f'explorer "{parent_dir}"')
             else:
                 subprocess.Popen(["xdg-open", path if os.path.exists(path) else os.path.dirname(path)])
+            show_statusbar_message(self, f"Opened in explorer: {path}")
 
         def do_delete_record():
             confirm1 = QMessageBox.question(
@@ -495,7 +513,6 @@ class CentralWidget(QWidget):
                     try:
                         self.db_manager.connect()
                         self.db_manager.delete_file(row_data['id'])
-                        # Delete only the last folder and its contents
                         project_path = str(row_data['path'])
                         if os.path.isdir(project_path):
                             try:
@@ -504,8 +521,10 @@ class CentralWidget(QWidget):
                                 print(f"Error deleting project folder: {e}")
                         self.load_data_from_database()
                         QMessageBox.information(self, "Success", "Record and project folder deleted.")
+                        show_statusbar_message(self, f"Deleted record and folder: {project_path}")
                     except Exception as e:
                         QMessageBox.critical(self, "Error", f"Failed to delete record: {e}")
+                        show_statusbar_message(self, f"Failed to delete record: {e}")
                     finally:
                         self.db_manager.close()
 
@@ -528,14 +547,15 @@ class CentralWidget(QWidget):
             self.sort_order = order
             self.sort_status_value = status_value
             self.apply_sort()
+            show_statusbar_message(self, f"Sort applied: {field} {order} {status_value if status_value else ''}")
 
     def apply_sort(self):
-        # If status_value is set, filter like search (only show that status)
         if self.sort_field == "status" and self.sort_status_value:
             self.filtered_data = [
                 row for row in self._all_data
                 if row.get("status") == self.sort_status_value
             ]
+            show_statusbar_message(self, f"Filtered by status: {self.sort_status_value}")
         else:
             self.filtered_data = self._all_data.copy()
         self.filtered_data = SortDialog.sort_data(
@@ -546,3 +566,4 @@ class CentralWidget(QWidget):
         )
         self.current_page = 1
         self.update_table()
+        show_statusbar_message(self, f"Sorted by {self.sort_field} ({self.sort_order})")

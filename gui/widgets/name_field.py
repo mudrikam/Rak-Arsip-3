@@ -8,6 +8,7 @@ import subprocess
 from pathlib import Path
 from helpers.markdown_generator import MarkdownGenerator
 from gui.dialogs.generate_name_dialog import GenerateNameDialog
+from helpers.show_statusbar_helper import show_statusbar_message
 
 class NameFieldWidget(QFrame):
     folder_created = Signal(str, str, str, str, str, str, int)  # date, name, root, path, category, subcategory, template_id
@@ -89,11 +90,7 @@ class NameFieldWidget(QFrame):
         self._block_signal = False
 
     def _show_statusbar_message(self, message):
-        main_window = self.window()
-        if hasattr(main_window, "statusBar"):
-            statusbar = main_window.statusBar()
-            if statusbar:
-                statusbar.showMessage(message, 2000)
+        show_statusbar_message(self, message)
 
     def set_db_manager(self, db_manager):
         self.db_manager = db_manager

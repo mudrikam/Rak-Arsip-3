@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QDockWidget, QWidget, QVBoxLayout, QFrame, QLabel, QComboBox, QHBoxLayout,
-    QCheckBox, QPushButton
+    QCheckBox, QPushButton, QApplication
 )
 from PySide6.QtGui import QColor, QCursor
 from PySide6.QtCore import Qt, QEvent, QThread, Signal, Slot
@@ -15,6 +15,7 @@ import re
 from .name_field import NameFieldWidget
 from database.db_manager import DatabaseManager
 from manager.config_manager import ConfigManager
+from helpers.show_statusbar_helper import show_statusbar_message
 
 def get_available_disks():
     disks = []
@@ -181,6 +182,7 @@ class MainActionDock(QDockWidget):
         combo_category.setMinimumWidth(150)
         combo_category.setMaximumWidth(150)
         combo_category.addItem("")
+
         category_row.addWidget(category_icon)
         category_row.addWidget(label_category)
         category_row.addWidget(combo_category)
@@ -196,6 +198,7 @@ class MainActionDock(QDockWidget):
         combo_subcategory.setMinimumWidth(150)
         combo_subcategory.setMaximumWidth(150)
         combo_subcategory.addItem("")
+
         subcategory_row.addWidget(subcategory_icon)
         subcategory_row.addWidget(label_subcategory)
         subcategory_row.addWidget(combo_subcategory)
@@ -336,8 +339,10 @@ class MainActionDock(QDockWidget):
                 for template in templates:
                     combo_template.addItem(template['name'])
                     combo_template.setItemData(combo_template.count() - 1, template['id'])
+                show_statusbar_message(self, "Templates loaded")
             except Exception as e:
                 print(f"Error loading templates: {e}")
+                show_statusbar_message(self, f"Error loading templates: {e}")
             finally:
                 self.db_manager.close()
 
@@ -360,6 +365,7 @@ class MainActionDock(QDockWidget):
             name_field_widget.set_disk_and_folder_with_date_category(
                 disk_label, folder_label, category_text, subcategory_text, date_path, name_input
             )
+            show_statusbar_message(self, f"Path updated: disk={disk_label}, folder={folder_label}, category={category_text}, subcategory={subcategory_text}, date={date_path}, name={name_input}")
 
         def load_categories():
             try:
@@ -369,8 +375,10 @@ class MainActionDock(QDockWidget):
                 combo_category.clear()
                 combo_category.addItem("")
                 combo_category.addItems(categories)
+                show_statusbar_message(self, "Categories loaded")
             except Exception as e:
                 print(f"Error loading categories: {e}")
+                show_statusbar_message(self, f"Error loading categories: {e}")
             finally:
                 self.db_manager.close()
 
@@ -380,6 +388,7 @@ class MainActionDock(QDockWidget):
             combo_subcategory.addItem("")
             if not category_name:
                 combo_subcategory.setEnabled(False)
+                show_statusbar_message(self, "No category selected for subcategory")
                 return
             
             try:
@@ -388,9 +397,11 @@ class MainActionDock(QDockWidget):
                 subcategories = [sanitize_category_subcategory(s) for s in subcategories]
                 combo_subcategory.addItems(subcategories)
                 combo_subcategory.setEnabled(True)
+                show_statusbar_message(self, f"Subcategories loaded for category: {category_name}")
             except Exception as e:
                 print(f"Error loading subcategories: {e}")
                 combo_subcategory.setEnabled(False)
+                show_statusbar_message(self, f"Error loading subcategories: {e}")
             finally:
                 self.db_manager.close()
 
@@ -399,6 +410,7 @@ class MainActionDock(QDockWidget):
                 combo_folder.clear()
                 combo_folder.setEnabled(False)
                 update_name_field_label()
+                show_statusbar_message(self, "No disk selected")
                 return
             disk_label = combo_disk.currentText()
             disk_path = extract_disk_path(disk_label)
@@ -407,13 +419,17 @@ class MainActionDock(QDockWidget):
             if folders:
                 combo_folder.addItems(folders)
                 combo_folder.setEnabled(True)
+                show_statusbar_message(self, f"Disk changed: {disk_label}, folders loaded")
             else:
                 combo_folder.setEnabled(False)
+                show_statusbar_message(self, f"Disk changed: {disk_label}, no folders found")
             adjust_folder_width()
             update_name_field_label()
 
         def on_folder_changed(index):
             update_name_field_label()
+            folder_label = combo_folder.currentText()
+            show_statusbar_message(self, f"Folder changed: {folder_label}")
 
         def on_category_changed():
             category_text = combo_category.currentText().strip()
@@ -421,6 +437,7 @@ class MainActionDock(QDockWidget):
             if category_text and combo_category.findText(category_text) >= 0:
                 load_subcategories(category_text)
             update_name_field_label()
+            show_statusbar_message(self, f"Category changed: {category_text}")
 
         def on_category_enter():
             category_text = combo_category.currentText().strip()
@@ -428,6 +445,7 @@ class MainActionDock(QDockWidget):
             if not category_text:
                 update_name_field_label()
                 combo_subcategory.setFocus()
+                show_statusbar_message(self, "Category entry empty")
                 return
             try:
                 self.db_manager.connect()
@@ -437,10 +455,12 @@ class MainActionDock(QDockWidget):
                 new_index = combo_category.findText(category_text)
                 if new_index >= 0:
                     combo_category.setCurrentIndex(new_index)
+                show_statusbar_message(self, f"Category ensured/created: {category_text}")
             except Exception as e:
                 print(f"Error ensuring category: {e}")
                 if self.db_manager.connection:
                     self.db_manager.close()
+                show_statusbar_message(self, f"Error ensuring category: {e}")
             load_subcategories(category_text)
             update_name_field_label()
             combo_subcategory.setFocus()
@@ -449,6 +469,7 @@ class MainActionDock(QDockWidget):
             subcategory_text = combo_subcategory.currentText().strip()
             subcategory_text = sanitize_category_subcategory(subcategory_text)
             update_name_field_label()
+            show_statusbar_message(self, f"Subcategory changed: {subcategory_text}")
 
         def on_subcategory_enter():
             category_text = combo_category.currentText().strip()
@@ -458,6 +479,7 @@ class MainActionDock(QDockWidget):
             if not category_text or not subcategory_text:
                 update_name_field_label()
                 name_field_widget.line_edit.setFocus()
+                show_statusbar_message(self, "Subcategory entry empty")
                 return
             try:
                 self.db_manager.connect()
@@ -468,36 +490,45 @@ class MainActionDock(QDockWidget):
                 new_index = combo_subcategory.findText(subcategory_text)
                 if new_index >= 0:
                     combo_subcategory.setCurrentIndex(new_index)
+                show_statusbar_message(self, f"Subcategory ensured/created: {subcategory_text}")
             except Exception as e:
                 print(f"Error ensuring subcategory: {e}")
                 if self.db_manager.connection:
                     self.db_manager.close()
+                show_statusbar_message(self, f"Error ensuring subcategory: {e}")
             update_name_field_label()
             name_field_widget.line_edit.setFocus()
 
         def on_date_check_changed(state):
             self.config_manager.set("action_options.date", date_check.isChecked())
             update_name_field_label()
+            show_statusbar_message(self, f"Date option changed: {date_check.isChecked()}")
 
         def on_markdown_check_changed(state):
             self.config_manager.set("action_options.markdown", markdown_check.isChecked())
+            show_statusbar_message(self, f"Markdown option changed: {markdown_check.isChecked()}")
 
         def on_open_explorer_check_changed(state):
             self.config_manager.set("action_options.open_explorer", open_explorer_check.isChecked())
+            show_statusbar_message(self, f"Open Explorer option changed: {open_explorer_check.isChecked()}")
 
         def on_name_input_changed(text):
             update_name_field_label()
+            show_statusbar_message(self, f"Name input changed: {text}")
 
         def on_sanitize_check_changed(state):
             self.config_manager.set("action_options.sanitize_name", name_field_widget.sanitize_check.isChecked())
             update_name_field_label()
+            show_statusbar_message(self, f"Sanitize name option changed: {name_field_widget.sanitize_check.isChecked()}")
 
         def on_template_changed(index):
             if index == 0:
                 name_field_widget.set_selected_template(None)
+                show_statusbar_message(self, "Template cleared")
             else:
                 template_id = combo_template.itemData(index)
                 name_field_widget.set_selected_template(template_id)
+                show_statusbar_message(self, f"Template selected: {combo_template.currentText()} (ID: {template_id})")
                 print(f"Selected template ID: {template_id}")
 
         combo_disk.currentIndexChanged.connect(on_disk_changed)
