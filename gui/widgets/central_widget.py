@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QHeaderView,
     QHBoxLayout, QLineEdit, QPushButton, QLabel, QSpacerItem, QSizePolicy, QComboBox,
-    QMenu, QApplication, QMessageBox, QDialog, QVBoxLayout as QVBoxLayout2, QRadioButton, QButtonGroup, QDialogButtonBox
+    QMenu, QApplication, QMessageBox, QDialog, QVBoxLayout as QVBoxLayout2, QRadioButton, QButtonGroup, QDialogButtonBox, QStyledItemDelegate, QStyle
 )
 from PySide6.QtGui import QColor, QAction, QFontMetrics, QCursor, QKeySequence, QShortcut
 from PySide6.QtCore import Signal, Qt, QTimer
@@ -19,6 +19,11 @@ from helpers.show_statusbar_helper import show_statusbar_message
 class NoWheelComboBox(QComboBox):
     def wheelEvent(self, event):
         event.ignore()
+
+class NoHoverDelegate(QStyledItemDelegate):
+    def paint(self, painter, option, index):
+        option.state &= ~QStyle.State_MouseOver
+        super().paint(painter, option, index)
 
 class CentralWidget(QWidget):
     row_selected = Signal(dict)
@@ -125,13 +130,8 @@ class CentralWidget(QWidget):
         self.table.cellDoubleClicked.connect(self._on_table_double_click)
         self.table.cellClicked.connect(self._on_table_cell_clicked)
 
-        self.table.setMouseTracking(True)
-        def table_mouseMoveEvent(event):
-            index = self.table.indexAt(event.pos())
-            self.table.viewport().setCursor(Qt.PointingHandCursor if index.isValid() else Qt.ArrowCursor)
-            # Do not change selection on hover
-            return QTableWidget.mouseMoveEvent(self.table, event)
-        self.table.mouseMoveEvent = table_mouseMoveEvent
+        self.table.setMouseTracking(False)
+        self.table.setItemDelegate(NoHoverDelegate(self.table))
 
         pagination_row = QHBoxLayout()
         pagination_icon = QLabel()
