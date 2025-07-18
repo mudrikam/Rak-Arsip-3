@@ -234,7 +234,7 @@ class CentralWidget(QWidget):
                 self._selected_row_index = row
                 show_statusbar_message(self, f"Selected row: {row_data['name']}")
 
-    def load_data_from_database(self):
+    def load_data_from_database(self, keep_search=False):
         try:
             self.db_manager.connect()
             rows = self.db_manager.get_all_files()
@@ -251,9 +251,12 @@ class CentralWidget(QWidget):
                     'category': row['category_name'],
                     'subcategory': row['subcategory_name']
                 })
-            self.filtered_data = self._all_data.copy()
-            self.current_page = 1
-            self.update_table()
+            if keep_search and hasattr(self, 'search_edit') and self.search_edit.text().strip():
+                self.apply_search(refresh_only=True)
+            else:
+                self.filtered_data = self._all_data.copy()
+                self.current_page = 1
+                self.update_table()
             show_statusbar_message(self, "Loaded data from database")
         except Exception as e:
             print(f"Error loading data from database: {e}")
@@ -268,17 +271,19 @@ class CentralWidget(QWidget):
         self.load_data_from_database()
         show_statusbar_message(self, "Table refreshed")
 
-    def apply_search(self):
+    def apply_search(self, refresh_only=False):
         query = self.search_edit.text().lower()
         if query:
             self.filtered_data = [
                 row for row in self._all_data
                 if any(query in str(value).lower() for value in row.values() if value)
             ]
-            show_statusbar_message(self, f"Search applied: {query}")
+            if not refresh_only:
+                show_statusbar_message(self, f"Search applied: {query}")
         else:
             self.filtered_data = self._all_data.copy()
-            show_statusbar_message(self, "Search cleared")
+            if not refresh_only:
+                show_statusbar_message(self, "Search cleared")
         self.current_page = 1
         self.update_table()
 
@@ -391,7 +396,8 @@ class CentralWidget(QWidget):
                     combo = self.table.cellWidget(row, 4)
                     if combo:
                         self._set_status_text_color(combo, value)
-                    self.load_data_from_database()
+                    # Only reload data, but keep search/filter if any
+                    self.load_data_from_database(keep_search=True)
             except Exception as e:
                 print(f"Error updating status: {e}")
                 row_data['status'] = old_status
