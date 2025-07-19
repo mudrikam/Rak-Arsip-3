@@ -506,6 +506,7 @@ class DatabaseManager(QObject):
         }
         sort_sql = sort_map.get(sort_field, "f.date")
         order_sql = "DESC" if sort_order == "desc" else "ASC"
+        # Use a CASE to parse both possible date formats and sort by real date
         sql = f"""
             SELECT f.id, f.date, f.name, f.root, f.path, f.status_id, f.category_id, f.subcategory_id, f.template_id,
                    s.name as status, s.color as status_color, 
@@ -517,7 +518,53 @@ class DatabaseManager(QObject):
             LEFT JOIN subcategories sc ON f.subcategory_id = sc.id
             LEFT JOIN templates t ON f.template_id = t.id
             {where_sql}
-            ORDER BY {sort_sql} {order_sql}, f.id DESC
+            ORDER BY 
+                CASE
+                    -- Format: YYYY\\Month\\DD
+                    WHEN f.date GLOB '[1-2][0-9][0-9][0-9]\\*\\*' THEN
+                        date(
+                            substr(f.date, 1, 4) || '-' ||
+                            CASE
+                                WHEN lower(substr(f.date, 6, instr(substr(f.date, 6), '\\')-1)) IN ('january','januari') THEN '01'
+                                WHEN lower(substr(f.date, 6, instr(substr(f.date, 6), '\\')-1)) IN ('february','februari') THEN '02'
+                                WHEN lower(substr(f.date, 6, instr(substr(f.date, 6), '\\')-1)) = 'march' THEN '03'
+                                WHEN lower(substr(f.date, 6, instr(substr(f.date, 6), '\\')-1)) = 'april' THEN '04'
+                                WHEN lower(substr(f.date, 6, instr(substr(f.date, 6), '\\')-1)) = 'may' THEN '05'
+                                WHEN lower(substr(f.date, 6, instr(substr(f.date, 6), '\\')-1)) = 'june' THEN '06'
+                                WHEN lower(substr(f.date, 6, instr(substr(f.date, 6), '\\')-1)) = 'july' THEN '07'
+                                WHEN lower(substr(f.date, 6, instr(substr(f.date, 6), '\\')-1)) = 'august' THEN '08'
+                                WHEN lower(substr(f.date, 6, instr(substr(f.date, 6), '\\')-1)) = 'september' THEN '09'
+                                WHEN lower(substr(f.date, 6, instr(substr(f.date, 6), '\\')-1)) = 'october' THEN '10'
+                                WHEN lower(substr(f.date, 6, instr(substr(f.date, 6), '\\')-1)) = 'november' THEN '11'
+                                WHEN lower(substr(f.date, 6, instr(substr(f.date, 6), '\\')-1)) = 'december' THEN '12'
+                                ELSE '01'
+                            END || '-' ||
+                            printf('%02d', cast(substr(f.date, length(f.date) - instr(reverse(f.date), '\\') + 2) as integer))
+                        )
+                    -- Format: DD\\Month\\YYYY
+                    WHEN f.date GLOB '[0-3][0-9]\\*\\*[1-2][0-9][0-9][0-9]' THEN
+                        date(
+                            substr(f.date, length(f.date) - 3, 4) || '-' ||
+                            CASE
+                                WHEN lower(substr(f.date, instr(f.date, '\\')+1, instr(substr(f.date, instr(f.date, '\\')+1), '\\')-1)) IN ('january','januari') THEN '01'
+                                WHEN lower(substr(f.date, instr(f.date, '\\')+1, instr(substr(f.date, instr(f.date, '\\')+1), '\\')-1)) IN ('february','februari') THEN '02'
+                                WHEN lower(substr(f.date, instr(f.date, '\\')+1, instr(substr(f.date, instr(f.date, '\\')+1), '\\')-1)) = 'march' THEN '03'
+                                WHEN lower(substr(f.date, instr(f.date, '\\')+1, instr(substr(f.date, instr(f.date, '\\')+1), '\\')-1)) = 'april' THEN '04'
+                                WHEN lower(substr(f.date, instr(f.date, '\\')+1, instr(substr(f.date, instr(f.date, '\\')+1), '\\')-1)) = 'may' THEN '05'
+                                WHEN lower(substr(f.date, instr(f.date, '\\')+1, instr(substr(f.date, instr(f.date, '\\')+1), '\\')-1)) = 'june' THEN '06'
+                                WHEN lower(substr(f.date, instr(f.date, '\\')+1, instr(substr(f.date, instr(f.date, '\\')+1), '\\')-1)) = 'july' THEN '07'
+                                WHEN lower(substr(f.date, instr(f.date, '\\')+1, instr(substr(f.date, instr(f.date, '\\')+1), '\\')-1)) = 'august' THEN '08'
+                                WHEN lower(substr(f.date, instr(f.date, '\\')+1, instr(substr(f.date, instr(f.date, '\\')+1), '\\')-1)) = 'september' THEN '09'
+                                WHEN lower(substr(f.date, instr(f.date, '\\')+1, instr(substr(f.date, instr(f.date, '\\')+1), '\\')-1)) = 'october' THEN '10'
+                                WHEN lower(substr(f.date, instr(f.date, '\\')+1, instr(substr(f.date, instr(f.date, '\\')+1), '\\')-1)) = 'november' THEN '11'
+                                WHEN lower(substr(f.date, instr(f.date, '\\')+1, instr(substr(f.date, instr(f.date, '\\')+1), '\\')-1)) = 'december' THEN '12'
+                                ELSE '01'
+                            END || '-' ||
+                            printf('%02d', cast(substr(f.date, 1, instr(f.date, '\\')-1) as integer))
+                        )
+                    ELSE NULL
+                END {order_sql},
+                f.id DESC
             LIMIT ? OFFSET ?
         """
         params.extend([page_size, offset])
