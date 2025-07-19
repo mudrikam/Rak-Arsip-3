@@ -469,7 +469,7 @@ class CentralWidget(QWidget):
                 f"Subcategory: {subcategory}\n"
                 f"Status: {status}\n"
             )
-            confirm1 = QMessageBox.question(
+            confirm1 = QMessageBox.warning(
                 self,
                 "Delete Record",
                 f"Delete this record?\n\n"
@@ -478,7 +478,7 @@ class CentralWidget(QWidget):
                 QMessageBox.Yes | QMessageBox.No
             )
             if confirm1 == QMessageBox.Yes:
-                confirm2 = QMessageBox.question(
+                confirm2 = QMessageBox.warning(
                     self,
                     "Are you sure?",
                     f"Are you sure you want to permanently delete this record and its project folder?\n\n"
