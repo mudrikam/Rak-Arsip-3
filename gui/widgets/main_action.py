@@ -330,6 +330,10 @@ class MainActionDock(QDockWidget):
         frame_right_layout.addWidget(date_check)
         frame_right_layout.addWidget(markdown_check)
         frame_right_layout.addWidget(open_explorer_check)
+        # Add label for open explorer status
+        self.open_explorer_status_label = QLabel("", frame_right)
+        self.open_explorer_status_label.setStyleSheet("color: #1976d2; font-size: 12px;")
+        frame_right_layout.addWidget(self.open_explorer_status_label)
         frame_right.setLayout(frame_right_layout)
         main_layout.addWidget(frame_right)
 
@@ -563,7 +567,14 @@ class MainActionDock(QDockWidget):
 
         def on_open_explorer_check_changed(state):
             self.config_manager.set("action_options.open_explorer", open_explorer_check.isChecked())
+            update_open_explorer_status_label()
             show_statusbar_message(self, f"Open Explorer option changed: {open_explorer_check.isChecked()}")
+
+        def update_open_explorer_status_label():
+            if not open_explorer_check.isChecked():
+                self.open_explorer_status_label.setText("Auto open explorer disabled")
+            else:
+                self.open_explorer_status_label.setText("")
 
         def on_name_input_changed(text):
             update_name_field_label()
@@ -606,6 +617,7 @@ class MainActionDock(QDockWidget):
         
         load_categories()
         load_templates()
+        update_open_explorer_status_label()
 
         def refresh_color_label():
             style = color_picker_btn.styleSheet()
