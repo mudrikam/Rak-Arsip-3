@@ -139,7 +139,7 @@ class MainActionDock(QDockWidget):
         folder_row = QHBoxLayout()
         folder_icon = QLabel()
         folder_icon.setPixmap(qta.icon("fa6s.folder", color="#2196F3").pixmap(16, 16))
-        label_folder = QLabel("Folder")
+        label_folder = QLabel("Root")
         combo_folder = QComboBox(frame_left)
         combo_folder.setEnabled(False)
         combo_folder.setMinimumWidth(180)
