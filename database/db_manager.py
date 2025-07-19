@@ -514,32 +514,32 @@ class DatabaseManager(QObject):
                 t.name as template,
                 CASE 
                     WHEN f.date LIKE '%_%_%' THEN 
-                        date(substr(f.date, -4) || '-' ||
-                             CASE substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)
-                                 WHEN 'Januari' THEN '01'
-                                 WHEN 'Februari' THEN '02'
-                                 WHEN 'Maret' THEN '03'
-                                 WHEN 'April' THEN '04'
-                                 WHEN 'Mei' THEN '05'
-                                 WHEN 'Juni' THEN '06'
-                                 WHEN 'Juli' THEN '07'
-                                 WHEN 'Agustus' THEN '08'
-                                 WHEN 'September' THEN '09'
-                                 WHEN 'Oktober' THEN '10'
-                                 WHEN 'November' THEN '11'
-                                 WHEN 'Desember' THEN '12'
-                                 WHEN 'January' THEN '01'
-                                 WHEN 'February' THEN '02'
-                                 WHEN 'March' THEN '03'
-                                 WHEN 'May' THEN '05'
-                                 WHEN 'June' THEN '06'
-                                 WHEN 'July' THEN '07'
-                                 WHEN 'August' THEN '08'
-                                 WHEN 'October' THEN '10'
-                                 WHEN 'December' THEN '12'
-                                 ELSE '01'
-                             END || '-' ||
-                             printf('%02d', cast(substr(f.date, 1, instr(f.date, '_') - 1) as integer)))
+                        date(
+                            substr(f.date, -4) || '-' ||
+                            (
+                                CASE
+                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) IN ('januari','january') THEN '01'
+                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) IN ('februari','february') THEN '02'
+                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) IN ('maret','march') THEN '03'
+                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) = 'april' THEN '04'
+                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) = 'mei' THEN '05'
+                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) = 'may' THEN '05'
+                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) = 'juni' THEN '06'
+                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) = 'july' THEN '07'
+                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) = 'juli' THEN '07'
+                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) = 'agustus' THEN '08'
+                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) = 'august' THEN '08'
+                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) = 'september' THEN '09'
+                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) = 'oktober' THEN '10'
+                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) = 'october' THEN '10'
+                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) = 'november' THEN '11'
+                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) = 'desember' THEN '12'
+                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) = 'december' THEN '12'
+                                    ELSE '01'
+                                END
+                            ) || '-' ||
+                            printf('%02d', cast(substr(f.date, 1, instr(f.date, '_') - 1) as integer))
+                        )
                     ELSE f.date
                 END AS parsed_date
             FROM files f
