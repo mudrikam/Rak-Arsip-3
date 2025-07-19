@@ -455,17 +455,34 @@ class CentralWidget(QWidget):
             show_statusbar_message(self, f"Opened in explorer: {path}")
 
         def do_delete_record():
+            name = row_data.get('name', '-')
+            path = row_data.get('path', '-')
+            date = row_data.get('date', '-')
+            category = row_data.get('category', '-')
+            subcategory = row_data.get('subcategory', '-')
+            status = row_data.get('status', '-')
+            details = (
+                f"Name: {name}\n"
+                f"Path: {path}\n"
+                f"Date: {date}\n"
+                f"Category: {category}\n"
+                f"Subcategory: {subcategory}\n"
+                f"Status: {status}\n"
+            )
             confirm1 = QMessageBox.question(
                 self,
                 "Delete Record",
-                "Delete this record?\nThis action cannot be undone.",
+                f"Delete this record?\n\n"
+                f"Details:\n{details}\n"
+                "This action cannot be undone.",
                 QMessageBox.Yes | QMessageBox.No
             )
             if confirm1 == QMessageBox.Yes:
                 confirm2 = QMessageBox.question(
                     self,
                     "Are you sure?",
-                    "Are you sure you want to permanently delete this record and its project folder?",
+                    f"Are you sure you want to permanently delete this record and its project folder?\n\n"
+                    f"Details:\n{details}",
                     QMessageBox.Yes | QMessageBox.No
                 )
                 if confirm2 == QMessageBox.Yes:
