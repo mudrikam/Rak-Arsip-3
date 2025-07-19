@@ -228,100 +228,6 @@ class DatabaseManager(QObject):
         self.create_temp_file()
         return cursor.lastrowid
 
-    def get_all_files(self):
-        cursor = self.connection.cursor()
-        cursor.execute("""
-            SELECT f.*, s.name as status_name, s.color as status_color, 
-                   c.name as category_name, sc.name as subcategory_name,
-                   t.name as template_name
-            FROM files f
-            LEFT JOIN statuses s ON f.status_id = s.id
-            LEFT JOIN categories c ON f.category_id = c.id
-            LEFT JOIN subcategories sc ON f.subcategory_id = sc.id
-            LEFT JOIN templates t ON f.template_id = t.id
-            ORDER BY 
-                CASE 
-                    WHEN f.date LIKE '%_%_%' THEN 
-                        date(substr(f.date, -4) || '-' ||
-                             CASE substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)
-                                 WHEN 'Januari' THEN '01'
-                                 WHEN 'Februari' THEN '02'
-                                 WHEN 'Maret' THEN '03'
-                                 WHEN 'April' THEN '04'
-                                 WHEN 'Mei' THEN '05'
-                                 WHEN 'Juni' THEN '06'
-                                 WHEN 'Juli' THEN '07'
-                                 WHEN 'Agustus' THEN '08'
-                                 WHEN 'September' THEN '09'
-                                 WHEN 'Oktober' THEN '10'
-                                 WHEN 'November' THEN '11'
-                                 WHEN 'Desember' THEN '12'
-                                 WHEN 'January' THEN '01'
-                                 WHEN 'February' THEN '02'
-                                 WHEN 'March' THEN '03'
-                                 WHEN 'May' THEN '05'
-                                 WHEN 'June' THEN '06'
-                                 WHEN 'July' THEN '07'
-                                 WHEN 'August' THEN '08'
-                                 WHEN 'October' THEN '10'
-                                 WHEN 'December' THEN '12'
-                                 ELSE '01'
-                             END || '-' ||
-                             printf('%02d', cast(substr(f.date, 1, instr(f.date, '_') - 1) as integer)))
-                    ELSE f.date
-                END DESC,
-                f.id DESC
-        """)
-        return cursor.fetchall()
-
-    def search_files(self, query):
-        cursor = self.connection.cursor()
-        search_pattern = f"%{query}%"
-        cursor.execute("""
-            SELECT f.*, s.name as status_name, s.color as status_color,
-                   c.name as category_name, sc.name as subcategory_name,
-                   t.name as template_name
-            FROM files f
-            LEFT JOIN statuses s ON f.status_id = s.id
-            LEFT JOIN categories c ON f.category_id = c.id
-            LEFT JOIN subcategories sc ON f.subcategory_id = sc.id
-            LEFT JOIN templates t ON f.template_id = t.id
-            WHERE f.name LIKE ? OR f.path LIKE ? OR c.name LIKE ? OR sc.name LIKE ?
-            ORDER BY 
-                CASE 
-                    WHEN f.date LIKE '%_%_%' THEN 
-                        date(substr(f.date, -4) || '-' ||
-                             CASE substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)
-                                 WHEN 'Januari' THEN '01'
-                                 WHEN 'Februari' THEN '02'
-                                 WHEN 'Maret' THEN '03'
-                                 WHEN 'April' THEN '04'
-                                 WHEN 'Mei' THEN '05'
-                                 WHEN 'Juni' THEN '06'
-                                 WHEN 'Juli' THEN '07'
-                                 WHEN 'Agustus' THEN '08'
-                                 WHEN 'September' THEN '09'
-                                 WHEN 'Oktober' THEN '10'
-                                 WHEN 'November' THEN '11'
-                                 WHEN 'Desember' THEN '12'
-                                 WHEN 'January' THEN '01'
-                                 WHEN 'February' THEN '02'
-                                 WHEN 'March' THEN '03'
-                                 WHEN 'May' THEN '05'
-                                 WHEN 'June' THEN '06'
-                                 WHEN 'July' THEN '07'
-                                 WHEN 'August' THEN '08'
-                                 WHEN 'October' THEN '10'
-                                 WHEN 'December' THEN '12'
-                                 ELSE '01'
-                             END || '-' ||
-                             printf('%02d', cast(substr(f.date, 1, instr(f.date, '_') - 1) as integer)))
-                    ELSE f.date
-                END DESC,
-                f.id DESC
-        """, (search_pattern, search_pattern, search_pattern, search_pattern))
-        return cursor.fetchall()
-
     def update_file_status(self, file_id, status_id):
         cursor = self.connection.cursor()
         cursor.execute(
@@ -571,3 +477,94 @@ class DatabaseManager(QObject):
                     writer.writerow([row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8]])
         finally:
             self.close()
+
+    def get_files_page(self, page=1, page_size=20, search_query=None, sort_field="date", sort_order="desc", status_value=None):
+        cursor = self.connection.cursor()
+        offset = (page - 1) * page_size
+        params = []
+        where_clauses = []
+        if search_query:
+            search_pattern = f"%{search_query}%"
+            where_clauses.append(
+                "(f.name LIKE ? OR f.path LIKE ? OR c.name LIKE ? OR sc.name LIKE ?)"
+            )
+            params.extend([search_pattern] * 4)
+        if status_value:
+            where_clauses.append("s.name = ?")
+            params.append(status_value)
+        where_sql = ""
+        if where_clauses:
+            where_sql = "WHERE " + " AND ".join(where_clauses)
+        sort_map = {
+            "date": "f.date",
+            "name": "f.name",
+            "root": "f.root",
+            "path": "f.path",
+            "status": "s.name",
+            "category": "c.name",
+            "subcategory": "sc.name"
+        }
+        sort_sql = sort_map.get(sort_field, "f.date")
+        order_sql = "DESC" if sort_order == "desc" else "ASC"
+        sql = f"""
+            SELECT f.id, f.date, f.name, f.root, f.path, f.status_id, f.category_id, f.subcategory_id, f.template_id,
+                   s.name as status, s.color as status_color, 
+                   c.name as category, sc.name as subcategory,
+                   t.name as template
+            FROM files f
+            LEFT JOIN statuses s ON f.status_id = s.id
+            LEFT JOIN categories c ON f.category_id = c.id
+            LEFT JOIN subcategories sc ON f.subcategory_id = sc.id
+            LEFT JOIN templates t ON f.template_id = t.id
+            {where_sql}
+            ORDER BY {sort_sql} {order_sql}, f.id DESC
+            LIMIT ? OFFSET ?
+        """
+        params.extend([page_size, offset])
+        cursor.execute(sql, params)
+        rows = cursor.fetchall()
+        result = []
+        for row in rows:
+            result.append({
+                "id": row["id"],
+                "date": row["date"],
+                "name": row["name"],
+                "root": row["root"],
+                "path": row["path"],
+                "status_id": row["status_id"],
+                "category_id": row["category_id"],
+                "subcategory_id": row["subcategory_id"],
+                "template_id": row["template_id"],
+                "status": row["status"],
+                "status_color": row["status_color"],
+                "category": row["category"],
+                "subcategory": row["subcategory"],
+                "template": row["template"]
+            })
+        return result
+
+    def count_files(self, search_query=None, status_value=None):
+        cursor = self.connection.cursor()
+        params = []
+        where_clauses = []
+        if search_query:
+            search_pattern = f"%{search_query}%"
+            where_clauses.append(
+                "(f.name LIKE ? OR f.path LIKE ? OR c.name LIKE ? OR sc.name LIKE ?)"
+            )
+            params.extend([search_pattern] * 4)
+        if status_value:
+            where_clauses.append("s.name = ?")
+            params.append(status_value)
+        where_sql = ""
+        if where_clauses:
+            where_sql = "WHERE " + " AND ".join(where_clauses)
+        sql = f"""
+            SELECT COUNT(*) FROM files f
+            LEFT JOIN statuses s ON f.status_id = s.id
+            LEFT JOIN categories c ON f.category_id = c.id
+            LEFT JOIN subcategories sc ON f.subcategory_id = sc.id
+            {where_sql}
+        """
+        cursor.execute(sql, params)
+        return cursor.fetchone()[0]

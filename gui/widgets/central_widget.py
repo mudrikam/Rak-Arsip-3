@@ -108,10 +108,11 @@ class CentralWidget(QWidget):
         self.table.setHorizontalHeaderItem(2, root_header)
         self.table.setHorizontalHeaderItem(3, path_header)
         self.table.setHorizontalHeaderItem(4, status_header)
-        self._all_data = []
         self.page_size = 20
         self.current_page = 1
         self.filtered_data = []
+        self.total_records = 0
+        self.found_records = 0
 
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.Fixed)
@@ -173,6 +174,10 @@ class CentralWidget(QWidget):
         open_explorer_shortcut = QShortcut(QKeySequence("Ctrl+E"), self)
         open_explorer_shortcut.activated.connect(self.open_explorer)
 
+        self._search_query = ""
+        self._status_filter = None
+        self._sort_field = "date"
+        self._sort_order = "desc"
         self.load_data_from_database()
 
     def paste_to_search(self):
@@ -238,30 +243,30 @@ class CentralWidget(QWidget):
     def load_data_from_database(self, keep_search=False):
         try:
             self.db_manager.connect()
-            rows = self.db_manager.get_all_files()
-            self._all_data = []
-            for row in rows:
-                self._all_data.append({
-                    'id': row['id'],
-                    'date': row['date'],
-                    'name': row['name'],
-                    'root': row['root'],
-                    'path': row['path'],
-                    'status': row['status_name'],
-                    'status_id': row['status_id'],
-                    'category': row['category_name'],
-                    'subcategory': row['subcategory_name']
-                })
-            if (keep_search or True) and hasattr(self, 'search_edit') and self.search_edit.text().strip():
-                self.apply_search(refresh_only=True)
+            self._search_query = self.search_edit.text().strip()
+            self._status_filter = self.sort_status_value
+            self._sort_field = self.sort_field
+            self._sort_order = self.sort_order
+            self.total_records = self.db_manager.count_files()
+            if self._search_query or self._status_filter:
+                self.found_records = self.db_manager.count_files(
+                    search_query=self._search_query,
+                    status_value=self._status_filter
+                )
             else:
-                self.filtered_data = self._all_data.copy()
-                self.current_page = 1
-                self.update_table()
+                self.found_records = self.total_records
+            self.filtered_data = self.db_manager.get_files_page(
+                page=self.current_page,
+                page_size=self.page_size,
+                search_query=self._search_query,
+                sort_field=self._sort_field,
+                sort_order=self._sort_order,
+                status_value=self._status_filter
+            )
+            self.update_table()
             show_statusbar_message(self, "Loaded data from database")
         except Exception as e:
             print(f"Error loading data from database: {e}")
-            self._all_data = []
             self.filtered_data = []
             self.update_table()
             show_statusbar_message(self, f"Error loading data: {e}")
@@ -273,20 +278,14 @@ class CentralWidget(QWidget):
         show_statusbar_message(self, "Table refreshed")
 
     def apply_search(self, refresh_only=False):
-        query = self.search_edit.text().lower()
-        if query:
-            self.filtered_data = [
-                row for row in self._all_data
-                if any(query in str(value).lower() for value in row.values() if value)
-            ]
-            if not refresh_only:
-                show_statusbar_message(self, f"Search applied: {query}")
-        else:
-            self.filtered_data = self._all_data.copy()
-            if not refresh_only:
-                show_statusbar_message(self, "Search cleared")
         self.current_page = 1
-        self.update_table()
+        self.load_data_from_database(keep_search=True)
+        if not refresh_only:
+            query = self.search_edit.text().lower()
+            if query:
+                show_statusbar_message(self, f"Search applied: {query}")
+            else:
+                show_statusbar_message(self, "Search cleared")
 
     def _truncate_path_by_width(self, path, column_width):
         if not path:
@@ -312,12 +311,10 @@ class CentralWidget(QWidget):
         return path
 
     def update_table(self):
-        total_rows = len(self.filtered_data)
+        total_rows = self.found_records
         total_pages = max(1, (total_rows + self.page_size - 1) // self.page_size)
         self.current_page = max(1, min(self.current_page, total_pages))
-        start = (self.current_page - 1) * self.page_size
-        end = start + self.page_size
-        page_data = self.filtered_data[start:end]
+        page_data = self.filtered_data
         self.table.setRowCount(len(page_data))
         path_column_width = self.table.columnWidth(3)
         for row_idx, row_data in enumerate(page_data):
@@ -347,15 +344,13 @@ class CentralWidget(QWidget):
             self.table.selectRow(self._selected_row_index)
 
     def update_stats_label(self):
-        total_records = len(self._all_data)
         last_date = "-"
-        if self._all_data:
-            last_date = self._all_data[0]['date']
-        if self.search_edit.text().strip():
-            found_records = len(self.filtered_data)
-            self.stats_label.setText(f"Total: {total_records} | Last: {last_date} | Found: {found_records} Records")
+        if self.filtered_data:
+            last_date = self.filtered_data[0]['date']
+        if self.search_edit.text().strip() or self.sort_status_value:
+            self.stats_label.setText(f"Total: {self.total_records} | Last: {last_date} | Found: {self.found_records} Records")
         else:
-            self.stats_label.setText(f"Total: {total_records} | Last: {last_date}")
+            self.stats_label.setText(f"Total: {self.total_records} | Last: {last_date}")
 
     def on_row_selected(self):
         current_row = self.table.currentRow()
@@ -378,47 +373,41 @@ class CentralWidget(QWidget):
             combo.setStyleSheet("")
 
     def _on_status_changed(self, row, value):
-        global_row = (self.current_page - 1) * self.page_size + row
-        if 0 <= global_row < len(self.filtered_data):
-            row_data = self.filtered_data[global_row]
-            old_status = row_data['status']
-            row_data['status'] = value
-            try:
-                self.db_manager.connect()
-                status_id = self.db_manager.get_status_id(value)
-                if status_id:
-                    self.db_manager.update_file_status(row_data['id'], status_id)
-                    row_data['status_id'] = status_id
-                    for data_row in self._all_data:
-                        if data_row['id'] == row_data['id']:
-                            data_row['status'] = value
-                            data_row['status_id'] = status_id
-                            break
-                    combo = self.table.cellWidget(row, 4)
-                    if combo:
-                        self._set_status_text_color(combo, value)
-                    # Only reload data, but keep search/filter if any
-                    self.load_data_from_database(keep_search=True)
-            except Exception as e:
-                print(f"Error updating status: {e}")
-                row_data['status'] = old_status
+        if row < 0 or row >= len(self.filtered_data):
+            return
+        row_data = self.filtered_data[row]
+        old_status = row_data['status']
+        row_data['status'] = value
+        try:
+            self.db_manager.connect()
+            status_id = self.db_manager.get_status_id(value)
+            if status_id:
+                self.db_manager.update_file_status(row_data['id'], status_id)
+                row_data['status_id'] = status_id
                 combo = self.table.cellWidget(row, 4)
                 if combo:
-                    combo.setCurrentText(old_status)
-            finally:
-                self.db_manager.close()
+                    self._set_status_text_color(combo, value)
+                self.load_data_from_database(keep_search=True)
+        except Exception as e:
+            print(f"Error updating status: {e}")
+            row_data['status'] = old_status
+            combo = self.table.cellWidget(row, 4)
+            if combo:
+                combo.setCurrentText(old_status)
+        finally:
+            self.db_manager.close()
 
     def prev_page(self):
         if self.current_page > 1:
             self.current_page -= 1
-            self.update_table()
+            self.load_data_from_database(keep_search=True)
 
     def next_page(self):
-        total_rows = len(self.filtered_data)
+        total_rows = self.found_records
         total_pages = max(1, (total_rows + self.page_size - 1) // self.page_size)
         if self.current_page < total_pages:
             self.current_page += 1
-            self.update_table()
+            self.load_data_from_database(keep_search=True)
 
     def show_context_menu(self, pos):
         index = self.table.indexAt(pos)
@@ -516,24 +505,6 @@ class CentralWidget(QWidget):
             self.sort_field = field
             self.sort_order = order
             self.sort_status_value = status_value
-            self.apply_sort()
+            self.current_page = 1
+            self.load_data_from_database(keep_search=True)
             show_statusbar_message(self, f"Sort applied: {field} {order} {status_value if status_value else ''}")
-
-    def apply_sort(self):
-        if self.sort_field == "status" and self.sort_status_value:
-            self.filtered_data = [
-                row for row in self._all_data
-                if row.get("status") == self.sort_status_value
-            ]
-            show_statusbar_message(self, f"Filtered by status: {self.sort_status_value}")
-        else:
-            self.filtered_data = self._all_data.copy()
-        self.filtered_data = SortDialog.sort_data(
-            self.filtered_data,
-            self.sort_field,
-            self.sort_order,
-            self.sort_status_value
-        )
-        self.current_page = 1
-        self.update_table()
-        show_statusbar_message(self, f"Sorted by {self.sort_field} ({self.sort_order})")
