@@ -506,7 +506,7 @@ class DatabaseManager(QObject):
         }
         sort_sql = sort_map.get(sort_field, "f.date")
         order_sql = "DESC" if sort_order == "desc" else "ASC"
-        # Use a CASE to parse both possible date formats and sort by real date
+        # Remove use of reverse() and use only substrings and instr for date parsing
         sql = f"""
             SELECT f.id, f.date, f.name, f.root, f.path, f.status_id, f.category_id, f.subcategory_id, f.template_id,
                    s.name as status, s.color as status_color, 
@@ -539,7 +539,11 @@ class DatabaseManager(QObject):
                                 WHEN lower(substr(f.date, 6, instr(substr(f.date, 6), '\\')-1)) = 'december' THEN '12'
                                 ELSE '01'
                             END || '-' ||
-                            printf('%02d', cast(substr(f.date, length(f.date) - instr(reverse(f.date), '\\') + 2) as integer))
+                            printf('%02d', cast(
+                                substr(
+                                    f.date,
+                                    length(f.date) - instr(substr(f.date, 6 + instr(substr(f.date, 6), '\\')), '\\') + 2
+                                ) as integer))
                         )
                     -- Format: DD\\Month\\YYYY
                     WHEN f.date GLOB '[0-3][0-9]\\*\\*[1-2][0-9][0-9][0-9]' THEN
