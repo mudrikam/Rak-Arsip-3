@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (
     QFrame, QFileDialog, QMessageBox, QApplication, QProgressBar, QLineEdit
 )
 from PySide6.QtCore import Qt, QThread, Signal
-from PySide6.QtGui import QPixmap, QDragEnterEvent, QDropEvent, QImage, QGuiApplication
+from PySide6.QtGui import QPixmap, QDragEnterEvent, QDropEvent, QImage, QGuiApplication, QIcon
 import qtawesome as qta
 import os
 import shutil
@@ -92,7 +92,14 @@ class GenerateNameDialog(QDialog):
         super().__init__(parent)
         self.config_manager = config_manager
         self.setWindowTitle("Generate Project Name from Image")
-        self.setWindowIcon(qta.icon("fa6s.star"))
+        # Use the same icon as AboutDialog for consistency
+        from PySide6.QtGui import QIcon
+        from pathlib import Path
+        icon_path = Path(__file__).parent.parent.parent / "res" / "rakikon.ico"
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
+        else:
+            self.setWindowIcon(qta.icon("fa6s.folder-tree"))
         self.setMinimumSize(400, 280)
         self.setMaximumHeight(320)
         self.setModal(True)
@@ -167,7 +174,6 @@ class GenerateNameDialog(QDialog):
         layout.addLayout(button_layout)
         
         dialog_buttons = QHBoxLayout()
-        # Tambahkan tombol test API dan label status di kiri
         self.test_api_btn = QPushButton()
         self.test_api_btn.setIcon(qta.icon("fa6s.plug-circle-check"))
         self.test_api_btn.setToolTip("Test Gemini API Key")
