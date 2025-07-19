@@ -285,7 +285,51 @@ class CentralWidget(QWidget):
 
     def refresh_table(self):
         self.load_data_from_database(keep_search=True)
-        show_statusbar_message(self, "Table refreshed")
+        # Refresh categories, subcategories, and templates in MainActionDock if available
+        main_window = self._main_window
+        if main_window and hasattr(main_window, "main_action_dock"):
+            main_action = main_window.main_action_dock
+            if hasattr(main_action, "_combo_category") and hasattr(main_action, "_combo_subcategory"):
+                if hasattr(main_action, "_combo_category") and hasattr(main_action, "db_manager"):
+                    try:
+                        main_action.db_manager.connect()
+                        categories = main_action.db_manager.get_all_categories()
+                        main_action._combo_category.clear()
+                        main_action._combo_category.addItem("")
+                        main_action._combo_category.addItems(categories)
+                        main_action.db_manager.close()
+                    except Exception as e:
+                        print(f"Error refreshing categories: {e}")
+                # Refresh subcategory based on current category
+                current_category = main_action._combo_category.currentText().strip()
+                if current_category:
+                    try:
+                        main_action.db_manager.connect()
+                        subcategories = main_action.db_manager.get_subcategories_by_category(current_category)
+                        main_action._combo_subcategory.clear()
+                        main_action._combo_subcategory.addItem("")
+                        main_action._combo_subcategory.addItems(subcategories)
+                        main_action._combo_subcategory.setEnabled(True)
+                        main_action.db_manager.close()
+                    except Exception as e:
+                        print(f"Error refreshing subcategories: {e}")
+                else:
+                    main_action._combo_subcategory.clear()
+                    main_action._combo_subcategory.addItem("")
+                    main_action._combo_subcategory.setEnabled(False)
+            if hasattr(main_action, "_combo_template"):
+                try:
+                    main_action.db_manager.connect()
+                    templates = main_action.db_manager.get_all_templates()
+                    main_action._combo_template.clear()
+                    main_action._combo_template.addItem("No Template")
+                    for template in templates:
+                        main_action._combo_template.addItem(template['name'])
+                        main_action._combo_template.setItemData(main_action._combo_template.count() - 1, template['id'])
+                    main_action.db_manager.close()
+                except Exception as e:
+                    print(f"Error refreshing templates: {e}")
+        show_statusbar_message(self, "Table and main action categories/templates refreshed")
 
     def apply_search(self, refresh_only=False):
         self.current_page = 1

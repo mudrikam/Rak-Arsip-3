@@ -110,7 +110,6 @@ class MainActionDock(QDockWidget):
 
         main_layout = QHBoxLayout()
 
-        # Disk/Folder section with header
         frame_left = QFrame(container)
         frame_left.setFrameShape(QFrame.StyledPanel)
         frame_left_layout = QVBoxLayout(frame_left)
@@ -149,6 +148,10 @@ class MainActionDock(QDockWidget):
         folder_row.addWidget(combo_folder)
         frame_left_layout.addLayout(folder_row)
 
+        disk_folder_label = QLabel("-", frame_left)
+        disk_folder_label.setStyleSheet("color: #1976d2; font-size: 12px; margin-top: 4px;")
+        frame_left_layout.addWidget(disk_folder_label)
+
         def adjust_folder_width():
             combo_folder.setMinimumWidth(combo_disk.width())
 
@@ -158,7 +161,6 @@ class MainActionDock(QDockWidget):
         frame_left.setLayout(frame_left_layout)
         main_layout.addWidget(frame_left)
 
-        # Category/Subcategory section with header
         frame_middle = QFrame(container)
         frame_middle.setFrameShape(QFrame.StyledPanel)
         frame_middle_layout = QVBoxLayout(frame_middle)
@@ -204,10 +206,13 @@ class MainActionDock(QDockWidget):
         subcategory_row.addWidget(combo_subcategory)
         frame_middle_layout.addLayout(subcategory_row)
 
+        cat_subcat_label = QLabel("-", frame_middle)
+        cat_subcat_label.setStyleSheet("color: #1976d2; font-size: 12px; margin-top: 4px;")
+        frame_middle_layout.addWidget(cat_subcat_label)
+
         frame_middle.setLayout(frame_middle_layout)
         main_layout.addWidget(frame_middle)
 
-        # Template/Theme section with header
         frame_far_right = QFrame(container)
         frame_far_right.setFrameShape(QFrame.StyledPanel)
         frame_far_right_layout = QVBoxLayout(frame_far_right)
@@ -231,10 +236,6 @@ class MainActionDock(QDockWidget):
         template_row.addWidget(combo_template)
         frame_far_right_layout.addLayout(template_row)
 
-        def refresh_templates_on_show():
-            load_templates()
-        combo_template.showPopup = lambda orig=combo_template.showPopup: (refresh_templates_on_show(), orig())
-
         color_row = QHBoxLayout()
         theme_icon = QLabel()
         theme_icon.setPixmap(qta.icon("fa6s.palette", color="#E91E63").pixmap(16, 16))
@@ -244,9 +245,19 @@ class MainActionDock(QDockWidget):
         color_picker_btn.setStyleSheet("background-color: #cccccc; border: 1px solid #888;")
         color_row.addWidget(theme_icon)
         color_row.addWidget(color_picker_btn)
+        color_hex_label = QLabel("#cccccc", frame_far_right)
+        color_hex_label.setStyleSheet("color: #1976d2; font-size: 12px; margin-left: 8px;")
+        color_row.addWidget(color_hex_label)
         frame_far_right_layout.addLayout(color_row)
 
+        # Add label for Template\Color display
+        template_color_label = QLabel("-", frame_far_right)
+        template_color_label.setStyleSheet("color: #1976d2; font-size: 12px; margin-top: 4px;")
+        frame_far_right_layout.addWidget(template_color_label)
+
         self._color_picker_btn = color_picker_btn
+        self._color_hex_label = color_hex_label
+        self._template_color_label = template_color_label
 
         def set_random_color_from_cursor():
             hue = random.randint(0, 359)
@@ -255,6 +266,20 @@ class MainActionDock(QDockWidget):
             color = QColor()
             color.setHsvF(hue / 359.0, s, v)
             color_picker_btn.setStyleSheet(f"background-color: {color.name()}; border: 1px solid #888;")
+            color_hex_label.setText(color.name())
+            update_template_color_label()
+
+        def update_template_color_label():
+            template_text = combo_template.currentText()
+            color_text = color_hex_label.text()
+            if template_text and template_text != "No Template":
+                template_color_label.setText(f"{template_text}\\{color_text}")
+            elif template_text:
+                template_color_label.setText(f"{template_text}")
+            elif color_text:
+                template_color_label.setText(f"\\{color_text}")
+            else:
+                template_color_label.setText("-")
 
         container.setMouseTracking(True)
         frame_far_right.setMouseTracking(True)
@@ -267,10 +292,11 @@ class MainActionDock(QDockWidget):
         frame_far_right.mouseMoveEvent = mouse_move_event
         color_picker_btn.mouseMoveEvent = mouse_move_event
 
+        combo_template.currentIndexChanged.connect(update_template_color_label)
+
         frame_far_right.setLayout(frame_far_right_layout)
         main_layout.addWidget(frame_far_right)
 
-        # Options section (already has header)
         frame_right = QFrame(container)
         frame_right.setFrameShape(QFrame.StyledPanel)
         frame_right_layout = QVBoxLayout(frame_right)
@@ -304,6 +330,10 @@ class MainActionDock(QDockWidget):
         frame_right_layout.addWidget(date_check)
         frame_right_layout.addWidget(markdown_check)
         frame_right_layout.addWidget(open_explorer_check)
+        # Add label for open explorer status
+        self.open_explorer_status_label = QLabel("", frame_right)
+        self.open_explorer_status_label.setStyleSheet("color: #1976d2; font-size: 12px;")
+        frame_right_layout.addWidget(self.open_explorer_status_label)
         frame_right.setLayout(frame_right_layout)
         main_layout.addWidget(frame_right)
 
@@ -329,6 +359,8 @@ class MainActionDock(QDockWidget):
         self._adjust_folder_width = adjust_folder_width
         self._combo_template = combo_template
         self._name_field_widget = name_field_widget
+        self._color_hex_label = color_hex_label
+        self._template_color_label = template_color_label
 
         def load_templates():
             try:
@@ -346,6 +378,18 @@ class MainActionDock(QDockWidget):
             finally:
                 self.db_manager.close()
 
+        def update_disk_folder_label():
+            disk_label = combo_disk.currentText()
+            folder_label = combo_folder.currentText() if combo_folder.isEnabled() and combo_folder.currentIndex() >= 0 else ""
+            if disk_label and folder_label:
+                disk_folder_label.setText(f"{disk_label}\\{folder_label}")
+            elif disk_label:
+                disk_folder_label.setText(f"{disk_label}")
+            elif folder_label:
+                disk_folder_label.setText(f"\\{folder_label}")
+            else:
+                disk_folder_label.setText("-")
+
         def update_name_field_label():
             disk_label = combo_disk.currentText()
             folder_label = combo_folder.currentText() if combo_folder.isEnabled() and combo_folder.currentIndex() >= 0 else ""
@@ -353,6 +397,16 @@ class MainActionDock(QDockWidget):
             subcategory_text = combo_subcategory.currentText().strip()
             category_text = sanitize_category_subcategory(category_text)
             subcategory_text = sanitize_category_subcategory(subcategory_text)
+            if category_text and subcategory_text:
+                cat_subcat_label.setText(f"{category_text}\\{subcategory_text}")
+            elif category_text:
+                cat_subcat_label.setText(f"{category_text}")
+            elif subcategory_text:
+                cat_subcat_label.setText(f"\\{subcategory_text}")
+            else:
+                cat_subcat_label.setText("-")
+            update_disk_folder_label()
+            update_template_color_label()
             date_path = ""
             if date_check.isChecked():
                 today = datetime.date.today()
@@ -410,6 +464,7 @@ class MainActionDock(QDockWidget):
                 combo_folder.clear()
                 combo_folder.setEnabled(False)
                 update_name_field_label()
+                update_disk_folder_label()
                 show_statusbar_message(self, "No disk selected")
                 return
             disk_label = combo_disk.currentText()
@@ -425,9 +480,11 @@ class MainActionDock(QDockWidget):
                 show_statusbar_message(self, f"Disk changed: {disk_label}, no folders found")
             adjust_folder_width()
             update_name_field_label()
+            update_disk_folder_label()
 
         def on_folder_changed(index):
             update_name_field_label()
+            update_disk_folder_label()
             folder_label = combo_folder.currentText()
             show_statusbar_message(self, f"Folder changed: {folder_label}")
 
@@ -438,6 +495,12 @@ class MainActionDock(QDockWidget):
                 load_subcategories(category_text)
             update_name_field_label()
             show_statusbar_message(self, f"Category changed: {category_text}")
+
+        def on_subcategory_changed():
+            subcategory_text = combo_subcategory.currentText().strip()
+            subcategory_text = sanitize_category_subcategory(subcategory_text)
+            update_name_field_label()
+            show_statusbar_message(self, f"Subcategory changed: {subcategory_text}")
 
         def on_category_enter():
             category_text = combo_category.currentText().strip()
@@ -464,12 +527,6 @@ class MainActionDock(QDockWidget):
             load_subcategories(category_text)
             update_name_field_label()
             combo_subcategory.setFocus()
-
-        def on_subcategory_changed():
-            subcategory_text = combo_subcategory.currentText().strip()
-            subcategory_text = sanitize_category_subcategory(subcategory_text)
-            update_name_field_label()
-            show_statusbar_message(self, f"Subcategory changed: {subcategory_text}")
 
         def on_subcategory_enter():
             category_text = combo_category.currentText().strip()
@@ -510,7 +567,14 @@ class MainActionDock(QDockWidget):
 
         def on_open_explorer_check_changed(state):
             self.config_manager.set("action_options.open_explorer", open_explorer_check.isChecked())
+            update_open_explorer_status_label()
             show_statusbar_message(self, f"Open Explorer option changed: {open_explorer_check.isChecked()}")
+
+        def update_open_explorer_status_label():
+            if not open_explorer_check.isChecked():
+                self.open_explorer_status_label.setText("Auto open explorer disabled")
+            else:
+                self.open_explorer_status_label.setText("")
 
         def on_name_input_changed(text):
             update_name_field_label()
@@ -529,6 +593,7 @@ class MainActionDock(QDockWidget):
                 template_id = combo_template.itemData(index)
                 name_field_widget.set_selected_template(template_id)
                 show_statusbar_message(self, f"Template selected: {combo_template.currentText()} (ID: {template_id})")
+            update_template_color_label()
 
         combo_disk.currentIndexChanged.connect(on_disk_changed)
         combo_folder.currentIndexChanged.connect(on_folder_changed)
@@ -552,17 +617,24 @@ class MainActionDock(QDockWidget):
         
         load_categories()
         load_templates()
+        update_open_explorer_status_label()
 
-        # Connect project_created signal to central widget refresh if available
-        def refresh_central_widget():
-            main_window = self.parent()
-            while main_window:
-                if hasattr(main_window, "central_widget") and hasattr(main_window.central_widget, "refresh_table"):
-                    print("Refreshing central widget table after project creation")
-                    main_window.central_widget.refresh_table()
-                    break
-                main_window = main_window.parent()
-        name_field_widget.project_created.connect(refresh_central_widget)
+        def refresh_color_label():
+            style = color_picker_btn.styleSheet()
+            if "background-color:" in style:
+                color_start = style.find("background-color:") + len("background-color:")
+                color_end = style.find(";", color_start)
+                if color_end == -1:
+                    color_end = style.find("}", color_start)
+                color = style[color_start:color_end].strip()
+                color_hex_label.setText(color)
+
+        color_picker_btn.installEventFilter(self)
+        def color_btn_event_filter(obj, event):
+            if obj is color_picker_btn and event.type() == QEvent.Paint:
+                refresh_color_label()
+            return False
+        color_picker_btn.eventFilter = color_btn_event_filter
 
     @Slot(list)
     def _on_disks_ready(self, disks):

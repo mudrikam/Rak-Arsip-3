@@ -1,5 +1,5 @@
-from PySide6.QtWidgets import QMainWindow, QApplication, QWidget, QStatusBar
-from PySide6.QtCore import Qt, QRect, QCoreApplication
+from PySide6.QtWidgets import QMainWindow, QApplication, QWidget, QStatusBar, QLabel
+from PySide6.QtCore import Qt, QRect, QCoreApplication, QTimer
 from helpers.window_helper import get_window_config, set_app_user_model_id, set_window_icon
 from gui.widgets.main_menu import MainMenu
 from gui.widgets.main_action import MainActionDock
@@ -38,6 +38,18 @@ class MainWindow(QMainWindow):
 
         self.status_bar = QStatusBar(self)
         self.setStatusBar(self.status_bar)
+
+        self.datetime_label = QLabel(self)
+        self.datetime_label.setStyleSheet("color: #888; font-size: 13px; margin-left: 10px;")
+        self.status_bar.addPermanentWidget(self.datetime_label)
+        self._update_datetime_label()
+        self._datetime_timer = QTimer(self)
+        self._datetime_timer.timeout.connect(self._update_datetime_label)
+        self._datetime_timer.start(10000)
+
+    def _update_datetime_label(self):
+        if hasattr(self.menu_bar, "get_datetime_string"):
+            self.datetime_label.setText(self.menu_bar.get_datetime_string())
 
     def center_on_screen(self):
         screen = QApplication.primaryScreen()
