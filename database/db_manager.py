@@ -518,16 +518,16 @@ class DatabaseManager(QObject):
                         printf('%04d-%02d-%02d',
                             CAST(substr(f.date, 1, 4) AS INTEGER),
                             CASE
-                                WHEN lower(substr(f.date, 6, instr(substr(f.date, 6), '\\\\')-1)) IN ('january','januari') THEN 1
-                                WHEN lower(substr(f.date, 6, instr(substr(f.date, 6), '\\\\')-1)) IN ('february','februari') THEN 2
-                                WHEN lower(substr(f.date, 6, instr(substr(f.date, 6), '\\\\')-1)) = 'march' THEN 3
-                                WHEN lower(substr(f.date, 6, instr(substr(f.date, 6), '\\\\')-1)) = 'april' THEN 4
-                                WHEN lower(substr(f.date, 6, instr(substr(f.date, 6), '\\\\')-1)) = 'may' THEN 5
-                                WHEN lower(substr(f.date, 6, instr(substr(f.date, 6), '\\\\')-1)) = 'june' THEN 6
-                                WHEN lower(substr(f.date, 6, instr(substr(f.date, 6), '\\\\')-1)) = 'july' THEN 7
-                                WHEN lower(substr(f.date, 6, instr(substr(f.date, 6), '\\\\')-1)) = 'august' THEN 8
+                                WHEN lower(substr(f.date, 6, instr(substr.f.date, 6), '\\\\')-1)) IN ('january','januari') THEN 1
+                                WHEN lower(substr(f.date, 6, instr(substr.f.date, 6), '\\\\')-1)) IN ('february','februari') THEN 2
+                                WHEN lower(substr(f.date, 6, instr(substr.f.date, 6), '\\\\')-1)) = 'march' THEN 3
+                                WHEN lower(substr(f.date, 6, instr(substr.f.date, 6), '\\\\')-1)) = 'april' THEN 4
+                                WHEN lower(substr(f.date, 6, instr(substr.f.date, 6), '\\\\')-1)) = 'may' THEN 5
+                                WHEN lower(substr(f.date, 6, instr(substr.f.date, 6), '\\\\')-1)) = 'june' THEN 6
+                                WHEN lower(substr(f.date, 6, instr(substr.f.date, 6), '\\\\')-1)) = 'july' THEN 7
+                                WHEN lower(substr(f.date, 6, instr(substr.f.date, 6), '\\\\')-1)) = 'august' THEN 8
                                 WHEN lower(substr(f.date, 6, instr(substr.f.date, 6), '\\\\')-1)) = 'september' THEN 9
-                                WHEN lower(substr(f.date, 6, instr(substr(f.date, 6), '\\\\')-1)) = 'october' THEN 10
+                                WHEN lower(substr(f.date, 6, instr(substr.f.date, 6), '\\\\')-1)) = 'october' THEN 10
                                 WHEN lower(substr(f.date, 6, instr(substr.f.date, 6), '\\\\')-1)) = 'november' THEN 11
                                 WHEN lower(substr(f.date, 6, instr(substr.f.date, 6), '\\\\')-1)) = 'december' THEN 12
                                 ELSE 1
@@ -535,7 +535,7 @@ class DatabaseManager(QObject):
                             CAST(
                                 substr(
                                     f.date,
-                                    length(f.date) - instr(replace(substr(f.date, 1, length(f.date)), '\\\\', '/'), '/') + 2
+                                    length(f.date) - instr(replace(f.date, '\\\\', '/'), '/') + 2
                                 ) AS INTEGER
                             )
                         )
@@ -544,11 +544,11 @@ class DatabaseManager(QObject):
                         printf('%04d-%02d-%02d',
                             CAST(substr(f.date, length(f.date) - 3, 4) AS INTEGER),
                             CASE
-                                WHEN lower(substr(f.date, instr(f.date, '\\\\')+1, instr(substr(f.date, instr(f.date, '\\\\')+1), '\\\\')-1)) IN ('january','januari') THEN 1
-                                WHEN lower(substr(f.date, instr(f.date, '\\\\')+1, instr(substr(f.date, instr(f.date, '\\\\')+1), '\\\\')-1)) IN ('february','februari') THEN 2
-                                WHEN lower(substr(f.date, instr(f.date, '\\\\')+1, instr(substr(f.date, instr(f.date, '\\\\')+1), '\\\\')-1)) = 'march' THEN 3
-                                WHEN lower(substr(f.date, instr(f.date, '\\\\')+1, instr(substr(f.date, instr(f.date, '\\\\')+1), '\\\\')-1)) = 'april' THEN 4
-                                WHEN lower(substr(f.date, instr(f.date, '\\\\')+1, instr(substr(f.date, instr(f.date, '\\\\')+1), '\\\\')-1)) = 'may' THEN 5
+                                WHEN lower(substr(f.date, instr(f.date, '\\\\')+1, instr(substr.f.date, instr(f.date, '\\\\')+1), '\\\\')-1)) IN ('january','januari') THEN 1
+                                WHEN lower(substr(f.date, instr(f.date, '\\\\')+1, instr(substr.f.date, instr(f.date, '\\\\')+1), '\\\\')-1)) IN ('february','februari') THEN 2
+                                WHEN lower(substr(f.date, instr(f.date, '\\\\')+1, instr(substr.f.date, instr(f.date, '\\\\')+1), '\\\\')-1)) = 'march' THEN 3
+                                WHEN lower(substr(f.date, instr(f.date, '\\\\')+1, instr(substr.f.date, instr(f.date, '\\\\')+1), '\\\\')-1)) = 'april' THEN 4
+                                WHEN lower(substr(f.date, instr(f.date, '\\\\')+1, instr(substr.f.date, instr(f.date, '\\\\')+1), '\\\\')-1)) = 'may' THEN 5
                                 WHEN lower(substr(f.date, instr(f.date, '\\\\')+1, instr(substr.f.date, instr(f.date, '\\\\')+1), '\\\\')-1)) = 'june' THEN 6
                                 WHEN lower(substr(f.date, instr(f.date, '\\\\')+1, instr(substr.f.date, instr(f.date, '\\\\')+1), '\\\\')-1)) = 'july' THEN 7
                                 WHEN lower(substr(f.date, instr(f.date, '\\\\')+1, instr(substr.f.date, instr(f.date, '\\\\')+1), '\\\\')-1)) = 'august' THEN 8
