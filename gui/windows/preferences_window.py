@@ -1,9 +1,9 @@
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget, QGroupBox,
     QCheckBox, QListWidget, QListWidgetItem, QPushButton, QLineEdit,
-    QTextEdit, QLabel, QMessageBox, QFileDialog, QInputDialog, QListView, QAbstractItemView
+    QTextEdit, QLabel, QMessageBox, QFileDialog, QInputDialog, QListView, QAbstractItemView, QProgressBar
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QCoreApplication
 import qtawesome as qta
 import csv
 import os
@@ -628,109 +628,148 @@ class PreferencesWindow(QDialog):
     def backup_database(self):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         default_filename = f"Rak_Arsip_Database_Backup_{timestamp}.csv"
-        
         filename, _ = QFileDialog.getSaveFileName(
             self, "Save Database Backup", default_filename, "CSV Files (*.csv)"
         )
-        
         if filename:
             try:
-                self.db_manager.connect()
-                
-                with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
-                    writer = csv.writer(csvfile)
-                    
-                    writer.writerow(["TABLE", "categories"])
-                    writer.writerow(["id", "name"])
-                    
-                    cursor = self.db_manager.connection.cursor()
-                    cursor.execute("SELECT id, name FROM categories")
-                    for row in cursor.fetchall():
-                        writer.writerow([row[0], row[1]])
-                    
-                    writer.writerow([])
-                    writer.writerow(["TABLE", "subcategories"])
-                    writer.writerow(["id", "category_id", "name"])
-                    
-                    cursor.execute("SELECT id, category_id, name FROM subcategories")
-                    for row in cursor.fetchall():
-                        writer.writerow([row[0], row[1], row[2]])
-                    
-                    writer.writerow([])
-                    writer.writerow(["TABLE", "templates"])
-                    writer.writerow(["id", "name", "content"])
-                    
-                    cursor.execute("SELECT id, name, content FROM templates")
-                    for row in cursor.fetchall():
-                        writer.writerow([row[0], row[1], row[2]])
-                    
-                    writer.writerow([])
-                    writer.writerow(["TABLE", "files"])
-                    writer.writerow(["id", "date", "name", "root", "path", "status_id", "category_id", "subcategory_id", "template_id"])
-                    
-                    cursor.execute("SELECT id, date, name, root, path, status_id, category_id, subcategory_id, template_id FROM files")
-                    for row in cursor.fetchall():
-                        writer.writerow([row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8]])
-                
+                self.db_manager.export_to_csv(filename)
                 QMessageBox.information(self, "Success", f"Database backup saved to:\n{filename}")
-                
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to backup database: {e}")
-            finally:
-                self.db_manager.close()
 
     def restore_database(self):
         filename, _ = QFileDialog.getOpenFileName(
             self, "Select Database Backup", "", "CSV Files (*.csv)"
         )
-        
         if filename:
             reply = QMessageBox.question(
                 self, "Restore Database", 
                 "This will add data from the backup file to the current database.\nContinue?"
             )
-            
             if reply == QMessageBox.Yes:
+                progress_dialog = QDialog(self)
+                progress_dialog.setWindowTitle("Importing Data")
+                progress_dialog.setModal(True)
+                vbox = QVBoxLayout(progress_dialog)
+                label = QLabel("Importing data, please wait...")
+                vbox.addWidget(label)
+                progress_bar = QProgressBar(progress_dialog)
+                vbox.addWidget(progress_bar)
+                progress_dialog.setLayout(vbox)
+                self.progress_bar = progress_bar
+
+                # Count total rows for progress
+                total_rows = 0
+                with open(filename, 'r', encoding='utf-8') as csvfile:
+                    for row in csv.reader(csvfile):
+                        if row and row[0] != "TABLE":
+                            total_rows += 1
+
+                progress_bar.setMinimum(0)
+                progress_bar.setMaximum(total_rows)
+                progress_bar.setValue(0)
+                progress_dialog.show()
+                QCoreApplication.processEvents()
+
+                # Use a direct sqlite3 connection for import to avoid WAL lock from Qt event loop
+                import sqlite3
+                db_path = self.db_manager.db_path
+                conn = sqlite3.connect(db_path, isolation_level=None)
+                conn.row_factory = sqlite3.Row
                 try:
-                    self.db_manager.connect()
-                    
+                    conn.execute("PRAGMA journal_mode=DELETE")
+                    conn.execute("BEGIN EXCLUSIVE")
                     with open(filename, 'r', encoding='utf-8') as csvfile:
                         reader = csv.reader(csvfile)
                         current_table = None
                         headers = None
-                        
+                        processed = 0
                         for row in reader:
                             if not row:
                                 continue
-                            
                             if row[0] == "TABLE":
                                 current_table = row[1]
                                 headers = None
                                 continue
-                            
                             if headers is None:
                                 headers = row
                                 continue
-                            
                             if current_table == "categories" and len(row) >= 2:
                                 try:
-                                    self.db_manager.get_or_create_category(row[1])
-                                except:
-                                    pass
-                            
+                                    cursor = conn.cursor()
+                                    cursor.execute("SELECT id FROM categories WHERE name = ?", (row[1],))
+                                    exists = cursor.fetchone()
+                                    if not exists:
+                                        cursor.execute("INSERT INTO categories (name) VALUES (?)", (row[1],))
+                                except Exception as e:
+                                    print(f"Error importing category: {e}")
+                            elif current_table == "subcategories" and len(row) >= 3:
+                                try:
+                                    cat_id = None
+                                    try:
+                                        cat_id = int(row[1])
+                                    except:
+                                        cat_id = None
+                                    if cat_id and row[2]:
+                                        cursor = conn.cursor()
+                                        cursor.execute("SELECT id FROM subcategories WHERE category_id = ? AND name = ?", (cat_id, row[2]))
+                                        exists = cursor.fetchone()
+                                        if not exists:
+                                            cursor.execute("INSERT INTO subcategories (category_id, name) VALUES (?, ?)", (cat_id, row[2]))
+                                except Exception as e:
+                                    print(f"Error importing subcategory: {e}")
                             elif current_table == "templates" and len(row) >= 3:
                                 try:
-                                    self.db_manager.insert_template(row[1], row[2])
-                                except:
-                                    pass
-                    
-                    QMessageBox.information(self, "Success", "Database restored successfully.")
-                    self.load_data()
-                    
+                                    cursor = conn.cursor()
+                                    cursor.execute("SELECT id FROM templates WHERE name = ?", (row[1],))
+                                    exists = cursor.fetchone()
+                                    if not exists:
+                                        cursor.execute("INSERT INTO templates (name, content) VALUES (?, ?)", (row[1], row[2]))
+                                except Exception as e:
+                                    print(f"Error importing template: {e}")
+                            elif current_table == "files" and len(row) >= 9:
+                                try:
+                                    cursor = conn.cursor()
+                                    cursor.execute("SELECT id FROM files WHERE name = ? AND path = ?", (row[2], row[4]))
+                                    exists = cursor.fetchone()
+                                    if not exists:
+                                        date_val = row[1]
+                                        name_val = row[2]
+                                        root_val = row[3]
+                                        path_val = row[4]
+                                        status_id_val = int(row[5]) if row[5] else None
+                                        category_id_val = int(row[6]) if row[6] else None
+                                        subcategory_id_val = int(row[7]) if row[7] else None
+                                        template_id_val = int(row[8]) if row[8] else None
+                                        cursor.execute(
+                                            "INSERT INTO files (date, name, root, path, status_id, category_id, subcategory_id, template_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                            (date_val, name_val, root_val, path_val, status_id_val, category_id_val, subcategory_id_val, template_id_val)
+                                        )
+                                except Exception as e:
+                                    print(f"Error importing file: {e}")
+                            processed += 1
+                            if processed % 10 == 0 or processed == total_rows:
+                                progress_bar.setValue(processed)
+                                QCoreApplication.processEvents()
+                        conn.commit()
                 except Exception as e:
+                    conn.rollback()
+                    if hasattr(self, "progress_bar") and self.progress_bar:
+                        self.progress_bar.setValue(0)
                     QMessageBox.critical(self, "Error", f"Failed to restore database: {e}")
-                finally:
-                    self.db_manager.close()
+                    progress_dialog.accept()
+                    conn.close()
+                    self.progress_bar = None
+                    return
+                conn.close()
+                progress_bar.setValue(total_rows)
+                QCoreApplication.processEvents()
+                progress_dialog.accept()
+                self.progress_bar = None
+                QMessageBox.information(self, "Success", "Database restored successfully.")
+                self.db_manager.close()
+                self.load_data()
 
     def apply_changes(self):
         try:
@@ -743,3 +782,4 @@ class PreferencesWindow(QDialog):
             self.accept()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to save preferences: {e}")
+            self.accept()

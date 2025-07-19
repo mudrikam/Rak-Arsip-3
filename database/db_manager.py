@@ -451,3 +451,123 @@ class DatabaseManager(QObject):
                     print(f"Error removing old backup: {e}")
         except Exception as e:
             print(f"Error cleaning up backups: {e}")
+
+    def import_from_csv(self, csv_path, progress_callback=None):
+        import csv
+        conn = sqlite3.connect(self.db_path, isolation_level=None)
+        conn.row_factory = sqlite3.Row
+        try:
+            conn.execute("PRAGMA journal_mode=DELETE")
+            conn.execute("BEGIN EXCLUSIVE")
+            with open(csv_path, 'r', encoding='utf-8') as csvfile:
+                reader = csv.reader(csvfile)
+                current_table = None
+                headers = None
+                processed = 0
+                total_rows = sum(1 for row in csv.reader(open(csv_path, 'r', encoding='utf-8')) if row and row[0] != "TABLE")
+                csvfile.seek(0)
+                for row in reader:
+                    if not row:
+                        continue
+                    if row[0] == "TABLE":
+                        current_table = row[1]
+                        headers = None
+                        continue
+                    if headers is None:
+                        headers = row
+                        continue
+                    if current_table == "categories" and len(row) >= 2:
+                        try:
+                            cursor = conn.cursor()
+                            cursor.execute("SELECT id FROM categories WHERE name = ?", (row[1],))
+                            exists = cursor.fetchone()
+                            if not exists:
+                                cursor.execute("INSERT INTO categories (name) VALUES (?)", (row[1],))
+                        except Exception as e:
+                            print(f"Error importing category: {e}")
+                    elif current_table == "subcategories" and len(row) >= 3:
+                        try:
+                            cat_id = None
+                            try:
+                                cat_id = int(row[1])
+                            except:
+                                cat_id = None
+                            if cat_id and row[2]:
+                                cursor = conn.cursor()
+                                cursor.execute("SELECT id FROM subcategories WHERE category_id = ? AND name = ?", (cat_id, row[2]))
+                                exists = cursor.fetchone()
+                                if not exists:
+                                    cursor.execute("INSERT INTO subcategories (category_id, name) VALUES (?, ?)", (cat_id, row[2]))
+                        except Exception as e:
+                            print(f"Error importing subcategory: {e}")
+                    elif current_table == "templates" and len(row) >= 3:
+                        try:
+                            cursor = conn.cursor()
+                            cursor.execute("SELECT id FROM templates WHERE name = ?", (row[1],))
+                            exists = cursor.fetchone()
+                            if not exists:
+                                cursor.execute("INSERT INTO templates (name, content) VALUES (?, ?)", (row[1], row[2]))
+                        except Exception as e:
+                            print(f"Error importing template: {e}")
+                    elif current_table == "files" and len(row) >= 9:
+                        try:
+                            cursor = conn.cursor()
+                            cursor.execute("SELECT id FROM files WHERE name = ? AND path = ?", (row[2], row[4]))
+                            exists = cursor.fetchone()
+                            if not exists:
+                                date_val = row[1]
+                                name_val = row[2]
+                                root_val = row[3]
+                                path_val = row[4]
+                                status_id_val = int(row[5]) if row[5] else None
+                                category_id_val = int(row[6]) if row[6] else None
+                                subcategory_id_val = int(row[7]) if row[7] else None
+                                template_id_val = int(row[8]) if row[8] else None
+                                cursor.execute(
+                                    "INSERT INTO files (date, name, root, path, status_id, category_id, subcategory_id, template_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                    (date_val, name_val, root_val, path_val, status_id_val, category_id_val, subcategory_id_val, template_id_val)
+                                )
+                        except Exception as e:
+                            print(f"Error importing file: {e}")
+                    processed += 1
+                    if progress_callback and (processed % 10 == 0 or processed == total_rows):
+                        progress_callback(processed, total_rows)
+                conn.commit()
+        except Exception as e:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def export_to_csv(self, csv_path):
+        import csv
+        self.connect()
+        try:
+            with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(["TABLE", "categories"])
+                writer.writerow(["id", "name"])
+                cursor = self.connection.cursor()
+                cursor.execute("SELECT id, name FROM categories")
+                for row in cursor.fetchall():
+                    writer.writerow([row[0], row[1]])
+                writer.writerow([])
+                writer.writerow(["TABLE", "subcategories"])
+                writer.writerow(["id", "category_id", "name"])
+                cursor.execute("SELECT id, category_id, name FROM subcategories")
+                for row in cursor.fetchall():
+                    writer.writerow([row[0], row[1], row[2]])
+                writer.writerow([])
+                writer.writerow(["TABLE", "templates"])
+                writer.writerow(["id", "name", "content"])
+                cursor.execute("SELECT id, name, content FROM templates")
+                for row in cursor.fetchall():
+                    writer.writerow([row[0], row[1], row[2]])
+                writer.writerow([])
+                writer.writerow(["TABLE", "files"])
+                writer.writerow(["id", "date", "name", "root", "path", "status_id", "category_id", "subcategory_id", "template_id"])
+                cursor.execute("SELECT id, date, name, root, path, status_id, category_id, subcategory_id, template_id FROM files")
+                for row in cursor.fetchall():
+                    writer.writerow([row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8]])
+        finally:
+            self.close()
