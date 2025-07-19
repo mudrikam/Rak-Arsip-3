@@ -529,7 +529,6 @@ class MainActionDock(QDockWidget):
                 template_id = combo_template.itemData(index)
                 name_field_widget.set_selected_template(template_id)
                 show_statusbar_message(self, f"Template selected: {combo_template.currentText()} (ID: {template_id})")
-                print(f"Selected template ID: {template_id}")
 
         combo_disk.currentIndexChanged.connect(on_disk_changed)
         combo_folder.currentIndexChanged.connect(on_folder_changed)

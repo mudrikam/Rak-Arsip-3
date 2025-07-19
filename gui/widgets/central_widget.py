@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QHeaderView,
     QHBoxLayout, QLineEdit, QPushButton, QLabel, QSpacerItem, QSizePolicy, QComboBox,
-    QMenu, QApplication, QMessageBox, QDialog, QVBoxLayout as QVBoxLayout2, QRadioButton, QButtonGroup, QDialogButtonBox, QStyledItemDelegate, QStyle
+    QMenu, QApplication, QMessageBox, QDialog, QVBoxLayout as QVBoxLayout2, QRadioButton, QButtonGroup, QDialogButtonBox, QStyledItemDelegate, QStyle, QSpinBox
 )
 from PySide6.QtGui import QColor, QAction, QFontMetrics, QCursor, QKeySequence, QShortcut
 from PySide6.QtCore import Signal, Qt, QTimer
@@ -145,8 +145,17 @@ class CentralWidget(QWidget):
         self.next_btn.setIcon(qta.icon("fa6s.chevron-right"))
         self.next_btn.setMinimumHeight(32)
         self.page_label = QLabel(self)
+        # Add page input for direct page jump
+        self.page_input = QSpinBox(self)
+        self.page_input.setMinimum(1)
+        self.page_input.setMaximum(1)
+        self.page_input.setFixedWidth(60)
+        self.page_input.setToolTip("Go to page")
+        self.page_input.setValue(1)
+        self.page_input.returnPressed = lambda: None  # placeholder for compatibility
         pagination_row.addWidget(self.prev_btn)
         pagination_row.addWidget(self.page_label)
+        pagination_row.addWidget(self.page_input)
         pagination_row.addWidget(self.next_btn)
         stats_icon = QLabel()
         stats_icon.setPixmap(qta.icon("fa6s.chart-simple", color="#666").pixmap(16, 16))
@@ -163,6 +172,7 @@ class CentralWidget(QWidget):
         self.search_edit.textChanged.connect(self.apply_search)
         self.prev_btn.clicked.connect(self.prev_page)
         self.next_btn.clicked.connect(self.next_page)
+        self.page_input.valueChanged.connect(self.goto_page)
         self.table.itemSelectionChanged.connect(self.on_row_selected)
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self.show_context_menu)
@@ -314,6 +324,10 @@ class CentralWidget(QWidget):
         total_rows = self.found_records
         total_pages = max(1, (total_rows + self.page_size - 1) // self.page_size)
         self.current_page = max(1, min(self.current_page, total_pages))
+        self.page_input.blockSignals(True)
+        self.page_input.setMaximum(total_pages)
+        self.page_input.setValue(self.current_page)
+        self.page_input.blockSignals(False)
         page_data = self.filtered_data
         self.table.setRowCount(len(page_data))
         path_column_width = self.table.columnWidth(3)
@@ -342,6 +356,13 @@ class CentralWidget(QWidget):
         self.update_stats_label()
         if self._selected_row_index is not None and 0 <= self._selected_row_index < self.table.rowCount():
             self.table.selectRow(self._selected_row_index)
+
+    def goto_page(self, value):
+        total_rows = self.found_records
+        total_pages = max(1, (total_rows + self.page_size - 1) // self.page_size)
+        if 1 <= value <= total_pages:
+            self.current_page = value
+            self.load_data_from_database(keep_search=True)
 
     def update_stats_label(self):
         last_date = "-"

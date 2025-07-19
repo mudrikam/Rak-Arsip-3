@@ -94,7 +94,6 @@ class NameFieldWidget(QFrame):
 
     def set_db_manager(self, db_manager):
         self.db_manager = db_manager
-        print(f"Database manager set: {self.db_manager is not None}")
 
     def set_config_manager(self, config_manager):
         self.config_manager = config_manager
