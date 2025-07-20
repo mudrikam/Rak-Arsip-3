@@ -1,11 +1,12 @@
-from PySide6.QtWidgets import QDockWidget, QWidget, QVBoxLayout, QLabel, QFrame, QHBoxLayout, QApplication, QMenu
-from PySide6.QtGui import QPixmap, QCursor, QMouseEvent, QGuiApplication, QDesktopServices, QAction
-from PySide6.QtCore import Qt, QPoint, QEvent, QRect
-import qtawesome as qta
+import sys
 import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+from PySide6.QtWidgets import QDockWidget, QWidget, QVBoxLayout, QLabel, QFrame, QHBoxLayout, QApplication, QMenu
+from PySide6.QtGui import QPixmap, QCursor, QMouseEvent, QGuiApplication, QDesktopServices, QAction, QDrag
+from PySide6.QtCore import Qt, QPoint, QEvent, QRect, QMimeData, QUrl
+import qtawesome as qta
 from pathlib import Path
 import textwrap
-import sys
 import subprocess
 from helpers.show_statusbar_helper import show_statusbar_message
 
@@ -109,6 +110,7 @@ class PropertiesWidget(QDockWidget):
         self.image_label.setContextMenuPolicy(Qt.CustomContextMenu)
         self.image_label.customContextMenuRequested.connect(self._show_image_context_menu)
         self._last_image_path = None
+        self._drag_start_pos = None
 
     def eventFilter(self, obj, event):
         if obj is self.image_label:
@@ -120,7 +122,44 @@ class PropertiesWidget(QDockWidget):
             elif event.type() == QEvent.MouseMove:
                 if self._tooltip_image_label.isVisible():
                     self._move_image_tooltip()
+                if self._drag_start_pos and self._last_image_path and os.path.isfile(self._last_image_path):
+                    if (event.pos() - self._drag_start_pos).manhattanLength() > QApplication.startDragDistance():
+                        self._hide_image_tooltip()
+                        self._start_image_drag()
+                        self._drag_start_pos = None
+            elif event.type() == QEvent.MouseButtonPress:
+                if event.button() == Qt.LeftButton:
+                    self._drag_start_pos = event.pos()
+            elif event.type() == QEvent.MouseButtonRelease:
+                self._drag_start_pos = None
+            elif event.type() == QEvent.MouseButtonDblClick:
+                if self._last_image_path and os.path.isfile(self._last_image_path):
+                    self._open_image_file()
+                    return True
         return super().eventFilter(obj, event)
+
+    def _open_image_file(self):
+        if not self._last_image_path or not os.path.isfile(self._last_image_path):
+            return
+        if sys.platform == "win32":
+            os.startfile(self._last_image_path)
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", self._last_image_path])
+        else:
+            subprocess.Popen(["xdg-open", self._last_image_path])
+        show_statusbar_message(self, "Image opened")
+
+    def _start_image_drag(self):
+        if not self._last_image_path or not os.path.isfile(self._last_image_path):
+            return
+        mime_data = QMimeData()
+        mime_data.setUrls([QUrl.fromLocalFile(self._last_image_path)])
+        drag = QDrag(self.image_label)
+        drag.setMimeData(mime_data)
+        pixmap = QPixmap(self._last_image_path)
+        if not pixmap.isNull():
+            drag.setPixmap(pixmap.scaled(64, 64, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        drag.exec(Qt.CopyAction)
 
     def _show_image_tooltip(self):
         if self._tooltip_pixmap:
@@ -190,13 +229,7 @@ class PropertiesWidget(QDockWidget):
                 show_statusbar_message(self, "Image copied to clipboard")
 
         def do_open_image():
-            if sys.platform == "win32":
-                os.startfile(self._last_image_path)
-            elif sys.platform == "darwin":
-                subprocess.Popen(["open", self._last_image_path])
-            else:
-                subprocess.Popen(["xdg-open", self._last_image_path])
-            show_statusbar_message(self, "Image opened")
+            self._open_image_file()
 
         def do_show_in_explorer():
             folder = os.path.dirname(self._last_image_path)
