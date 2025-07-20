@@ -385,19 +385,26 @@ class CentralWidget(QWidget):
         self.table.setRowCount(len(page_data))
         path_column_width = self.table.columnWidth(3)
         for row_idx, row_data in enumerate(page_data):
+            tooltip = (
+                f"Date: {row_data.get('date','')}\n"
+                f"Name: {row_data.get('name','')}\n"
+                f"Root: {row_data.get('root','')}\n"
+                f"Path: {row_data.get('path','')}\n"
+                f"Status: {row_data.get('status','')}"
+            )
             date_item = QTableWidgetItem(row_data['date'])
             date_item.setData(256, row_data)
-            date_item.setToolTip(str(row_data['date']))
+            date_item.setToolTip(tooltip)
             self.table.setItem(row_idx, 0, date_item)
             name_item = QTableWidgetItem(row_data['name'])
-            name_item.setToolTip(str(row_data['name']))
+            name_item.setToolTip(tooltip)
             self.table.setItem(row_idx, 1, name_item)
             root_item = QTableWidgetItem(row_data['root'])
-            root_item.setToolTip(str(row_data['root']))
+            root_item.setToolTip(tooltip)
             self.table.setItem(row_idx, 2, root_item)
             truncated_path = self._truncate_path_by_width(row_data['path'], path_column_width)
             path_item = QTableWidgetItem(truncated_path)
-            path_item.setToolTip(str(row_data['path']))
+            path_item.setToolTip(tooltip)
             self.table.setItem(row_idx, 3, path_item)
             combo = NoWheelComboBox(self.table)
             combo.addItems(self.status_options)
@@ -406,8 +413,7 @@ class CentralWidget(QWidget):
             combo.currentTextChanged.connect(lambda val, row=row_idx: self._on_status_changed(row, val))
             combo.setFocusPolicy(Qt.StrongFocus)
             self.table.setCellWidget(row_idx, 4, combo)
-            # Tooltip untuk status pada cell widget (combo)
-            combo.setToolTip(str(row_data['status']))
+            combo.setToolTip(tooltip)
         self.page_label.setText(f"Page {self.current_page} / {total_pages}")
         self.prev_btn.setEnabled(self.current_page > 1)
         self.next_btn.setEnabled(self.current_page < total_pages)
