@@ -5,6 +5,7 @@ import qtawesome as qta
 import webbrowser
 from gui.dialogs.about_dialog import AboutDialog
 from gui.windows.preferences_window import PreferencesWindow
+from datetime import datetime
 import sys
 
 class MainMenu(QMenuBar):
@@ -48,6 +49,13 @@ class MainMenu(QMenuBar):
         self.clear_search_action.triggered.connect(self._trigger_clear_search)
         self.sort_action.triggered.connect(self._trigger_sort)
         self.paste_search_action.triggered.connect(self._trigger_paste_search)
+
+    def get_datetime_string(self):
+        now = datetime.now()
+        if sys.platform == "win32":
+            return now.strftime("%#d\\%B\\%Y %H:%M")
+        else:
+            return now.strftime("%-d\\%B\\%Y %H:%M")
 
     def _get_central_widget(self):
         # Try to get central widget from parent window
