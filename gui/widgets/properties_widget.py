@@ -1,7 +1,7 @@
 import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
-from PySide6.QtWidgets import QDockWidget, QWidget, QVBoxLayout, QLabel, QFrame, QHBoxLayout, QApplication, QMenu
+from PySide6.QtWidgets import QDockWidget, QWidget, QVBoxLayout, QLabel, QFrame, QHBoxLayout, QApplication, QMenu, QPushButton, QLayout, QGridLayout, QScrollArea
 from PySide6.QtGui import QPixmap, QCursor, QMouseEvent, QGuiApplication, QDesktopServices, QAction, QDrag
 from PySide6.QtCore import Qt, QPoint, QEvent, QRect, QMimeData, QUrl
 import qtawesome as qta
@@ -15,8 +15,11 @@ class PropertiesWidget(QDockWidget):
         super().__init__("Project Properties", parent)
         self.setWindowIcon(qta.icon("fa6s.circle-info"))
         self.parent_window = parent
+
         container = QWidget(self)
-        layout = QVBoxLayout(container)
+        main_layout = QVBoxLayout(container)
+        main_layout.setContentsMargins(8, 8, 8, 8)
+        main_layout.setSpacing(0)
 
         self.image_frame = QFrame(container)
         self.image_frame.setFixedSize(180, 180)
@@ -24,7 +27,28 @@ class PropertiesWidget(QDockWidget):
         self.image_label.setAlignment(Qt.AlignCenter)
         self.image_label.setGeometry(0, 0, 180, 180)
         self.image_label.setText("No Preview")
-        layout.addWidget(self.image_frame)
+        main_layout.addWidget(self.image_frame)
+
+        self.scroll_area = QScrollArea(container)
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.scroll_area.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        main_layout.addWidget(self.scroll_area)
+
+        self.scroll_content = QWidget()
+        self.scroll_area.setWidget(self.scroll_content)
+        layout = QVBoxLayout(self.scroll_content)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
+
+        self.image_nav_buttons_grid = QGridLayout()
+        self.image_nav_buttons_grid.setSpacing(2)
+        self.image_nav_buttons_grid.setContentsMargins(0, 0, 0, 0)
+        self.image_nav_buttons_widget = QWidget(self.scroll_content)
+        self.image_nav_buttons_widget.setLayout(self.image_nav_buttons_grid)
+        self.image_nav_buttons_widget.hide()
+        layout.addWidget(self.image_nav_buttons_widget)
 
         self._tooltip_image_label = QLabel(self)
         self._tooltip_image_label.setWindowFlags(Qt.ToolTip)
@@ -37,7 +61,7 @@ class PropertiesWidget(QDockWidget):
         self.date_icon = QLabel()
         self.date_icon.setPixmap(qta.icon("fa6s.calendar", color="#666").pixmap(16, 16))
         self.date_icon.setCursor(Qt.PointingHandCursor)
-        self.date_label = QLabel("-", container)
+        self.date_label = QLabel("-", self.scroll_content)
         self.date_label.setCursor(Qt.PointingHandCursor)
         date_row.addWidget(self.date_icon)
         date_row.addWidget(self.date_label)
@@ -48,7 +72,7 @@ class PropertiesWidget(QDockWidget):
         self.root_icon = QLabel()
         self.root_icon.setPixmap(qta.icon("fa6s.folder", color="#666").pixmap(16, 16))
         self.root_icon.setCursor(Qt.PointingHandCursor)
-        self.root_label = QLabel("-", container)
+        self.root_label = QLabel("-", self.scroll_content)
         self.root_label.setCursor(Qt.PointingHandCursor)
         root_row.addWidget(self.root_icon)
         root_row.addWidget(self.root_label)
@@ -59,7 +83,7 @@ class PropertiesWidget(QDockWidget):
         self.name_icon = QLabel()
         self.name_icon.setPixmap(qta.icon("fa6s.file-lines", color="#666").pixmap(16, 16))
         self.name_icon.setCursor(Qt.PointingHandCursor)
-        self.name_label = QLabel("-", container)
+        self.name_label = QLabel("-", self.scroll_content)
         self.name_label.setWordWrap(True)
         self.name_label.setMinimumWidth(180)
         self.name_label.setMaximumWidth(200)
@@ -73,7 +97,7 @@ class PropertiesWidget(QDockWidget):
         self.cat_icon = QLabel()
         self.cat_icon.setPixmap(qta.icon("fa6s.folder-tree", color="#666").pixmap(16, 16))
         self.cat_icon.setCursor(Qt.PointingHandCursor)
-        self.cat_combined_label = QLabel("-", container)
+        self.cat_combined_label = QLabel("-", self.scroll_content)
         self.cat_combined_label.setCursor(Qt.PointingHandCursor)
         cat_row.addWidget(self.cat_icon)
         cat_row.addWidget(self.cat_combined_label)
@@ -83,17 +107,17 @@ class PropertiesWidget(QDockWidget):
         status_row = QHBoxLayout()
         status_icon = QLabel()
         status_icon.setPixmap(qta.icon("fa6s.circle-info", color="#666").pixmap(16, 16))
-        self.status_label = QLabel("-", container)
+        self.status_label = QLabel("-", self.scroll_content)
         status_row.addWidget(status_icon)
         status_row.addWidget(self.status_label)
         status_row.addStretch()
         layout.addLayout(status_row)
 
         layout.addStretch()
-        container.setLayout(layout)
+        container.setLayout(main_layout)
         self.setWidget(container)
         self.setFixedWidth(200)
-        
+
         self.supported_formats = ['.png', '.jpg', '.jpeg', '.bmp', '.gif', '.tiff', '.webp', '.tif']
 
         self._current_row_data = None
@@ -111,6 +135,9 @@ class PropertiesWidget(QDockWidget):
         self.image_label.customContextMenuRequested.connect(self._show_image_context_menu)
         self._last_image_path = None
         self._drag_start_pos = None
+
+        self._image_files = []
+        self._image_index = 0
 
     def eventFilter(self, obj, event):
         if obj is self.image_label:
@@ -397,61 +424,119 @@ class PropertiesWidget(QDockWidget):
             return text
         return "\n".join(textwrap.wrap(text, width=width))
 
+    def _find_all_images(self, directory, max_depth=3, current_depth=0):
+        image_files = []
+        if current_depth > max_depth:
+            return image_files
+        try:
+            for item in directory.iterdir():
+                if item.is_file() and item.suffix.lower() in self.supported_formats:
+                    image_files.append(item)
+            for item in directory.iterdir():
+                if item.is_dir():
+                    image_files.extend(self._find_all_images(item, max_depth, current_depth + 1))
+        except Exception:
+            pass
+        return image_files
+
     def _find_first_image_fast(self, directory, file_name, max_depth=3, current_depth=0):
         if current_depth > max_depth:
             return None
-        
         try:
             items = list(directory.iterdir())
-            
             for item in items:
                 if item.is_file() and item.suffix.lower() in self.supported_formats:
                     if item.stem.lower() == file_name.lower():
                         return item
                     else:
                         return item
-            
             for item in items:
                 if item.is_dir():
                     result = self._find_first_image_fast(item, file_name, max_depth, current_depth + 1)
                     if result:
                         return result
-                        
         except PermissionError:
             pass
         except Exception:
             pass
-        
         return None
 
     def load_preview_image(self, file_path, file_name):
         try:
+            self._image_files = []
+            self._image_index = 0
+            self._clear_image_nav_buttons()
             if not file_path:
                 self.set_no_preview()
                 return
-            
             path_obj = Path(file_path)
-            
             if path_obj.is_file():
                 directory = path_obj.parent
             elif path_obj.is_dir():
                 directory = path_obj
             else:
                 directory = path_obj
-            
             if not directory.exists():
                 self.set_no_preview()
                 return
-            
-            image_file = self._find_first_image_fast(directory, file_name)
-            
-            if image_file:
-                self.display_image(str(image_file))
-            else:
+            first_image = self._find_first_image_fast(directory, file_name)
+            if not first_image:
                 self.set_no_preview()
-                
+                return
+            self.display_image(str(first_image))
+            # Now find all images (recursive, up to max_depth)
+            all_images = self._find_all_images(directory)
+            all_images = sorted(set(all_images), key=lambda x: str(x))
+            if len(all_images) > 1:
+                self._image_files = all_images
+                # Set index to the first image found
+                try:
+                    self._image_index = self._image_files.index(first_image)
+                except Exception:
+                    self._image_index = 0
+                self._show_image_nav_buttons(len(self._image_files))
+            else:
+                self._image_files = [first_image]
+                self._image_index = 0
+                self._clear_image_nav_buttons()
         except Exception:
             self.set_no_preview()
+
+    def _show_image_nav_buttons(self, count):
+        self._clear_image_nav_buttons()
+        max_per_row = max(1, self.image_frame.width() // 32)
+        row = 0
+        col = 0
+        for i in range(count):
+            btn = QPushButton(str(i + 1), self.image_nav_buttons_widget)
+            btn.setFixedSize(28, 28)
+            btn.setCheckable(True)
+            if i == self._image_index:
+                btn.setChecked(True)
+            btn.clicked.connect(lambda checked, idx=i: self._on_image_nav_button_clicked(idx))
+            self.image_nav_buttons_grid.addWidget(btn, row, col)
+            col += 1
+            if col >= max_per_row:
+                col = 0
+                row += 1
+        self.image_nav_buttons_widget.show()
+
+    def _clear_image_nav_buttons(self):
+        while self.image_nav_buttons_grid.count():
+            child = self.image_nav_buttons_grid.takeAt(0)
+            widget = child.widget()
+            if widget is not None:
+                widget.deleteLater()
+        self.image_nav_buttons_widget.hide()
+
+    def _on_image_nav_button_clicked(self, idx):
+        if 0 <= idx < len(self._image_files):
+            self._image_index = idx
+            self.display_image(str(self._image_files[idx]))
+            for i in range(self.image_nav_buttons_grid.count()):
+                btn = self.image_nav_buttons_grid.itemAt(i).widget()
+                if btn:
+                    btn.setChecked(i == idx)
 
     def display_image(self, image_path):
         try:
@@ -473,3 +558,4 @@ class PropertiesWidget(QDockWidget):
         self.image_label.setText("No Preview")
         self._tooltip_pixmap = None
         self._tooltip_image_label.hide()
+        self._clear_image_nav_buttons()
