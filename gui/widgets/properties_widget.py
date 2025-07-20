@@ -1,6 +1,6 @@
-from PySide6.QtWidgets import QDockWidget, QWidget, QVBoxLayout, QLabel, QFrame, QHBoxLayout, QApplication
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap, QCursor, QMouseEvent
+from PySide6.QtWidgets import QDockWidget, QWidget, QVBoxLayout, QLabel, QFrame, QHBoxLayout, QApplication, QMenu
+from PySide6.QtGui import QPixmap, QCursor, QMouseEvent, QGuiApplication, QDesktopServices, QAction
+from PySide6.QtCore import Qt, QPoint, QEvent, QRect
 import qtawesome as qta
 import os
 from pathlib import Path
@@ -24,6 +24,13 @@ class PropertiesWidget(QDockWidget):
         self.image_label.setGeometry(0, 0, 180, 180)
         self.image_label.setText("No Preview")
         layout.addWidget(self.image_frame)
+
+        self._tooltip_image_label = QLabel(self)
+        self._tooltip_image_label.setWindowFlags(Qt.ToolTip)
+        self._tooltip_image_label.setAlignment(Qt.AlignCenter)
+        self._tooltip_image_label.setStyleSheet("background: white; border: 1px solid #888;")
+        self._tooltip_image_label.hide()
+        self._tooltip_pixmap = None
 
         date_row = QHBoxLayout()
         self.date_icon = QLabel()
@@ -97,6 +104,114 @@ class PropertiesWidget(QDockWidget):
         self.date_label.mousePressEvent = self._on_date_icon_clicked
         self.cat_icon.mousePressEvent = self._on_cat_icon_clicked
         self.cat_combined_label.mousePressEvent = self._on_cat_icon_clicked
+
+        self.image_label.installEventFilter(self)
+        self.image_label.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.image_label.customContextMenuRequested.connect(self._show_image_context_menu)
+        self._last_image_path = None
+
+    def eventFilter(self, obj, event):
+        if obj is self.image_label:
+            if event.type() == QEvent.Enter:
+                if self._tooltip_pixmap:
+                    self._show_image_tooltip()
+            elif event.type() == QEvent.Leave:
+                self._hide_image_tooltip()
+            elif event.type() == QEvent.MouseMove:
+                if self._tooltip_image_label.isVisible():
+                    self._move_image_tooltip()
+        return super().eventFilter(obj, event)
+
+    def _show_image_tooltip(self):
+        if self._tooltip_pixmap:
+            cursor_pos = QCursor.pos()
+            tooltip_size = self._tooltip_pixmap.size()
+            screen = QGuiApplication.screenAt(cursor_pos)
+            if screen is not None:
+                screen_geom = screen.geometry()
+            else:
+                screen_geom = QGuiApplication.primaryScreen().geometry()
+            x = cursor_pos.x() + 20
+            y = cursor_pos.y() + 20
+            if x + tooltip_size.width() > screen_geom.right():
+                x = cursor_pos.x() - tooltip_size.width() - 20
+                if x < screen_geom.left():
+                    x = screen_geom.left()
+            if y + tooltip_size.height() > screen_geom.bottom():
+                y = cursor_pos.y() - tooltip_size.height() - 20
+                if y < screen_geom.top():
+                    y = screen_geom.top()
+            self._tooltip_image_label.setPixmap(self._tooltip_pixmap)
+            self._tooltip_image_label.resize(self._tooltip_pixmap.size())
+            self._tooltip_image_label.move(QPoint(x, y))
+            self._tooltip_image_label.show()
+
+    def _move_image_tooltip(self):
+        cursor_pos = QCursor.pos()
+        tooltip_size = self._tooltip_image_label.size()
+        screen = QGuiApplication.screenAt(cursor_pos)
+        if screen is not None:
+            screen_geom = screen.geometry()
+        else:
+            screen_geom = QGuiApplication.primaryScreen().geometry()
+        x = cursor_pos.x() + 20
+        y = cursor_pos.y() + 20
+        if x + tooltip_size.width() > screen_geom.right():
+            x = cursor_pos.x() - tooltip_size.width() - 20
+            if x < screen_geom.left():
+                x = screen_geom.left()
+        if y + tooltip_size.height() > screen_geom.bottom():
+            y = cursor_pos.y() - tooltip_size.height() - 20
+            if y < screen_geom.top():
+                y = screen_geom.top()
+        self._tooltip_image_label.move(QPoint(x, y))
+
+    def _hide_image_tooltip(self):
+        self._tooltip_image_label.hide()
+
+    def _show_image_context_menu(self, pos):
+        if not self._last_image_path or not os.path.isfile(self._last_image_path):
+            return
+        menu = QMenu(self.image_label)
+        icon_copy = qta.icon("fa6s.copy")
+        icon_open = qta.icon("fa6s.image")
+        icon_explorer = qta.icon("fa6s.folder-open")
+        action_copy = QAction(icon_copy, "Copy Image", self)
+        action_open = QAction(icon_open, "Open Image", self)
+        action_show_in_explorer = QAction(icon_explorer, "Show in Explorer", self)
+        menu.addAction(action_copy)
+        menu.addAction(action_open)
+        menu.addAction(action_show_in_explorer)
+
+        def do_copy_image():
+            pixmap = QPixmap(self._last_image_path)
+            if not pixmap.isNull():
+                QApplication.clipboard().setPixmap(pixmap)
+                show_statusbar_message(self, "Image copied to clipboard")
+
+        def do_open_image():
+            if sys.platform == "win32":
+                os.startfile(self._last_image_path)
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", self._last_image_path])
+            else:
+                subprocess.Popen(["xdg-open", self._last_image_path])
+            show_statusbar_message(self, "Image opened")
+
+        def do_show_in_explorer():
+            folder = os.path.dirname(self._last_image_path)
+            if sys.platform == "win32":
+                subprocess.Popen(f'explorer /select,"{self._last_image_path}"')
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", folder])
+            else:
+                subprocess.Popen(["xdg-open", folder])
+            show_statusbar_message(self, "Image location opened")
+
+        action_copy.triggered.connect(do_copy_image)
+        action_open.triggered.connect(do_open_image)
+        action_show_in_explorer.triggered.connect(do_show_in_explorer)
+        menu.exec(self.image_label.mapToGlobal(pos))
 
     def update_properties(self, row_data):
         self._current_row_data = row_data
@@ -312,6 +427,9 @@ class PropertiesWidget(QDockWidget):
                 scaled_pixmap = pixmap.scaled(178, 178, Qt.KeepAspectRatio, Qt.SmoothTransformation)
                 self.image_label.setPixmap(scaled_pixmap)
                 self.image_label.setText("")
+                tooltip_pixmap = pixmap.scaled(400, 400, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                self._tooltip_pixmap = tooltip_pixmap
+                self._last_image_path = image_path
             else:
                 self.set_no_preview()
         except Exception:
@@ -320,3 +438,5 @@ class PropertiesWidget(QDockWidget):
     def set_no_preview(self):
         self.image_label.clear()
         self.image_label.setText("No Preview")
+        self._tooltip_pixmap = None
+        self._tooltip_image_label.hide()
