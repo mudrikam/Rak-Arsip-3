@@ -113,6 +113,7 @@ class CentralWidget(QWidget):
         self.filtered_data = []
         self.total_records = 0
         self.found_records = 0
+        self.total_draft = 0
 
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.Fixed)
@@ -258,6 +259,7 @@ class CentralWidget(QWidget):
             self._sort_field = self.sort_field
             self._sort_order = self.sort_order
             self.total_records = self.db_manager.count_files()
+            self.total_draft = self.db_manager.count_files(status_value="Draft")
             if self._search_query or self._status_filter:
                 self.found_records = self.db_manager.count_files(
                     search_query=self._search_query,
@@ -413,9 +415,9 @@ class CentralWidget(QWidget):
         if self.filtered_data:
             last_date = self.filtered_data[0]['date']
         if self.search_edit.text().strip() or self.sort_status_value:
-            self.stats_label.setText(f"Total: {self.total_records} | Last: {last_date} | Found: {self.found_records} Records")
+            self.stats_label.setText(f"Total: {self.total_records} | Draft: {self.total_draft} | Last: {last_date} | Found: {self.found_records} Records")
         else:
-            self.stats_label.setText(f"Total: {self.total_records} | Last: {last_date}")
+            self.stats_label.setText(f"Total: {self.total_records} | Draft: {self.total_draft} | Last: {last_date}")
 
     def on_row_selected(self):
         current_row = self.table.currentRow()

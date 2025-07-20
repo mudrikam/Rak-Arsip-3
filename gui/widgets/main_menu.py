@@ -5,7 +5,6 @@ import qtawesome as qta
 import webbrowser
 from gui.dialogs.about_dialog import AboutDialog
 from gui.windows.preferences_window import PreferencesWindow
-from datetime import datetime
 import sys
 
 class MainMenu(QMenuBar):
@@ -14,14 +13,11 @@ class MainMenu(QMenuBar):
         self.config_manager = config_manager
 
         file_menu = QMenu("File", self)
+        self.preferences_action = QAction(qta.icon('fa6s.gear'), "Preferences", self)
         self.exit_action = QAction(qta.icon('fa6s.right-from-bracket'), "Exit", self)
+        file_menu.addAction(self.preferences_action)
         file_menu.addAction(self.exit_action)
         self.addMenu(file_menu)
-
-        edit_menu = QMenu("Edit", self)
-        self.preferences_action = QAction(qta.icon('fa6s.gear'), "Preferences", self)
-        edit_menu.addAction(self.preferences_action)
-        self.addMenu(edit_menu)
 
         # Data menu for central widget actions
         data_menu = QMenu("Data", self)
@@ -52,13 +48,6 @@ class MainMenu(QMenuBar):
         self.clear_search_action.triggered.connect(self._trigger_clear_search)
         self.sort_action.triggered.connect(self._trigger_sort)
         self.paste_search_action.triggered.connect(self._trigger_paste_search)
-
-    def get_datetime_string(self):
-        now = datetime.now()
-        if sys.platform == "win32":
-            return now.strftime("%#d\\%B\\%Y %H:%M")
-        else:
-            return now.strftime("%-d\\%B\\%Y %H:%M")
 
     def _get_central_widget(self):
         # Try to get central widget from parent window
