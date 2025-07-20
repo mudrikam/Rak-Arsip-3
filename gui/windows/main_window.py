@@ -5,6 +5,7 @@ from gui.widgets.main_menu import MainMenu
 from gui.widgets.main_action import MainActionDock
 from gui.widgets.central_widget import CentralWidget
 from gui.widgets.properties_widget import PropertiesWidget
+from helpers.show_statusbar_helper import get_datetime_string
 import os
 import sys
 
@@ -48,8 +49,7 @@ class MainWindow(QMainWindow):
         self._datetime_timer.start(10000)
 
     def _update_datetime_label(self):
-        if hasattr(self.menu_bar, "get_datetime_string"):
-            self.datetime_label.setText(self.menu_bar.get_datetime_string())
+        self.datetime_label.setText(get_datetime_string())
 
     def center_on_screen(self):
         screen = QApplication.primaryScreen()
