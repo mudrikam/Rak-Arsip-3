@@ -1,7 +1,7 @@
 import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
-from PySide6.QtWidgets import QDockWidget, QWidget, QVBoxLayout, QLabel, QFrame, QHBoxLayout, QApplication, QMenu, QPushButton, QLayout, QGridLayout, QScrollArea
+from PySide6.QtWidgets import QDockWidget, QWidget, QVBoxLayout, QLabel, QFrame, QHBoxLayout, QApplication, QMenu, QSpinBox, QScrollArea
 from PySide6.QtGui import QPixmap, QCursor, QMouseEvent, QGuiApplication, QDesktopServices, QAction, QDrag
 from PySide6.QtCore import Qt, QPoint, QEvent, QRect, QMimeData, QUrl
 import qtawesome as qta
@@ -42,13 +42,24 @@ class PropertiesWidget(QDockWidget):
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
 
-        self.image_nav_buttons_grid = QGridLayout()
-        self.image_nav_buttons_grid.setSpacing(2)
-        self.image_nav_buttons_grid.setContentsMargins(0, 0, 0, 0)
-        self.image_nav_buttons_widget = QWidget(self.scroll_content)
-        self.image_nav_buttons_widget.setLayout(self.image_nav_buttons_grid)
-        self.image_nav_buttons_widget.hide()
-        layout.addWidget(self.image_nav_buttons_widget)
+        # Spinner for image navigation
+        self.image_nav_widget = QWidget(self.scroll_content)
+        self.image_nav_layout = QHBoxLayout(self.image_nav_widget)
+        self.image_nav_layout.setContentsMargins(0, 0, 0, 0)
+        self.image_nav_layout.setSpacing(4)
+        self.image_nav_label = QLabel(self.image_nav_widget)
+        self.image_nav_spin = QSpinBox(self.image_nav_widget)
+        self.image_nav_spin.setMinimum(1)
+        self.image_nav_spin.setMaximum(1)
+        self.image_nav_spin.setValue(1)
+        self.image_nav_spin.setFixedWidth(60)
+        self.image_nav_spin.valueChanged.connect(self._on_image_nav_spin_changed)
+        self.image_nav_label.setText("1/1 Images")
+        self.image_nav_widget.hide()
+        self.image_nav_layout.addWidget(self.image_nav_label)
+        self.image_nav_layout.addWidget(self.image_nav_spin)
+        self.image_nav_layout.addStretch()
+        layout.addWidget(self.image_nav_widget)
 
         self._tooltip_image_label = QLabel(self)
         self._tooltip_image_label.setWindowFlags(Qt.ToolTip)
@@ -465,7 +476,7 @@ class PropertiesWidget(QDockWidget):
         try:
             self._image_files = []
             self._image_index = 0
-            self._clear_image_nav_buttons()
+            self._hide_image_nav_widget()
             if not file_path:
                 self.set_no_preview()
                 return
@@ -484,59 +495,40 @@ class PropertiesWidget(QDockWidget):
                 self.set_no_preview()
                 return
             self.display_image(str(first_image))
-            # Now find all images (recursive, up to max_depth)
             all_images = self._find_all_images(directory)
             all_images = sorted(set(all_images), key=lambda x: str(x))
             if len(all_images) > 1:
                 self._image_files = all_images
-                # Set index to the first image found
                 try:
                     self._image_index = self._image_files.index(first_image)
                 except Exception:
                     self._image_index = 0
-                self._show_image_nav_buttons(len(self._image_files))
+                self._show_image_nav_widget(len(self._image_files))
             else:
                 self._image_files = [first_image]
                 self._image_index = 0
-                self._clear_image_nav_buttons()
+                self._hide_image_nav_widget()
         except Exception:
             self.set_no_preview()
 
-    def _show_image_nav_buttons(self, count):
-        self._clear_image_nav_buttons()
-        max_per_row = max(1, self.image_frame.width() // 32)
-        row = 0
-        col = 0
-        for i in range(count):
-            btn = QPushButton(str(i + 1), self.image_nav_buttons_widget)
-            btn.setFixedSize(28, 28)
-            btn.setCheckable(True)
-            if i == self._image_index:
-                btn.setChecked(True)
-            btn.clicked.connect(lambda checked, idx=i: self._on_image_nav_button_clicked(idx))
-            self.image_nav_buttons_grid.addWidget(btn, row, col)
-            col += 1
-            if col >= max_per_row:
-                col = 0
-                row += 1
-        self.image_nav_buttons_widget.show()
+    def _show_image_nav_widget(self, count):
+        self.image_nav_spin.blockSignals(True)
+        self.image_nav_spin.setMinimum(1)
+        self.image_nav_spin.setMaximum(count)
+        self.image_nav_spin.setValue(self._image_index + 1)
+        self.image_nav_label.setText(f"{self._image_index + 1}/{count} Images")
+        self.image_nav_widget.show()
+        self.image_nav_spin.blockSignals(False)
 
-    def _clear_image_nav_buttons(self):
-        while self.image_nav_buttons_grid.count():
-            child = self.image_nav_buttons_grid.takeAt(0)
-            widget = child.widget()
-            if widget is not None:
-                widget.deleteLater()
-        self.image_nav_buttons_widget.hide()
+    def _hide_image_nav_widget(self):
+        self.image_nav_widget.hide()
 
-    def _on_image_nav_button_clicked(self, idx):
+    def _on_image_nav_spin_changed(self, value):
+        idx = value - 1
         if 0 <= idx < len(self._image_files):
             self._image_index = idx
             self.display_image(str(self._image_files[idx]))
-            for i in range(self.image_nav_buttons_grid.count()):
-                btn = self.image_nav_buttons_grid.itemAt(i).widget()
-                if btn:
-                    btn.setChecked(i == idx)
+            self.image_nav_label.setText(f"{value}/{len(self._image_files)} Images")
 
     def display_image(self, image_path):
         try:
@@ -558,4 +550,4 @@ class PropertiesWidget(QDockWidget):
         self.image_label.setText("No Preview")
         self._tooltip_pixmap = None
         self._tooltip_image_label.hide()
-        self._clear_image_nav_buttons()
+        self._hide_image_nav_widget()
