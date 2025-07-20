@@ -211,3 +211,5 @@ database/archieve_database.db
 database/temp/
 temp/
 db_backups/
+
+*_old.db

@@ -6,6 +6,7 @@ import webbrowser
 from gui.dialogs.about_dialog import AboutDialog
 from gui.windows.preferences_window import PreferencesWindow
 import sys
+import os
 
 class MainMenu(QMenuBar):
     def __init__(self, config_manager, parent=None):
@@ -14,8 +15,10 @@ class MainMenu(QMenuBar):
 
         file_menu = QMenu("File", self)
         self.preferences_action = QAction(qta.icon('fa6s.gear'), "Preferences", self)
+        self.relaunch_action = QAction(qta.icon('fa6s.rotate-right'), "Relaunch", self)
         self.exit_action = QAction(qta.icon('fa6s.right-from-bracket'), "Exit", self)
         file_menu.addAction(self.preferences_action)
+        file_menu.addAction(self.relaunch_action)
         file_menu.addAction(self.exit_action)
         self.addMenu(file_menu)
 
@@ -39,6 +42,7 @@ class MainMenu(QMenuBar):
         self.addMenu(help_menu)
 
         self.exit_action.triggered.connect(self.close_app)
+        self.relaunch_action.triggered.connect(self.relaunch_app)
         self.preferences_action.triggered.connect(self.show_preferences)
         self.about_action.triggered.connect(self.show_about)
         self.repo_action.triggered.connect(self.open_repo)
@@ -80,6 +84,12 @@ class MainMenu(QMenuBar):
 
     def close_app(self):
         QApplication.quit()
+
+    def relaunch_app(self):
+        python = sys.executable
+        if " " in python:
+            python = f'"{python}"'
+        os.execl(sys.executable, python, *sys.argv)
 
     def show_preferences(self):
         from pathlib import Path
