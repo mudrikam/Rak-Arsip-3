@@ -450,28 +450,6 @@ class PropertiesWidget(QDockWidget):
             pass
         return image_files
 
-    def _find_first_image_fast(self, directory, file_name, max_depth=3, current_depth=0):
-        if current_depth > max_depth:
-            return None
-        try:
-            items = list(directory.iterdir())
-            for item in items:
-                if item.is_file() and item.suffix.lower() in self.supported_formats:
-                    if item.stem.lower() == file_name.lower():
-                        return item
-                    else:
-                        return item
-            for item in items:
-                if item.is_dir():
-                    result = self._find_first_image_fast(item, file_name, max_depth, current_depth + 1)
-                    if result:
-                        return result
-        except PermissionError:
-            pass
-        except Exception:
-            pass
-        return None
-
     def load_preview_image(self, file_path, file_name):
         try:
             self._image_files = []
@@ -490,24 +468,61 @@ class PropertiesWidget(QDockWidget):
             if not directory.exists():
                 self.set_no_preview()
                 return
-            first_image = self._find_first_image_fast(directory, file_name)
-            if not first_image:
-                self.set_no_preview()
-                return
-            self.display_image(str(first_image))
+
+            # Cari folder Preview di dalam folder project
+            preview_dir = None
+            for item in directory.iterdir():
+                if item.is_dir() and item.name.lower() == "preview":
+                    preview_dir = item
+                    break
+
             all_images = self._find_all_images(directory)
             all_images = sorted(set(all_images), key=lambda x: str(x))
-            if len(all_images) > 1:
-                self._image_files = all_images
+
+            preview_images = []
+            if preview_dir and preview_dir.exists():
+                preview_images = self._find_all_images(preview_dir)
+                preview_images = sorted(set(preview_images), key=lambda x: str(x))
+
+            # Prioritas 1: gambar di folder Preview dengan nama sama dengan project
+            preferred_image = None
+            if preview_images:
+                for img in preview_images:
+                    if img.stem.lower() == file_name.lower():
+                        preferred_image = img
+                        break
+                # Jika tidak ada yang sama persis, ambil gambar pertama di Preview
+                if not preferred_image and preview_images:
+                    preferred_image = preview_images[0]
+            # Prioritas 2: gambar di folder lain dengan nama sama dengan project
+            if not preferred_image:
+                for img in all_images:
+                    if img.stem.lower() == file_name.lower():
+                        preferred_image = img
+                        break
+            # Prioritas 3: gambar pertama di folder lain
+            if not preferred_image and all_images:
+                preferred_image = all_images[0]
+
+            if preferred_image:
+                self.display_image(str(preferred_image))
+                # Gabungkan semua gambar untuk navigasi, Preview dulu jika ada
+                combined_images = []
+                if preview_images:
+                    combined_images.extend(preview_images)
+                # Hindari duplikat jika gambar Preview sudah ada di all_images
+                combined_images.extend([img for img in all_images if img not in combined_images])
+                self._image_files = combined_images
                 try:
-                    self._image_index = self._image_files.index(first_image)
+                    self._image_index = self._image_files.index(preferred_image)
                 except Exception:
                     self._image_index = 0
-                self._show_image_nav_widget(len(self._image_files))
+                if len(self._image_files) > 1:
+                    self._show_image_nav_widget(len(self._image_files))
+                else:
+                    self._hide_image_nav_widget()
             else:
-                self._image_files = [first_image]
-                self._image_index = 0
-                self._hide_image_nav_widget()
+                self.set_no_preview()
         except Exception:
             self.set_no_preview()
 
