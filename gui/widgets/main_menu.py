@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QMenuBar, QMenu, QApplication
+from PySide6.QtWidgets import QMenuBar, QMenu, QApplication, QDialog
 from PySide6.QtGui import QAction
 from PySide6.QtCore import QTimer
 import qtawesome as qta
@@ -28,10 +28,12 @@ class MainMenu(QMenuBar):
         self.clear_search_action = QAction(qta.icon('fa6s.xmark'), "Clear Search", self)
         self.sort_action = QAction(qta.icon('fa6s.arrow-down-wide-short'), "Sort Table", self)
         self.paste_search_action = QAction(qta.icon('fa6s.paste'), "Paste to Search", self)
+        self.edit_selected_action = QAction(qta.icon('fa6s.pen-to-square'), "Edit Selected Record", self)
         data_menu.addAction(self.refresh_action)
         data_menu.addAction(self.clear_search_action)
         data_menu.addAction(self.sort_action)
         data_menu.addAction(self.paste_search_action)
+        data_menu.addAction(self.edit_selected_action)
         self.addMenu(data_menu)
 
         help_menu = QMenu("Help", self)
@@ -52,6 +54,7 @@ class MainMenu(QMenuBar):
         self.clear_search_action.triggered.connect(self._trigger_clear_search)
         self.sort_action.triggered.connect(self._trigger_sort)
         self.paste_search_action.triggered.connect(self._trigger_paste_search)
+        self.edit_selected_action.triggered.connect(self._trigger_edit_selected_record)
 
     def _get_central_widget(self):
         # Try to get central widget from parent window
@@ -81,6 +84,11 @@ class MainMenu(QMenuBar):
         cw = self._get_central_widget()
         if cw and hasattr(cw, "paste_to_search"):
             cw.paste_to_search()
+
+    def _trigger_edit_selected_record(self):
+        cw = self._get_central_widget()
+        if cw and hasattr(cw, "do_edit_record"):
+            cw.do_edit_record()
 
     def close_app(self):
         QApplication.quit()

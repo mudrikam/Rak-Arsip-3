@@ -225,6 +225,15 @@ class CentralWidget(QWidget):
             self.search_edit.setText(text)
             self.apply_search()
             show_statusbar_message(self, f"Pasted to search: {text}")
+            if self.table.rowCount() > 0:
+                self.table.selectRow(0)
+                item = self.table.item(0, 0)
+                if item:
+                    row_data = item.data(256)
+                    if row_data:
+                        self.selected_row_data = row_data
+                        self._selected_row_index = 0
+                        self.row_selected.emit(row_data)
 
     def auto_refresh_table(self):
         self.load_data_from_database()
@@ -685,3 +694,41 @@ class CentralWidget(QWidget):
             self.current_page = 1
             self.load_data_from_database(keep_search=True)
             show_statusbar_message(self, f"Sort applied: {field} {order} {status_value if status_value else ''}")
+
+    def do_edit_record(self):
+        if not self.selected_row_data:
+            show_statusbar_message(self, "No record selected for editing.")
+            return
+        row_data = self.selected_row_data
+        dialog = EditRecordDialog(
+            row_data,
+            self.status_options,
+            self.db_manager,
+            self,
+            main_action_dock=self._main_window.main_action_dock if hasattr(self._main_window, "main_action_dock") else None
+        )
+        if dialog.exec() == QDialog.Accepted:
+            new_data = dialog.get_data()
+            file_id = row_data['id']
+            try:
+                self.db_manager.connect()
+                status_id = self.db_manager.get_status_id(new_data['status'])
+                category_id = self.db_manager.get_or_create_category(new_data['category']) if new_data['category'] else None
+                subcategory_id = self.db_manager.get_or_create_subcategory(
+                    category_id,
+                    new_data['subcategory']
+                ) if new_data['subcategory'] and new_data['category'] else None
+                self.db_manager.update_file_record(
+                    file_id=file_id,
+                    name=new_data['name'],
+                    root=new_data['root'],
+                    path=new_data['full_path'],
+                    status_id=status_id,
+                    category_id=category_id,
+                    subcategory_id=subcategory_id
+                )
+            finally:
+                self.db_manager.close()
+            self.load_data_from_database()
+            QMessageBox.information(self, "Success", "Record updated.")
+            show_statusbar_message(self, f"Record updated: {new_data['name']}")
