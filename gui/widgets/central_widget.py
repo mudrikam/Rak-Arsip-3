@@ -143,6 +143,7 @@ class CentralWidget(QWidget):
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.cellDoubleClicked.connect(self._on_table_double_click)
         self.table.cellClicked.connect(self._on_table_cell_clicked)
+        self.table.itemSelectionChanged.connect(self.on_row_selected)
 
         self.table.setMouseTracking(False)
         self.table.setItemDelegate(NoHoverDelegate(self.table))
@@ -266,6 +267,7 @@ class CentralWidget(QWidget):
                 self._selected_row_index = row
                 self.open_explorer()
                 show_statusbar_message(self, f"Double-clicked: Opened {row_data['path']}")
+                self.row_selected.emit(row_data)
 
     def _on_table_cell_clicked(self, row, column):
         self.table.selectRow(row)
@@ -276,6 +278,7 @@ class CentralWidget(QWidget):
                 self.selected_row_data = row_data
                 self._selected_row_index = row
                 show_statusbar_message(self, f"Selected row: {row_data['name']}")
+                self.row_selected.emit(row_data)
 
     def load_data_from_database(self, keep_search=False):
         try:
