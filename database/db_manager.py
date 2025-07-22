@@ -237,6 +237,15 @@ class DatabaseManager(QObject):
         self.connection.commit()
         self.create_temp_file()
 
+    def update_file_record(self, file_id, name, root, path, status_id, category_id, subcategory_id):
+        cursor = self.connection.cursor()
+        cursor.execute("""
+            UPDATE files SET name = ?, root = ?, path = ?, status_id = ?, category_id = ?, subcategory_id = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        """, (name, root, path, status_id, category_id, subcategory_id, file_id))
+        self.connection.commit()
+        self.create_temp_file()
+
     def delete_category(self, category_name):
         cursor = self.connection.cursor()
         cursor.execute("SELECT id FROM categories WHERE name = ?", (category_name,))

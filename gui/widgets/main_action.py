@@ -88,6 +88,24 @@ def sanitize_category_subcategory(name):
     sanitized = re.sub(r'[^A-Za-z0-9_]', '', sanitized)
     return sanitized
 
+def get_unique_sanitized_categories(db_manager):
+    categories = db_manager.get_all_categories()
+    sanitized_map = {}
+    for c in categories:
+        key = sanitize_category_subcategory(c)
+        if key not in sanitized_map:
+            sanitized_map[key] = []
+        sanitized_map[key].append(c)
+    return list(sanitized_map.keys()), sanitized_map
+
+def get_all_subcategories_for_sanitized(db_manager, sanitized_category, sanitized_map):
+    subcategories = set()
+    for orig_cat in sanitized_map.get(sanitized_category, []):
+        subs = db_manager.get_subcategories_by_category(orig_cat)
+        for s in subs:
+            subcategories.add(sanitize_category_subcategory(s))
+    return sorted(subcategories)
+
 class DiskScanThread(QThread):
     disks_found = Signal(list)
     def run(self):
@@ -424,11 +442,10 @@ class MainActionDock(QDockWidget):
         def load_categories():
             try:
                 self.db_manager.connect()
-                categories = self.db_manager.get_all_categories()
-                categories = [sanitize_category_subcategory(c) for c in categories]
+                unique_cats, self._sanitized_cat_map = get_unique_sanitized_categories(self.db_manager)
                 combo_category.clear()
                 combo_category.addItem("")
-                combo_category.addItems(categories)
+                combo_category.addItems(unique_cats)
                 show_statusbar_message(self, "Categories loaded")
             except Exception as e:
                 print(f"Error loading categories: {e}")
@@ -437,21 +454,19 @@ class MainActionDock(QDockWidget):
                 self.db_manager.close()
 
         def load_subcategories(category_name):
-            category_name = sanitize_category_subcategory(category_name)
+            sanitized_cat = sanitize_category_subcategory(category_name)
             combo_subcategory.clear()
             combo_subcategory.addItem("")
-            if not category_name:
+            if not sanitized_cat or not hasattr(self, "_sanitized_cat_map"):
                 combo_subcategory.setEnabled(False)
                 show_statusbar_message(self, "No category selected for subcategory")
                 return
-            
             try:
                 self.db_manager.connect()
-                subcategories = self.db_manager.get_subcategories_by_category(category_name)
-                subcategories = [sanitize_category_subcategory(s) for s in subcategories]
+                subcategories = get_all_subcategories_for_sanitized(self.db_manager, sanitized_cat, self._sanitized_cat_map)
                 combo_subcategory.addItems(subcategories)
                 combo_subcategory.setEnabled(True)
-                show_statusbar_message(self, f"Subcategories loaded for category: {category_name}")
+                show_statusbar_message(self, f"Subcategories loaded for category: {sanitized_cat}")
             except Exception as e:
                 print(f"Error loading subcategories: {e}")
                 combo_subcategory.setEnabled(False)
@@ -651,3 +666,6 @@ class MainActionDock(QDockWidget):
             self._combo_folder.clear()
             self._combo_folder.setEnabled(False)
             self._on_disk_changed(0)
+
+    def get_current_color_hex(self):
+        return self._color_hex_label.text()

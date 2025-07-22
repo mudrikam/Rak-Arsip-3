@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QHeaderView,
     QHBoxLayout, QLineEdit, QPushButton, QLabel, QSpacerItem, QSizePolicy, QComboBox,
-    QMenu, QApplication, QMessageBox, QDialog, QVBoxLayout as QVBoxLayout2, QRadioButton, QButtonGroup, QDialogButtonBox, QStyledItemDelegate, QStyle, QSpinBox
+    QMenu, QApplication, QMessageBox, QDialog, QVBoxLayout as QVBoxLayout2, QRadioButton, QButtonGroup, QDialogButtonBox, QStyledItemDelegate, QStyle, QSpinBox, QFormLayout
 )
 from PySide6.QtGui import QColor, QAction, QFontMetrics, QCursor, QKeySequence, QShortcut
 from PySide6.QtCore import Signal, Qt, QTimer
@@ -15,6 +15,8 @@ import os
 import shutil
 from gui.dialogs.short_dialog import SortDialog
 from helpers.show_statusbar_helper import show_statusbar_message
+from helpers.markdown_generator import MarkdownGenerator
+from gui.dialogs.edit_record_dialog import EditRecordDialog
 
 class NoWheelComboBox(QComboBox):
     def wheelEvent(self, event):
@@ -39,6 +41,8 @@ class CentralWidget(QWidget):
         self.sort_status_value = None
         self._main_window = parent if isinstance(parent, QWidget) else None
         self._selected_row_index = None
+        self.markdown_generator = MarkdownGenerator()
+        self._select_after_refresh = None
 
         if hasattr(parent, 'main_action_dock') and hasattr(parent.main_action_dock, 'db_manager'):
             self.db_manager = parent.main_action_dock.db_manager
@@ -198,6 +202,21 @@ class CentralWidget(QWidget):
         self._sort_order = "desc"
         self.load_data_from_database()
 
+        # Connect NameFieldWidget.project_created to refresh_table
+        if hasattr(parent, "main_action_dock") and hasattr(parent.main_action_dock, "_name_field_widget"):
+            name_field_widget = parent.main_action_dock._name_field_widget
+            name_field_widget.project_created.connect(self._on_project_created)
+
+    def _on_project_created(self):
+        # Ambil data project terakhir dari database
+        self.db_manager.connect()
+        files = self.db_manager.get_files_page(page=1, page_size=1, sort_field="id", sort_order="desc")
+        self.db_manager.close()
+        if files:
+            last = files[0]
+            self._select_after_refresh = (last['name'], last['path'])
+        self.refresh_table()
+
     def paste_to_search(self):
         clipboard = QApplication.clipboard()
         text = clipboard.text()
@@ -339,6 +358,21 @@ class CentralWidget(QWidget):
                 except Exception as e:
                     print(f"Error refreshing templates: {e}")
         show_statusbar_message(self, "Table and main action categories/templates refreshed")
+        if self._select_after_refresh:
+            self._select_row_by_name_path(*self._select_after_refresh)
+            self._select_after_refresh = None
+
+    def _select_row_by_name_path(self, name, path):
+        for row in range(self.table.rowCount()):
+            item = self.table.item(row, 0)
+            if item:
+                row_data = item.data(256)
+                if row_data and row_data.get('name') == name and row_data.get('path') == path:
+                    self.table.selectRow(row)
+                    self.selected_row_data = row_data
+                    self._selected_row_index = row
+                    self.row_selected.emit(row_data)
+                    break
 
     def apply_search(self, refresh_only=False):
         self.current_page = 1
@@ -511,10 +545,12 @@ class CentralWidget(QWidget):
         icon_copy_path = qta.icon("fa6s.folder-open")
         icon_open_explorer = qta.icon("fa6s.folder-tree")
         icon_delete = qta.icon("fa6s.trash")
+        icon_edit = qta.icon("fa6s.pen-to-square")
         action_copy_name = QAction(icon_copy_name, "Copy Name\tCtrl+C", self)
         action_copy_path = QAction(icon_copy_path, "Copy Path\tCtrl+X", self)
         action_open_explorer = QAction(icon_open_explorer, "Open in Explorer\tCtrl+E", self)
         action_delete = QAction(icon_delete, "Delete Record", self)
+        action_edit = QAction(icon_edit, "Edit Record", self)
 
         def do_copy_name():
             QApplication.clipboard().setText(str(row_data['name']))
@@ -589,13 +625,49 @@ class CentralWidget(QWidget):
                     finally:
                         self.db_manager.close()
 
+        def do_edit_record():
+            dialog = EditRecordDialog(
+                row_data,
+                self.status_options,
+                self.db_manager,
+                self,
+                main_action_dock=self._main_window.main_action_dock if hasattr(self._main_window, "main_action_dock") else None
+            )
+            if dialog.exec() == QDialog.Accepted:
+                new_data = dialog.get_data()
+                file_id = row_data['id']
+                try:
+                    self.db_manager.connect()
+                    status_id = self.db_manager.get_status_id(new_data['status'])
+                    category_id = self.db_manager.get_or_create_category(new_data['category']) if new_data['category'] else None
+                    subcategory_id = self.db_manager.get_or_create_subcategory(
+                        category_id,
+                        new_data['subcategory']
+                    ) if new_data['subcategory'] and new_data['category'] else None
+                    self.db_manager.update_file_record(
+                        file_id=file_id,
+                        name=new_data['name'],
+                        root=new_data['root'],
+                        path=new_data['full_path'],
+                        status_id=status_id,
+                        category_id=category_id,
+                        subcategory_id=subcategory_id
+                    )
+                finally:
+                    self.db_manager.close()
+                self.load_data_from_database()
+                QMessageBox.information(self, "Success", "Record updated.")
+                show_statusbar_message(self, f"Record updated: {new_data['name']}")
+
         action_copy_name.triggered.connect(do_copy_name)
         action_copy_path.triggered.connect(do_copy_path)
         action_open_explorer.triggered.connect(do_open_explorer)
         action_delete.triggered.connect(do_delete_record)
+        action_edit.triggered.connect(do_edit_record)
         menu.addAction(action_copy_name)
         menu.addAction(action_copy_path)
         menu.addAction(action_open_explorer)
+        menu.addAction(action_edit)
         menu.addSeparator()
         menu.addAction(action_delete)
         menu.exec(self.table.viewport().mapToGlobal(pos))
