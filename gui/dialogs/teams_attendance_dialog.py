@@ -98,6 +98,25 @@ class TeamsAttendanceDialog(QDialog):
         pin_valid = self._is_pin_valid(username, pin)
         self.toggle_button.setEnabled(pin_valid)
         self.note_edit.setEnabled(pin_valid)
+        if pin_valid:
+            self._update_toggle_button_style(enabled=True)
+        else:
+            self._update_toggle_button_style(enabled=False)
+
+    def _update_toggle_button_style(self, enabled):
+        if enabled:
+            if self.current_mode == "checkin":
+                self.toggle_button.setStyleSheet(
+                    "background-color: #43a047; color: white; font-weight: bold; padding: 8px; border-radius: 8px;"
+                )
+            else:
+                self.toggle_button.setStyleSheet(
+                    "background-color: #e53935; color: white; font-weight: bold; padding: 8px; border-radius: 8px;"
+                )
+        else:
+            self.toggle_button.setStyleSheet(
+                "background-color: #cccccc; color: #888888; font-weight: bold; padding: 8px; border-radius: 8px;"
+            )
 
     def _format_date(self, date_str):
         if not date_str:
@@ -128,10 +147,8 @@ class TeamsAttendanceDialog(QDialog):
             )
             self.toggle_button.setIcon(qta.icon('fa6s.arrow-right-to-bracket'))
             self.toggle_button.setText("Check In")
-            self.toggle_button.setStyleSheet(
-                "background-color: #43a047; color: white; font-weight: bold; padding: 8px; border-radius: 8px;"
-            )
             self.current_mode = "checkin"
+            self._update_toggle_button_style(enabled=False)
             return
         if not pin_valid:
             self.status_label.setText(
@@ -143,10 +160,8 @@ class TeamsAttendanceDialog(QDialog):
             )
             self.toggle_button.setIcon(qta.icon('fa6s.arrow-right-to-bracket'))
             self.toggle_button.setText("Check In")
-            self.toggle_button.setStyleSheet(
-                "background-color: #43a047; color: white; font-weight: bold; padding: 8px; border-radius: 8px;"
-            )
             self.current_mode = "checkin"
+            self._update_toggle_button_style(enabled=False)
             return
         basedir = Path(__file__).parent.parent.parent
         db_config_path = basedir / "configs" / "db_config.json"
@@ -163,10 +178,8 @@ class TeamsAttendanceDialog(QDialog):
             )
             self.toggle_button.setIcon(qta.icon('fa6s.arrow-right-from-bracket'))
             self.toggle_button.setText("Check Out")
-            self.toggle_button.setStyleSheet(
-                "background-color: #e53935; color: white; font-weight: bold; padding: 8px; border-radius: 8px;"
-            )
             self.current_mode = "checkout"
+            self._update_toggle_button_style(enabled=True if pin_valid else False)
         else:
             latest_attendance = db_manager.get_attendance_by_username_pin(username, pin)
             if latest_attendance:
@@ -196,10 +209,8 @@ class TeamsAttendanceDialog(QDialog):
                 )
             self.toggle_button.setIcon(qta.icon('fa6s.arrow-right-to-bracket'))
             self.toggle_button.setText("Check In")
-            self.toggle_button.setStyleSheet(
-                "background-color: #43a047; color: white; font-weight: bold; padding: 8px; border-radius: 8px;"
-            )
             self.current_mode = "checkin"
+            self._update_toggle_button_style(enabled=True if pin_valid else False)
 
     def toggle_check(self):
         username = self.username_combo.currentText().strip()
