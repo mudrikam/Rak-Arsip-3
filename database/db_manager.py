@@ -609,7 +609,7 @@ class DatabaseManager(QObject):
         cursor.execute(sql, params)
         return cursor.fetchone()[0]
 
-    def assign_price(self, file_id, price, currency):
+    def assign_price(self, file_id, price, currency, note=""):
         self.connect()
         cursor = self.connection.cursor()
         cursor.execute("SELECT id FROM item_price WHERE file_id = ?", (file_id,))
@@ -617,13 +617,13 @@ class DatabaseManager(QObject):
         if item_price_row:
             item_price_id = item_price_row["id"]
             cursor.execute(
-                "UPDATE item_price SET price = ?, currency = ? WHERE id = ?",
-                (price, currency, item_price_id)
+                "UPDATE item_price SET price = ?, currency = ?, note = ? WHERE id = ?",
+                (price, currency, note, item_price_id)
             )
         else:
             cursor.execute(
-                "INSERT INTO item_price (file_id, price, currency) VALUES (?, ?, ?)",
-                (file_id, price, currency)
+                "INSERT INTO item_price (file_id, price, currency, note) VALUES (?, ?, ?, ?)",
+                (file_id, price, currency, note)
             )
         self.connection.commit()
         self.close()
@@ -638,3 +638,13 @@ class DatabaseManager(QObject):
         if row:
             return row["price"], row["currency"]
         return None, None
+
+    def get_item_price_detail(self, file_id):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT price, currency, note FROM item_price WHERE file_id = ?", (file_id,))
+        row = cursor.fetchone()
+        self.close()
+        if row:
+            return str(row["price"]) if row["price"] is not None else "", row["currency"] or "IDR", row["note"] or ""
+        return "", "IDR", ""

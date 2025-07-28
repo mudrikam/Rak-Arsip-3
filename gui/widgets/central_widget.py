@@ -432,7 +432,7 @@ class CentralWidget(QWidget):
         self.table.setRowCount(len(page_data))
         path_column_width = self.table.columnWidth(3)
         for row_idx, row_data in enumerate(page_data):
-            price, currency = self.db_manager.get_item_price(row_data['id'])
+            price, currency, note = self.db_manager.get_item_price_detail(row_data['id'])
             if price is not None and currency:
                 try:
                     price_float = float(price)
@@ -445,13 +445,17 @@ class CentralWidget(QWidget):
                     price_str = f"{price} {currency}"
             else:
                 price_str = "-"
+            if note:
+                price_note_str = f"{price_str} - {note}"
+            else:
+                price_note_str = f"{price_str} -"
             tooltip = (
                 f"Date: {row_data.get('date','')}\n"
                 f"Name: {row_data.get('name','')}\n"
                 f"Root: {row_data.get('root','')}\n"
                 f"Path: {row_data.get('path','')}\n"
                 f"Status: {row_data.get('status','')}\n"
-                f"Price: {price_str}"
+                f"Price: {price_note_str}"
             )
             date_item = QTableWidgetItem(row_data['date'])
             date_item.setData(256, row_data)
@@ -696,14 +700,14 @@ class CentralWidget(QWidget):
         action_copy_name.triggered.connect(do_copy_name)
         action_copy_path.triggered.connect(do_copy_path)
         action_open_explorer.triggered.connect(do_open_explorer)
-        action_delete.triggered.connect(do_delete_record)
-        action_edit.triggered.connect(do_edit_record)
         action_assign_price.triggered.connect(do_assign_price)
+        action_edit.triggered.connect(do_edit_record)
+        action_delete.triggered.connect(do_delete_record)
         menu.addAction(action_copy_name)
         menu.addAction(action_copy_path)
         menu.addAction(action_open_explorer)
-        menu.addAction(action_edit)
         menu.addAction(action_assign_price)
+        menu.addAction(action_edit)
         menu.addSeparator()
         menu.addAction(action_delete)
         menu.exec(self.table.viewport().mapToGlobal(pos))
