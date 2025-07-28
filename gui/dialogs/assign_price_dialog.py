@@ -38,6 +38,7 @@ class AssignPriceDialog(QDialog):
         self.button_box.rejected.connect(self.reject)
         self.file_record = file_record
         self.db_manager = db_manager
+        self._parent = parent
 
     def _on_accept(self):
         price = self.price_edit.text().strip()
@@ -48,4 +49,5 @@ class AssignPriceDialog(QDialog):
             self.reject()
             return
         self.db_manager.assign_price(file_id, price, currency, note)
+        self._parent.refresh_table()
         self.accept()
