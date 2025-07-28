@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QDialog, QFormLayout, QLineEdit, QComboBox, QDialogButtonBox, QLabel, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem, QPushButton, QHeaderView, QWidget, QMessageBox
+from PySide6.QtWidgets import QDialog, QFormLayout, QLineEdit, QComboBox, QDialogButtonBox, QLabel, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem, QPushButton, QHeaderView, QWidget, QMessageBox, QInputDialog
 from PySide6.QtCore import Qt
 import qtawesome as qta
 
@@ -6,7 +6,7 @@ class AssignPriceDialog(QDialog):
     def __init__(self, file_record, db_manager, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Assign Price")
-        self.setMinimumWidth(300)
+        self.setMinimumWidth(500)
         main_layout = QVBoxLayout(self)
         form_layout = QFormLayout()
         self.item_label = QLabel(file_record.get("name", ""))
@@ -59,9 +59,9 @@ class AssignPriceDialog(QDialog):
         earnings_label = QLabel("Earnings Share:")
         main_layout.addWidget(earnings_label)
         self.earnings_table = QTableWidget()
-        self.earnings_table.setColumnCount(3)
+        self.earnings_table.setColumnCount(4)
         self.earnings_table.setHorizontalHeaderLabels([
-            "Username", "Full Name", f"({self._get_operational_percentage()}% Opr)"
+            "Username", "Full Name", f"({self._get_operational_percentage()}% Opr)", "Note"
         ])
         self.earnings_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.earnings_table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -69,6 +69,7 @@ class AssignPriceDialog(QDialog):
         self.earnings_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.earnings_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.earnings_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self.earnings_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
         main_layout.addWidget(self.earnings_table)
 
         add_row = QHBoxLayout()
@@ -87,6 +88,11 @@ class AssignPriceDialog(QDialog):
         self.remove_team_btn.setFixedWidth(40)
         self.remove_team_btn.setToolTip("Remove selected team member from earnings")
         add_row.addWidget(self.remove_team_btn)
+        self.edit_note_btn = QPushButton()
+        self.edit_note_btn.setIcon(qta.icon("fa6s.pen"))
+        self.edit_note_btn.setFixedWidth(40)
+        self.edit_note_btn.setToolTip("Edit note for selected team member")
+        add_row.addWidget(self.edit_note_btn)
         add_row.addStretch()
         main_layout.addLayout(add_row)
 
@@ -97,6 +103,7 @@ class AssignPriceDialog(QDialog):
 
         self.add_team_btn.clicked.connect(self._on_add_team)
         self.remove_team_btn.clicked.connect(self._on_remove_selected_team)
+        self.edit_note_btn.clicked.connect(self._on_edit_note)
         self.price_edit.textChanged.connect(self._on_price_changed)
         self.currency_combo.currentTextChanged.connect(self._on_price_changed)
         self.note_edit.textChanged.connect(self._on_note_changed)
@@ -110,21 +117,21 @@ class AssignPriceDialog(QDialog):
         file_id = self.file_record["id"]
         earnings = self.db_manager.get_earnings_by_file_id(file_id)
         self.earnings_table.setRowCount(len(earnings))
+        price, currency, _ = self.db_manager.get_item_price_detail(file_id)
         for row_idx, earning in enumerate(earnings):
             item_username = QTableWidgetItem(earning["username"])
             item_fullname = QTableWidgetItem(earning["full_name"])
-            currency = earning.get("currency", None)
-            if not currency:
-                price, currency, _ = self.db_manager.get_item_price_detail(file_id)
             try:
                 amount_float = float(earning["amount"])
                 amount_str = f"{int(amount_float):,}".replace(",", ".")
             except Exception:
                 amount_str = str(earning["amount"])
             item_share = QTableWidgetItem(f"{currency} {amount_str}")
+            item_note = QTableWidgetItem(str(earning.get("note", "")))
             self.earnings_table.setItem(row_idx, 0, item_username)
             self.earnings_table.setItem(row_idx, 1, item_fullname)
             self.earnings_table.setItem(row_idx, 2, item_share)
+            self.earnings_table.setItem(row_idx, 3, item_note)
 
     def _get_current_operational_percentage(self):
         file_id = self.file_record["id"]
@@ -177,6 +184,31 @@ class AssignPriceDialog(QDialog):
             return
         self.db_manager.remove_earning(earning_id, file_id)
         self.refresh_earnings_table()
+
+    def _on_edit_note(self):
+        selected_row = self.earnings_table.currentRow()
+        if selected_row < 0:
+            QMessageBox.warning(self, "No Selection", "Please select a team member to edit note.")
+            return
+        file_id = self.file_record["id"]
+        earnings = self.db_manager.get_earnings_by_file_id(file_id)
+        if selected_row >= len(earnings):
+            QMessageBox.warning(self, "Invalid Selection", "Selected row is invalid.")
+            return
+        earning_id = earnings[selected_row]["id"]
+        current_note = earnings[selected_row].get("note", "")
+        new_note, ok = QInputDialog.getText(self, "Edit Note", "Enter note for this team member:", QLineEdit.Normal, current_note)
+        if ok:
+            self._update_earning_note(earning_id, new_note)
+            self.refresh_earnings_table()
+
+    def _update_earning_note(self, earning_id, note):
+        self.db_manager.connect()
+        cursor = self.db_manager.connection.cursor()
+        cursor.execute("UPDATE earnings SET note = ? WHERE id = ?", (note, earning_id))
+        self.db_manager.connection.commit()
+        self.db_manager.close()
+        self.db_manager.create_temp_file()
 
     def _on_price_changed(self):
         price = self.price_edit.text().strip()

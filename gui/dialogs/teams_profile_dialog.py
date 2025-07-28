@@ -186,9 +186,9 @@ class TeamsProfileDialog(QDialog):
         search_row.addWidget(self.earnings_search_edit)
         tab_layout.addLayout(search_row)
         self.earnings_table = QTableWidget(tab)
-        self.earnings_table.setColumnCount(7)
+        self.earnings_table.setColumnCount(6)
         self.earnings_table.setHorizontalHeaderLabels([
-            "File Name", "Date", "Amount", "Currency", "Note", "Status", "ID"
+            "File Name", "Date", "Amount", "Note", "Status", "Client"
         ])
         self.earnings_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.earnings_table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -470,16 +470,24 @@ class TeamsProfileDialog(QDialog):
             price, currency, _ = db_manager.get_item_price_detail(file_id)
             status = file.get("status", "")
             earnings = db_manager.get_earnings_by_file_id(file_id)
+            client_name = db_manager.get_client_name_by_file_id(file_id)
             for earning in earnings:
                 if earning["username"] == username:
+                    amount = earning["amount"]
+                    # Format amount as "IDR 10.000" (no decimals, no commas, no .00)
+                    try:
+                        amount_int = int(float(amount))
+                        amount_str = f"{amount_int:,}".replace(",", ".")
+                    except Exception:
+                        amount_str = str(amount)
+                    amount_display = f"{currency} {amount_str}" if currency else str(amount_str)
                     earnings_records.append((
                         file_name,
                         file_date,
-                        earning["amount"],
-                        currency,
+                        amount_display,
                         earning["note"],
                         status,
-                        earning["id"]
+                        client_name
                     ))
         self.earnings_records_all = earnings_records
         self.earnings_current_page = 1
@@ -519,8 +527,7 @@ class TeamsProfileDialog(QDialog):
                     (r[2] and search_text in str(r[2]).lower()) or
                     (r[3] and search_text in str(r[3]).lower()) or
                     (r[4] and search_text in str(r[4]).lower()) or
-                    (r[5] and search_text in str(r[5]).lower()) or
-                    (r[6] and search_text in str(r[6]).lower())
+                    (r[5] and search_text in str(r[5]).lower())
                 )
             ]
         else:
@@ -539,41 +546,33 @@ class TeamsProfileDialog(QDialog):
         total_amount = 0
         total_pending = 0
         total_paid = 0
-        currency = ""
+        currency_label = ""
         for row_idx, record in enumerate(page_records):
-            file_name, file_date, amount, currency, note, status, rec_id = record
+            file_name, file_date, amount_display, note, status, client_name = record
             formatted_date = format_date_indonesian(file_date)
-            try:
-                amount_float = float(amount)
-                if amount_float.is_integer():
-                    amount_str = f"{int(amount_float):,}".replace(",", ".")
-                else:
-                    amount_str = f"{amount_float:,.2f}".replace(",", ".")
-            except Exception:
-                amount_str = str(amount)
             item_file_name = QTableWidgetItem(str(file_name))
             item_date = QTableWidgetItem(formatted_date)
-            item_amount = QTableWidgetItem(str(amount_str))
-            item_currency = QTableWidgetItem(str(currency))
+            item_amount = QTableWidgetItem(str(amount_display))
             item_note = QTableWidgetItem(str(note) if note else "")
             item_status = QTableWidgetItem(str(status))
-            item_id = QTableWidgetItem(str(rec_id))
+            item_client = QTableWidgetItem(str(client_name))
             item_file_name.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
             item_date.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
             item_amount.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-            item_currency.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
             item_note.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
             item_status.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-            item_id.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            item_client.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
             self.earnings_table.setItem(row_idx, 0, item_file_name)
             self.earnings_table.setItem(row_idx, 1, item_date)
             self.earnings_table.setItem(row_idx, 2, item_amount)
-            self.earnings_table.setItem(row_idx, 3, item_currency)
-            self.earnings_table.setItem(row_idx, 4, item_note)
-            self.earnings_table.setItem(row_idx, 5, item_status)
-            self.earnings_table.setItem(row_idx, 6, item_id)
+            self.earnings_table.setItem(row_idx, 3, item_note)
+            self.earnings_table.setItem(row_idx, 4, item_status)
+            self.earnings_table.setItem(row_idx, 5, item_client)
+            if not currency_label and " " in str(amount_display):
+                currency_label = str(amount_display).split(" ")[0]
             try:
-                amt = float(amount)
+                amt_str = str(amount_display).split(" ", 1)[-1].replace(".", "")
+                amt = int(amt_str)
                 total_amount += amt
                 if str(status).lower() == "pending":
                     total_pending += amt
@@ -583,8 +582,8 @@ class TeamsProfileDialog(QDialog):
                 pass
         def format_thousands(val):
             try:
-                val = float(val)
-                return f"{int(val):,}".replace(",", ".")
+                val = int(val)
+                return f"{val:,}".replace(",", ".")
             except Exception:
                 return str(val)
         while self.earnings_summary_layout.count():
@@ -611,14 +610,11 @@ class TeamsProfileDialog(QDialog):
         pending_icon.setPixmap(qta.icon("fa6s.clock", color="#ffb300").pixmap(16, 16))
         pending_label = QLabel("Pending:")
         pending_label.setStyleSheet("color:#ffb300; font-size:12px; font-weight:bold;")
-        pending_currency = QLabel(str(currency))
-        pending_currency.setStyleSheet("font-size:12px; font-weight:bold; margin-right:6px;")
-        pending_amount = QLabel(f"{format_thousands(total_pending)}")
+        pending_amount = QLabel(f"{currency_label} {format_thousands(total_pending)}" if currency_label else format_thousands(total_pending))
         pending_amount.setStyleSheet("font-size:12px; font-weight:bold;")
         pending_row.setSpacing(4)
         pending_row.addWidget(pending_icon)
         pending_row.addWidget(pending_label)
-        pending_row.addWidget(pending_currency)
         pending_row.addWidget(pending_amount)
         pending_row.addStretch()
         pending_widget = QWidget()
@@ -629,14 +625,11 @@ class TeamsProfileDialog(QDialog):
         paid_icon.setPixmap(qta.icon("fa6s.money-bill-wave", color="#009688").pixmap(16, 16))
         paid_label = QLabel("Paid:")
         paid_label.setStyleSheet("color:#009688; font-size:12px; font-weight:bold;")
-        paid_currency = QLabel(str(currency))
-        paid_currency.setStyleSheet("font-size:12px; font-weight:bold; margin-right:6px;")
-        paid_amount = QLabel(f"{format_thousands(total_paid)}")
+        paid_amount = QLabel(f"{currency_label} {format_thousands(total_paid)}" if currency_label else format_thousands(total_paid))
         paid_amount.setStyleSheet("font-size:12px; font-weight:bold;")
         paid_row.setSpacing(4)
         paid_row.addWidget(paid_icon)
         paid_row.addWidget(paid_label)
-        paid_row.addWidget(paid_currency)
         paid_row.addWidget(paid_amount)
         paid_row.addStretch()
         paid_widget = QWidget()
@@ -647,14 +640,11 @@ class TeamsProfileDialog(QDialog):
         all_icon.setPixmap(qta.icon("fa6s.chart-column", color="#1976d2").pixmap(16, 16))
         all_label = QLabel("All Time:")
         all_label.setStyleSheet("color:#1976d2; font-size:12px; font-weight:bold;")
-        all_currency = QLabel(str(currency))
-        all_currency.setStyleSheet("font-size:12px; font-weight:bold; margin-right:6px;")
-        all_amount = QLabel(f"{format_thousands(total_amount)}")
+        all_amount = QLabel(f"{currency_label} {format_thousands(total_amount)}" if currency_label else format_thousands(total_amount))
         all_amount.setStyleSheet("font-size:12px; font-weight:bold;")
         all_row.setSpacing(4)
         all_row.addWidget(all_icon)
         all_row.addWidget(all_label)
-        all_row.addWidget(all_currency)
         all_row.addWidget(all_amount)
         all_row.addStretch()
         all_widget = QWidget()
