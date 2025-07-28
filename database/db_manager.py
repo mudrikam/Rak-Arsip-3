@@ -863,3 +863,19 @@ class DatabaseManager(QObject):
                 "note": attendance_row[3]
             }
         return None
+
+    def get_attendance_records_by_username(self, username):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT id FROM teams WHERE username = ?", (username,))
+        team_row = cursor.fetchone()
+        records = []
+        if team_row:
+            team_id = team_row[0]
+            cursor.execute(
+                "SELECT date, check_in, check_out, note, id FROM attendance WHERE team_id = ? ORDER BY id DESC",
+                (team_id,)
+            )
+            records = cursor.fetchall()
+        self.close()
+        return records

@@ -1,9 +1,34 @@
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QTabWidget, QWidget, QTableWidget, QTableWidgetItem, QLabel, QFormLayout, QLineEdit, QPushButton, QMessageBox, QDateEdit, QHBoxLayout, QInputDialog
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QTabWidget, QWidget, QTableWidget, QTableWidgetItem, QLabel, QFormLayout, QLineEdit, QPushButton, QMessageBox, QDateEdit, QHBoxLayout, QInputDialog, QSizePolicy, QHeaderView, QSpinBox, QSpacerItem
 from PySide6.QtCore import Qt, QDate
 from PySide6.QtGui import QColor
 from database.db_manager import DatabaseManager
 from manager.config_manager import ConfigManager
 from pathlib import Path
+from datetime import datetime
+
+def format_date_indonesian(date_str, with_time=False):
+    hari_map = {
+        0: "Senin", 1: "Selasa", 2: "Rabu", 3: "Kamis", 4: "Jumat", 5: "Sabtu", 6: "Minggu"
+    }
+    bulan_map = {
+        1: "Januari", 2: "Februari", 3: "Maret", 4: "April", 5: "Mei", 6: "Juni",
+        7: "Juli", 8: "Agustus", 9: "September", 10: "Oktober", 11: "November", 12: "Desember"
+    }
+    if not date_str:
+        return "-"
+    try:
+        if with_time:
+            dt = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
+        else:
+            dt = datetime.strptime(date_str, "%Y-%m-%d")
+        hari = hari_map[dt.weekday()]
+        bulan = bulan_map[dt.month]
+        if with_time:
+            return f"{hari}, {dt.day} {bulan} {dt.year} {dt.strftime('%H:%M:%S')}"
+        else:
+            return f"{hari}, {dt.day} {bulan} {dt.year}"
+    except Exception:
+        return date_str
 
 class TeamsProfileDialog(QDialog):
     def __init__(self, parent=None):
@@ -15,6 +40,7 @@ class TeamsProfileDialog(QDialog):
         layout.addWidget(self.tab_widget)
         self._init_teams_tab()
         self._init_details_tab()
+        self._init_attendance_tab()
 
     def _init_teams_tab(self):
         tab = QWidget()
@@ -91,6 +117,55 @@ class TeamsProfileDialog(QDialog):
         self._add_mode = False
         self.save_button.setEnabled(False)
 
+    def _init_attendance_tab(self):
+        tab = QWidget()
+        tab_layout = QVBoxLayout(tab)
+        self.attendance_summary = QLabel("")
+        self.attendance_summary.setAlignment(Qt.AlignLeft)
+        tab_layout.addWidget(self.attendance_summary)
+        search_row = QHBoxLayout()
+        self.attendance_search_edit = QLineEdit()
+        self.attendance_search_edit.setPlaceholderText("Search attendance notes...")
+        self.attendance_search_edit.setMinimumHeight(32)
+        self.attendance_search_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        search_row.addWidget(self.attendance_search_edit)
+        tab_layout.addLayout(search_row)
+        self.attendance_table = QTableWidget(tab)
+        self.attendance_table.setColumnCount(5)
+        self.attendance_table.setHorizontalHeaderLabels([
+            "Date", "Check In", "Check Out", "Note", "ID"
+        ])
+        self.attendance_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.attendance_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.attendance_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.attendance_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.attendance_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        self.attendance_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        tab_layout.addWidget(self.attendance_table)
+        pagination_row = QHBoxLayout()
+        self.attendance_prev_btn = QPushButton("Prev")
+        self.attendance_next_btn = QPushButton("Next")
+        self.attendance_page_label = QLabel()
+        self.attendance_page_input = QSpinBox()
+        self.attendance_page_input.setMinimum(1)
+        self.attendance_page_input.setMaximum(1)
+        self.attendance_page_input.setFixedWidth(60)
+        pagination_row.addWidget(self.attendance_prev_btn)
+        pagination_row.addWidget(self.attendance_page_label)
+        pagination_row.addWidget(self.attendance_page_input)
+        pagination_row.addWidget(self.attendance_next_btn)
+        pagination_row.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
+        tab_layout.addLayout(pagination_row)
+        self.tab_widget.addTab(tab, "Attendance Records")
+        self.attendance_search_edit.textChanged.connect(self._attendance_search_changed)
+        self.attendance_prev_btn.clicked.connect(self._attendance_prev_page)
+        self.attendance_next_btn.clicked.connect(self._attendance_next_page)
+        self.attendance_page_input.valueChanged.connect(self._attendance_goto_page)
+        self.attendance_records_all = []
+        self.attendance_records_filtered = []
+        self.attendance_page_size = 20
+        self.attendance_current_page = 1
+
     def _load_teams_data(self):
         basedir = Path(__file__).parent.parent.parent
         db_config_path = basedir / "configs" / "db_config.json"
@@ -146,10 +221,117 @@ class TeamsProfileDialog(QDialog):
                 else:
                     widget.setText(value)
             self.save_button.setEnabled(True)
+            self._load_attendance_records(team["username"], team.get("full_name", ""))
+
+    def _load_attendance_records(self, username, full_name=""):
+        basedir = Path(__file__).parent.parent.parent
+        db_config_path = basedir / "configs" / "db_config.json"
+        config_manager = ConfigManager(str(db_config_path))
+        db_manager = DatabaseManager(config_manager, config_manager)
+        records = db_manager.get_attendance_records_by_username(username)
+        self.attendance_records_all = records
+        self.attendance_current_page = 1
+        self._update_attendance_table(full_name)
+
+    def _attendance_search_changed(self):
+        self.attendance_current_page = 1
+        self._update_attendance_table()
+
+    def _attendance_prev_page(self):
+        if self.attendance_current_page > 1:
+            self.attendance_current_page -= 1
+            self._update_attendance_table()
+
+    def _attendance_next_page(self):
+        total_rows = len(self.attendance_records_filtered)
+        total_pages = max(1, (total_rows + self.attendance_page_size - 1) // self.attendance_page_size)
+        if self.attendance_current_page < total_pages:
+            self.attendance_current_page += 1
+            self._update_attendance_table()
+
+    def _attendance_goto_page(self, value):
+        total_rows = len(self.attendance_records_filtered)
+        total_pages = max(1, (total_rows + self.attendance_page_size - 1) // self.attendance_page_size)
+        if 1 <= value <= total_pages:
+            self.attendance_current_page = value
+            self._update_attendance_table()
+
+    def _update_attendance_table(self, full_name=None):
+        search_text = self.attendance_search_edit.text().strip().lower()
+        if search_text:
+            self.attendance_records_filtered = [
+                r for r in self.attendance_records_all
+                if (
+                    (r[0] and search_text in str(r[0]).lower()) or  # date
+                    (r[1] and search_text in str(r[1]).lower()) or  # check_in
+                    (r[2] and search_text in str(r[2]).lower()) or  # check_out
+                    (r[3] and search_text in str(r[3]).lower()) or  # note
+                    (r[4] and search_text in str(r[4]).lower())     # id
+                )
+            ]
+        else:
+            self.attendance_records_filtered = list(self.attendance_records_all)
+        total_rows = len(self.attendance_records_filtered)
+        total_pages = max(1, (total_rows + self.attendance_page_size - 1) // self.attendance_page_size)
+        self.attendance_page_input.blockSignals(True)
+        self.attendance_page_input.setMaximum(total_pages)
+        self.attendance_page_input.setValue(self.attendance_current_page)
+        self.attendance_page_input.blockSignals(False)
+        self.attendance_page_label.setText(f"Page {self.attendance_current_page} / {total_pages}")
+        start_idx = (self.attendance_current_page - 1) * self.attendance_page_size
+        end_idx = start_idx + self.attendance_page_size
+        page_records = self.attendance_records_filtered[start_idx:end_idx]
+        self.attendance_table.setRowCount(len(page_records))
+        total_days = set()
+        total_records = len(self.attendance_records_filtered)
+        total_seconds = 0
+        last_checkout = "-"
+        for row_idx, record in enumerate(page_records):
+            date, check_in, check_out, note, rec_id = record
+            formatted_date = format_date_indonesian(date)
+            formatted_checkin = format_date_indonesian(check_in, with_time=True) if check_in else ""
+            formatted_checkout = format_date_indonesian(check_out, with_time=True) if check_out else ""
+            item_date = QTableWidgetItem(formatted_date)
+            item_checkin = QTableWidgetItem(formatted_checkin)
+            item_checkout = QTableWidgetItem(formatted_checkout)
+            item_note = QTableWidgetItem(str(note) if note else "")
+            item_id = QTableWidgetItem(str(rec_id))
+            item_date.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            item_checkin.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            item_checkout.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            item_note.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            item_id.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            self.attendance_table.setItem(row_idx, 0, item_date)
+            self.attendance_table.setItem(row_idx, 1, item_checkin)
+            self.attendance_table.setItem(row_idx, 2, item_checkout)
+            self.attendance_table.setItem(row_idx, 3, item_note)
+            self.attendance_table.setItem(row_idx, 4, item_id)
+            if date:
+                total_days.add(date)
+            if check_in and check_out:
+                try:
+                    dt_in = datetime.strptime(check_in, "%Y-%m-%d %H:%M:%S")
+                    dt_out = datetime.strptime(check_out, "%Y-%m-%d %H:%M:%S")
+                    total_seconds += int((dt_out - dt_in).total_seconds())
+                    last_checkout = formatted_checkout
+                except Exception:
+                    pass
+            elif check_out:
+                last_checkout = formatted_checkout
+        total_hours = round(total_seconds / 3600, 2)
+        if full_name is None and self._selected_team_index is not None and 0 <= self._selected_team_index < len(self._teams_data):
+            full_name = self._teams_data[self._selected_team_index].get("full_name", "")
+        summary = (
+            f"Full Name: {full_name or ''}\n"
+            f"Total Days: {len(total_days)}\n"
+            f"Total Records: {total_records}\n"
+            f"Total Work Hours: {total_hours}\n"
+            f"Last Checkout: {last_checkout}"
+        )
+        self.attendance_summary.setText(summary)
 
     def _on_team_row_clicked(self, row, col):
         self._fill_details_form(row)
-        # Stay on Teams tab
 
     def _on_team_row_double_clicked(self, row, col):
         self._fill_details_form(row)
@@ -167,6 +349,12 @@ class TeamsProfileDialog(QDialog):
                 widget.setText("")
         self.save_button.setEnabled(True)
         self.tab_widget.setCurrentIndex(1)
+        self.attendance_table.setRowCount(0)
+        self.attendance_summary.setText("")
+        self.attendance_records_all = []
+        self.attendance_records_filtered = []
+        self.attendance_current_page = 1
+        self._update_attendance_table()
 
     def _save_team_details(self):
         basedir = Path(__file__).parent.parent.parent
@@ -185,6 +373,11 @@ class TeamsProfileDialog(QDialog):
             QMessageBox.warning(self, "Validation Error", "Username and Full Name cannot be empty.")
             return
         if self._add_mode:
+            teams = db_manager.get_all_teams()
+            existing_usernames = {team["username"] for team in teams}
+            if updated_data["username"] in existing_usernames:
+                QMessageBox.warning(self, "Duplicate Username", "Username already exists. Please choose another username.")
+                return
             try:
                 db_manager.add_team(
                     username=updated_data["username"],
@@ -214,6 +407,12 @@ class TeamsProfileDialog(QDialog):
                     widget.setText("")
             self.save_button.setEnabled(False)
             self.tab_widget.setCurrentIndex(0)
+            self.attendance_table.setRowCount(0)
+            self.attendance_summary.setText("")
+            self.attendance_records_all = []
+            self.attendance_records_filtered = []
+            self.attendance_current_page = 1
+            self._update_attendance_table()
             QMessageBox.information(self, "Success", "Team member added successfully.")
         else:
             idx = self._selected_team_index
@@ -250,4 +449,10 @@ class TeamsProfileDialog(QDialog):
             self._load_teams_data()
             self._selected_team_index = None
             self.save_button.setEnabled(False)
+            self.attendance_table.setRowCount(0)
+            self.attendance_summary.setText("")
+            self.attendance_records_all = []
+            self.attendance_records_filtered = []
+            self.attendance_current_page = 1
+            self._update_attendance_table()
             QMessageBox.information(self, "Success", "Team data updated successfully.")
