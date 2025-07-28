@@ -122,9 +122,11 @@ class TeamsProfileDialog(QDialog):
     def _init_attendance_tab(self):
         tab = QWidget()
         tab_layout = QVBoxLayout(tab)
-        self.attendance_summary = QLabel("")
-        self.attendance_summary.setAlignment(Qt.AlignLeft)
-        tab_layout.addWidget(self.attendance_summary)
+        self.attendance_summary_widget = QWidget()
+        self.attendance_summary_layout = QVBoxLayout(self.attendance_summary_widget)
+        self.attendance_summary_layout.setContentsMargins(0, 0, 0, 0)
+        self.attendance_summary_layout.setSpacing(2)
+        tab_layout.addWidget(self.attendance_summary_widget)
         search_row = QHBoxLayout()
         self.attendance_search_edit = QLineEdit()
         self.attendance_search_edit.setPlaceholderText("Search attendance notes...")
@@ -375,14 +377,84 @@ class TeamsProfileDialog(QDialog):
         total_hours = round(total_seconds / 3600, 2)
         if full_name is None and self._selected_team_index is not None and 0 <= self._selected_team_index < len(self._teams_data):
             full_name = self._teams_data[self._selected_team_index].get("full_name", "")
-        summary = (
-            f"Name: {full_name or ''}\n"
-            f"Total Days: {len(total_days)}\n"
-            f"Total Records: {total_records}\n"
-            f"Total Work Hours: {total_hours}\n"
-            f"Last Checkout: {last_checkout}"
-        )
-        self.attendance_summary.setText(summary)
+        # Attendance summary styling (follow earnings style)
+        def format_thousands(val):
+            try:
+                val = float(val)
+                return f"{int(val):,}".replace(",", ".")
+            except Exception:
+                return str(val)
+        while self.attendance_summary_layout.count():
+            item = self.attendance_summary_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+        full_name_label = QLabel(f"Name: {full_name or ''}")
+        full_name_label.setStyleSheet("font-size:12px; font-weight:bold; margin-bottom:2px;")
+        self.attendance_summary_layout.addWidget(full_name_label)
+        days_row = QHBoxLayout()
+        days_icon = QLabel()
+        days_icon.setPixmap(qta.icon("fa6s.calendar-days", color="#1976d2").pixmap(16, 16))
+        days_label = QLabel("Total Days:")
+        days_label.setStyleSheet("color:#1976d2; font-size:12px; font-weight:bold;")
+        days_count = QLabel(str(len(total_days)))
+        days_count.setStyleSheet("font-size:12px; font-weight:bold;")
+        days_row.setSpacing(4)
+        days_row.addWidget(days_icon)
+        days_row.addWidget(days_label)
+        days_row.addWidget(days_count)
+        days_row.addStretch()
+        days_widget = QWidget()
+        days_widget.setLayout(days_row)
+        self.attendance_summary_layout.addWidget(days_widget)
+        records_row = QHBoxLayout()
+        records_icon = QLabel()
+        records_icon.setPixmap(qta.icon("fa6s.clipboard-list", color="#009688").pixmap(16, 16))
+        records_label = QLabel("Total Records:")
+        records_label.setStyleSheet("color:#009688; font-size:12px; font-weight:bold;")
+        records_count = QLabel(str(total_records))
+        records_count.setStyleSheet("font-size:12px; font-weight:bold;")
+        records_row.setSpacing(4)
+        records_row.addWidget(records_icon)
+        records_row.addWidget(records_label)
+        records_row.addWidget(records_count)
+        records_row.addStretch()
+        records_widget = QWidget()
+        records_widget.setLayout(records_row)
+        self.attendance_summary_layout.addWidget(records_widget)
+        hours_row = QHBoxLayout()
+        hours_icon = QLabel()
+        hours_icon.setPixmap(qta.icon("fa6s.clock", color="#ffb300").pixmap(16, 16))
+        hours_label = QLabel("Total Work Hours:")
+        hours_label.setStyleSheet("color:#ffb300; font-size:12px; font-weight:bold;")
+        hours_count = QLabel(str(total_hours))
+        hours_count.setStyleSheet("font-size:12px; font-weight:bold;")
+        hours_row.setSpacing(4)
+        hours_row.addWidget(hours_icon)
+        hours_row.addWidget(hours_label)
+        hours_row.addWidget(hours_count)
+        hours_row.addStretch()
+        hours_widget = QWidget()
+        hours_widget.setLayout(hours_row)
+        self.attendance_summary_layout.addWidget(hours_widget)
+        last_row = QHBoxLayout()
+        last_icon = QLabel()
+        last_icon.setPixmap(qta.icon("fa6s.arrow-right-to-city", color="#666").pixmap(16, 16))
+        last_label = QLabel("Last Checkout:")
+        last_label.setStyleSheet("color:#666; font-size:12px; font-weight:bold;")
+        last_checkout_label = QLabel(str(last_checkout))
+        last_checkout_label.setStyleSheet("font-size:12px; font-weight:bold;")
+        last_row.setSpacing(4)
+        last_row.addWidget(last_icon)
+        last_row.addWidget(last_label)
+        last_row.addWidget(last_checkout_label)
+        last_row.addStretch()
+        last_widget = QWidget()
+        last_widget.setLayout(last_row)
+        self.attendance_summary_layout.addWidget(last_widget)
+        filtered_label = QLabel(f"Filtered Attendance Records: {len(self.attendance_records_filtered)}")
+        filtered_label.setStyleSheet("color:#666; font-size:11px; margin-top:2px;")
+        self.attendance_summary_layout.addWidget(filtered_label)
 
     def _load_earnings_records(self, username):
         basedir = Path(__file__).parent.parent.parent
@@ -612,13 +684,22 @@ class TeamsProfileDialog(QDialog):
         self.save_button.setEnabled(True)
         self.tab_widget.setCurrentIndex(1)
         self.attendance_table.setRowCount(0)
-        self.attendance_summary.setText("")
+        # Attendance summary widget clear
+        while self.attendance_summary_layout.count():
+            item = self.attendance_summary_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
         self.attendance_records_all = []
         self.attendance_records_filtered = []
         self.attendance_current_page = 1
         self._update_attendance_table()
         self.earnings_table.setRowCount(0)
-        self.earnings_summary.setText("")
+        while self.earnings_summary_layout.count():
+            item = self.earnings_summary_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
         self.earnings_records_all = []
         self.earnings_records_filtered = []
         self.earnings_current_page = 1
