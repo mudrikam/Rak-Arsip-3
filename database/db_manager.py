@@ -437,59 +437,73 @@ class DatabaseManager(QObject):
                     if headers is None:
                         headers = row
                         continue
+                    cursor = conn.cursor()
+                    # categories
                     if current_table == "categories" and len(row) >= 2:
                         try:
-                            cursor = conn.cursor()
-                            cursor.execute("SELECT id FROM categories WHERE name = ?", (row[1],))
-                            exists = cursor.fetchone()
-                            if not exists:
-                                cursor.execute("INSERT INTO categories (name) VALUES (?)", (row[1],))
+                            cursor.execute("REPLACE INTO categories (id, name) VALUES (?, ?)", (row[0], row[1]))
                         except Exception as e:
                             print(f"Error importing category: {e}")
+                    # subcategories
                     elif current_table == "subcategories" and len(row) >= 3:
                         try:
-                            cat_id = None
-                            try:
-                                cat_id = int(row[1])
-                            except:
-                                cat_id = None
-                            if cat_id and row[2]:
-                                cursor = conn.cursor()
-                                cursor.execute("SELECT id FROM subcategories WHERE category_id = ? AND name = ?", (cat_id, row[2]))
-                                exists = cursor.fetchone()
-                                if not exists:
-                                    cursor.execute("INSERT INTO subcategories (category_id, name) VALUES (?, ?)", (cat_id, row[2]))
+                            cursor.execute("REPLACE INTO subcategories (id, category_id, name) VALUES (?, ?, ?)", (row[0], row[1], row[2]))
                         except Exception as e:
                             print(f"Error importing subcategory: {e}")
-                    elif current_table == "templates" and len(row) >= 3:
+                    # statuses
+                    elif current_table == "statuses" and len(row) >= 4:
                         try:
-                            cursor = conn.cursor()
-                            cursor.execute("SELECT id FROM templates WHERE name = ?", (row[1],))
-                            exists = cursor.fetchone()
-                            if not exists:
-                                cursor.execute("INSERT INTO templates (name, content) VALUES (?, ?)", (row[1], row[2]))
+                            cursor.execute("REPLACE INTO statuses (id, name, color, font_weight) VALUES (?, ?, ?, ?)", (row[0], row[1], row[2], row[3]))
+                        except Exception as e:
+                            print(f"Error importing status: {e}")
+                    # templates
+                    elif current_table == "templates" and len(row) >= 5:
+                        try:
+                            cursor.execute("REPLACE INTO templates (id, name, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)", (row[0], row[1], row[2], row[3], row[4]))
                         except Exception as e:
                             print(f"Error importing template: {e}")
-                    elif current_table == "files" and len(row) >= 9:
+                    # files
+                    elif current_table == "files" and len(row) >= 11:
                         try:
-                            cursor = conn.cursor()
-                            cursor.execute("SELECT id FROM files WHERE name = ? AND path = ?", (row[2], row[4]))
-                            exists = cursor.fetchone()
-                            if not exists:
-                                date_val = row[1]
-                                name_val = row[2]
-                                root_val = row[3]
-                                path_val = row[4]
-                                status_id_val = int(row[5]) if row[5] else None
-                                category_id_val = int(row[6]) if row[6] else None
-                                subcategory_id_val = int(row[7]) if row[7] else None
-                                template_id_val = int(row[8]) if row[8] else None
-                                cursor.execute(
-                                    "INSERT INTO files (date, name, root, path, status_id, category_id, subcategory_id, template_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                                    (date_val, name_val, root_val, path_val, status_id_val, category_id_val, subcategory_id_val, template_id_val)
-                                )
+                            cursor.execute("REPLACE INTO files (id, date, name, root, path, status_id, category_id, subcategory_id, template_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10]))
                         except Exception as e:
                             print(f"Error importing file: {e}")
+                    # teams
+                    elif current_table == "teams" and len(row) >= 15:
+                        try:
+                            cursor.execute("REPLACE INTO teams (id, username, full_name, contact, address, email, phone, attendance_pin, profile_image, bank, account_number, account_holder, started_at, added_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11], row[12], row[13], row[14]))
+                        except Exception as e:
+                            print(f"Error importing team: {e}")
+                    # attendance
+                    elif current_table == "attendance" and len(row) >= 6:
+                        try:
+                            cursor.execute("REPLACE INTO attendance (id, team_id, date, check_in, check_out, note) VALUES (?, ?, ?, ?, ?, ?)", (row[0], row[1], row[2], row[3], row[4], row[5]))
+                        except Exception as e:
+                            print(f"Error importing attendance: {e}")
+                    # item_price
+                    elif current_table == "item_price" and len(row) >= 7:
+                        try:
+                            cursor.execute("REPLACE INTO item_price (id, file_id, price, currency, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)", (row[0], row[1], row[2], row[3], row[4], row[5], row[6]))
+                        except Exception as e:
+                            print(f"Error importing item_price: {e}")
+                    # earnings
+                    elif current_table == "earnings" and len(row) >= 7:
+                        try:
+                            cursor.execute("REPLACE INTO earnings (id, team_id, item_price_id, amount, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)", (row[0], row[1], row[2], row[3], row[4], row[5], row[6]))
+                        except Exception as e:
+                            print(f"Error importing earnings: {e}")
+                    # client
+                    elif current_table == "client" and len(row) >= 8:
+                        try:
+                            cursor.execute("REPLACE INTO client (id, client_name, contact, links, status, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7]))
+                        except Exception as e:
+                            print(f"Error importing client: {e}")
+                    # file_client_price
+                    elif current_table == "file_client_price" and len(row) >= 6:
+                        try:
+                            cursor.execute("REPLACE INTO file_client_price (id, file_id, item_price_id, client_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)", (row[0], row[1], row[2], row[3], row[4], row[5]))
+                        except Exception as e:
+                            print(f"Error importing file_client_price: {e}")
                     processed += 1
                     if progress_callback and (processed % 10 == 0 or processed == total_rows):
                         progress_callback(processed, total_rows)
@@ -500,36 +514,44 @@ class DatabaseManager(QObject):
         finally:
             conn.close()
 
-    def export_to_csv(self, csv_path):
+    def export_to_csv(self, csv_path, progress_callback=None):
         import csv
         self.connect()
         try:
             with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
                 writer = csv.writer(csvfile)
-                writer.writerow(["TABLE", "categories"])
-                writer.writerow(["id", "name"])
                 cursor = self.connection.cursor()
-                cursor.execute("SELECT id, name FROM categories")
-                for row in cursor.fetchall():
-                    writer.writerow([row[0], row[1]])
-                writer.writerow([])
-                writer.writerow(["TABLE", "subcategories"])
-                writer.writerow(["id", "category_id", "name"])
-                cursor.execute("SELECT id, category_id, name FROM subcategories")
-                for row in cursor.fetchall():
-                    writer.writerow([row[0], row[1], row[2]])
-                writer.writerow([])
-                writer.writerow(["TABLE", "templates"])
-                writer.writerow(["id", "name", "content"])
-                cursor.execute("SELECT id, name, content FROM templates")
-                for row in cursor.fetchall():
-                    writer.writerow([row[0], row[1], row[2]])
-                writer.writerow([])
-                writer.writerow(["TABLE", "files"])
-                writer.writerow(["id", "date", "name", "root", "path", "status_id", "category_id", "subcategory_id", "template_id"])
-                cursor.execute("SELECT id, date, name, root, path, status_id, category_id, subcategory_id, template_id FROM files")
-                for row in cursor.fetchall():
-                    writer.writerow([row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8]])
+                tables = [
+                    ("categories", "SELECT id, name FROM categories"),
+                    ("subcategories", "SELECT id, category_id, name FROM subcategories"),
+                    ("statuses", "SELECT id, name, color, font_weight FROM statuses"),
+                    ("templates", "SELECT id, name, content, created_at, updated_at FROM templates"),
+                    ("files", "SELECT id, date, name, root, path, status_id, category_id, subcategory_id, template_id, created_at, updated_at FROM files"),
+                    ("teams", "SELECT id, username, full_name, contact, address, email, phone, attendance_pin, profile_image, bank, account_number, account_holder, started_at, added_at, updated_at FROM teams"),
+                    ("attendance", "SELECT id, team_id, date, check_in, check_out, note FROM attendance"),
+                    ("item_price", "SELECT id, file_id, price, currency, note, created_at, updated_at FROM item_price"),
+                    ("earnings", "SELECT id, team_id, item_price_id, amount, note, created_at, updated_at FROM earnings"),
+                    ("client", "SELECT id, client_name, contact, links, status, note, created_at, updated_at FROM client"),
+                    ("file_client_price", "SELECT id, file_id, item_price_id, client_id, created_at, updated_at FROM file_client_price")
+                ]
+                processed = 0
+                total_rows = 0
+                for table_name, query in tables:
+                    cursor.execute(query)
+                    total_rows += len(cursor.fetchall())
+                cursor = self.connection.cursor()
+                for table_name, query in tables:
+                    writer.writerow(["TABLE", table_name])
+                    cursor.execute(query)
+                    columns = [desc[0] for desc in cursor.description]
+                    writer.writerow(columns)
+                    rows = cursor.fetchall()
+                    for row in rows:
+                        writer.writerow([row[col] for col in columns])
+                        processed += 1
+                        if progress_callback and (processed % 10 == 0 or processed == total_rows):
+                            progress_callback(processed, total_rows)
+                    writer.writerow([])
         finally:
             self.close()
 
