@@ -41,6 +41,7 @@ class TeamsProfileDialog(QDialog):
         self._init_teams_tab()
         self._init_details_tab()
         self._init_attendance_tab()
+        self._init_earnings_tab()
 
     def _init_teams_tab(self):
         tab = QWidget()
@@ -165,6 +166,13 @@ class TeamsProfileDialog(QDialog):
         self.attendance_records_filtered = []
         self.attendance_page_size = 20
         self.attendance_current_page = 1
+
+    def _init_earnings_tab(self):
+        tab = QWidget()
+        tab_layout = QVBoxLayout(tab)
+        label = QLabel("Earnings tab content will be added here.")
+        tab_layout.addWidget(label)
+        self.tab_widget.addTab(tab, "Earnings")
 
     def _load_teams_data(self):
         basedir = Path(__file__).parent.parent.parent
