@@ -56,7 +56,7 @@ class AssignPriceDialog(QDialog):
         self.db_manager = db_manager
         self._parent = parent
 
-        earnings_label = QLabel("Earnings (username, share):")
+        earnings_label = QLabel("Earnings Share:")
         main_layout.addWidget(earnings_label)
         self.earnings_table = QTableWidget()
         self.earnings_table.setColumnCount(3)
