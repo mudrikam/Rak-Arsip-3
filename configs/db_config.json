@@ -44,6 +44,53 @@
             "FOREIGN KEY (category_id)": "REFERENCES categories(id)",
             "FOREIGN KEY (subcategory_id)": "REFERENCES subcategories(id)",
             "FOREIGN KEY (template_id)": "REFERENCES templates(id)"
+        },
+        "teams": {
+            "id": "INTEGER PRIMARY KEY AUTOINCREMENT",
+            "username": "TEXT NOT NULL UNIQUE",
+            "full_name": "TEXT NOT NULL",
+            "contact": "TEXT",
+            "address": "TEXT",
+            "email": "TEXT",
+            "phone": "TEXT",
+            "attendance_pin": "TEXT",
+            "profile_image": "TEXT",
+            "bank": "TEXT",
+            "account_number": "TEXT",
+            "account_holder": "TEXT",
+            "started_at": "DATETIME",
+            "added_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+            "updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP"
+        },
+        "attendance": {
+            "id": "INTEGER PRIMARY KEY AUTOINCREMENT",
+            "team_id": "INTEGER NOT NULL",
+            "date": "DATE NOT NULL",
+            "check_in": "DATETIME",
+            "check_out": "DATETIME",
+            "note": "TEXT",
+            "FOREIGN KEY (team_id)": "REFERENCES teams(id)"
+        },
+        "item_price": {
+            "id": "INTEGER PRIMARY KEY AUTOINCREMENT",
+            "file_id": "INTEGER NOT NULL UNIQUE",
+            "price": "REAL NOT NULL",
+            "currency": "TEXT NOT NULL",
+            "note": "TEXT",
+            "created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+            "updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+            "FOREIGN KEY (file_id)": "REFERENCES files(id)"
+        },
+        "earnings": {
+            "id": "INTEGER PRIMARY KEY AUTOINCREMENT",
+            "team_id": "INTEGER NOT NULL",
+            "item_price_id": "INTEGER NOT NULL",
+            "amount": "REAL NOT NULL",
+            "note": "TEXT",
+            "created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+            "updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+            "FOREIGN KEY (team_id)": "REFERENCES teams(id)",
+            "FOREIGN KEY (item_price_id)": "REFERENCES item_price(id)"
         }
     }
 }

@@ -9,6 +9,7 @@ from pathlib import Path
 import textwrap
 import subprocess
 from helpers.show_statusbar_helper import show_statusbar_message
+from database.db_manager import DatabaseManager
 
 class PropertiesWidget(QDockWidget):
     def __init__(self, parent=None):
@@ -123,6 +124,27 @@ class PropertiesWidget(QDockWidget):
         status_row.addWidget(self.status_label)
         status_row.addStretch()
         layout.addLayout(status_row)
+
+        # Price and Note row
+        price_row = QHBoxLayout()
+        self.price_icon = QLabel()
+        self.price_icon.setPixmap(qta.icon("fa6s.money-bill-wave", color="#666").pixmap(16, 16))
+        self.price_label = QLabel("-", self.scroll_content)
+        self.price_label.setWordWrap(True)
+        price_row.addWidget(self.price_icon)
+        price_row.addWidget(self.price_label)
+        price_row.addStretch()
+        layout.addLayout(price_row)
+
+        note_row = QHBoxLayout()
+        self.note_icon = QLabel()
+        self.note_icon.setPixmap(qta.icon("fa6s.note-sticky", color="#666").pixmap(16, 16))
+        self.note_label = QLabel("-", self.scroll_content)
+        self.note_label.setWordWrap(True)
+        note_row.addWidget(self.note_icon)
+        note_row.addWidget(self.note_label)
+        note_row.addStretch()
+        layout.addLayout(note_row)
 
         layout.addStretch()
         container.setLayout(main_layout)
@@ -305,6 +327,30 @@ class PropertiesWidget(QDockWidget):
         status = row_data.get('status', '-')
         self.status_label.setText(f"{status}")
         self._apply_status_color(status)
+        # Price and Note
+        price_str = "-"
+        note_str = "-"
+        db_manager = None
+        if hasattr(self.parent_window, "db_manager"):
+            db_manager = self.parent_window.db_manager
+        elif hasattr(self.parent_window, "main_action_dock") and hasattr(self.parent_window.main_action_dock, "db_manager"):
+            db_manager = self.parent_window.main_action_dock.db_manager
+        if db_manager and row_data.get("id"):
+            price, currency, note = db_manager.get_item_price_detail(row_data["id"])
+            try:
+                price_float = float(price)
+                if price_float.is_integer():
+                    price_str = f"{int(price_float):,}".replace(",", ".")
+                else:
+                    price_str = f"{price_float:,.2f}".replace(",", ".")
+                price_str = f"{price_str} {currency}"
+            except Exception:
+                price_str = f"{price} {currency}"
+            self.price_label.setText(price_str)
+            self.note_label.setText(note if note else "-")
+        else:
+            self.price_label.setText("-")
+            self.note_label.setText("-")
         self.load_preview_image(row_data.get('path', ''), row_data.get('name', ''))
 
     def _show_statusbar_message(self, message):
