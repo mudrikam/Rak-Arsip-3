@@ -1,7 +1,413 @@
-from PySide6.QtWidgets import QDialog, QVBoxLayout
+from PySide6.QtWidgets import (
+    QDialog, QVBoxLayout, QTabWidget, QWidget, QTableWidget, QTableWidgetItem, QLabel,
+    QFormLayout, QLineEdit, QPushButton, QMessageBox, QHBoxLayout, QSizePolicy, QHeaderView, QComboBox, QTextEdit, QSpinBox, QSpacerItem
+)
+from PySide6.QtCore import Qt
+from database.db_manager import DatabaseManager
+from manager.config_manager import ConfigManager
+from pathlib import Path
 
 class ClientDataDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Client Data")
+        self.setMinimumSize(800, 500)
         layout = QVBoxLayout(self)
+        self.tab_widget = QTabWidget(self)
+        layout.addWidget(self.tab_widget)
+        self._init_clients_tab()
+        self._init_details_tab()
+        self._init_files_tab()
+
+    def _init_clients_tab(self):
+        tab = QWidget()
+        tab_layout = QVBoxLayout(tab)
+        self.clients_table = QTableWidget(tab)
+        self.clients_table.setColumnCount(6)
+        self.clients_table.setHorizontalHeaderLabels([
+            "Name", "Contact", "Links", "Status", "Note", "ID"
+        ])
+        self.clients_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.clients_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.clients_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.clients_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.clients_table.cellClicked.connect(self._on_client_row_clicked)
+        self.clients_table.cellDoubleClicked.connect(self._on_client_row_double_clicked)
+        tab_layout.addWidget(self.clients_table)
+        self.tab_widget.addTab(tab, "Clients")
+        self._load_clients_data()
+
+    def _init_details_tab(self):
+        tab = QWidget()
+        tab_layout = QVBoxLayout(tab)
+        self.details_layout = QFormLayout()
+        tab_layout.addLayout(self.details_layout)
+        self.details_widgets = {}
+        self.details_editable = {}
+        fields = [
+            ("Name", "client_name", True),
+            ("Contact", "contact", True),
+            ("Links", "links", True),
+            ("Status", "status", True),
+            ("Note", "note", True)
+        ]
+        for label, key, editable in fields:
+            if key == "note":
+                w = QTextEdit("")
+                self.details_layout.addRow(label, w)
+                self.details_widgets[key] = w
+                self.details_editable[key] = True
+            else:
+                w = QLineEdit("")
+                self.details_layout.addRow(label, w)
+                self.details_widgets[key] = w
+                self.details_editable[key] = True
+        button_layout = QHBoxLayout()
+        self.save_button = QPushButton("Save")
+        self.save_button.clicked.connect(self._save_client_details)
+        self.add_button = QPushButton("Add Client")
+        self.add_button.clicked.connect(self._add_client_mode)
+        button_layout.addWidget(self.save_button)
+        button_layout.addWidget(self.add_button)
+        tab_layout.addLayout(button_layout)
+        self.tab_widget.addTab(tab, "Details")
+        self._selected_client_index = None
+        self._add_mode = False
+        self.save_button.setEnabled(False)
+
+    def _init_files_tab(self):
+        tab = QWidget()
+        tab_layout = QVBoxLayout(tab)
+        self.files_summary_widget = QWidget()
+        self.files_summary_layout = QVBoxLayout(self.files_summary_widget)
+        self.files_summary_layout.setContentsMargins(0, 0, 0, 0)
+        self.files_summary_layout.setSpacing(2)
+        tab_layout.addWidget(self.files_summary_widget)
+        self.files_search_row = QHBoxLayout()
+        self.files_search_edit = QLineEdit()
+        self.files_search_edit.setPlaceholderText("Search by status, name, date, price, note...")
+        self.files_search_edit.setMinimumHeight(32)
+        self.files_search_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.files_search_row.addWidget(self.files_search_edit)
+        self.files_sort_combo = QComboBox()
+        self.files_sort_combo.addItems(["File Name", "Date", "Price", "Status", "Note"])
+        self.files_sort_order_combo = QComboBox()
+        self.files_sort_order_combo.addItems(["Ascending", "Descending"])
+        self.files_search_row.addWidget(QLabel("Sort by:"))
+        self.files_search_row.addWidget(self.files_sort_combo)
+        self.files_search_row.addWidget(self.files_sort_order_combo)
+        tab_layout.addLayout(self.files_search_row)
+        self.files_table = QTableWidget(tab)
+        self.files_table.setColumnCount(5)
+        self.files_table.setHorizontalHeaderLabels([
+            "File Name", "Date", "Price", "Status", "Note"
+        ])
+        self.files_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.files_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.files_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.files_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        tab_layout.addWidget(self.files_table)
+        pagination_row = QHBoxLayout()
+        self.files_prev_btn = QPushButton("Prev")
+        self.files_next_btn = QPushButton("Next")
+        self.files_page_label = QLabel()
+        self.files_page_input = QSpinBox()
+        self.files_page_input.setMinimum(1)
+        self.files_page_input.setMaximum(1)
+        self.files_page_input.setFixedWidth(60)
+        pagination_row.addWidget(self.files_prev_btn)
+        pagination_row.addWidget(self.files_page_label)
+        pagination_row.addWidget(self.files_page_input)
+        pagination_row.addWidget(self.files_next_btn)
+        pagination_row.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
+        tab_layout.addLayout(pagination_row)
+        self.tab_widget.addTab(tab, "Files")
+        self.files_prev_btn.clicked.connect(self._files_prev_page)
+        self.files_next_btn.clicked.connect(self._files_next_page)
+        self.files_page_input.valueChanged.connect(self._files_goto_page)
+        self.files_search_edit.textChanged.connect(self._on_files_search_changed)
+        self.files_sort_combo.currentIndexChanged.connect(self._on_files_sort_changed)
+        self.files_sort_order_combo.currentIndexChanged.connect(self._on_files_sort_changed)
+        self.files_records_all = []
+        self.files_records_filtered = []
+        self.files_page_size = 20
+        self.files_current_page = 1
+        self.files_sort_field = "File Name"
+        self.files_sort_order = "Descending"
+
+    def _load_clients_data(self):
+        basedir = Path(__file__).parent.parent.parent
+        db_config_path = basedir / "configs" / "db_config.json"
+        config_manager = ConfigManager(str(db_config_path))
+        db_manager = DatabaseManager(config_manager, config_manager)
+        clients = db_manager.get_all_clients()
+        self.clients_table.setRowCount(len(clients))
+        self._clients_data = []
+        for row_idx, client in enumerate(clients):
+            self._clients_data.append(client)
+            for col_idx, key in enumerate(["client_name", "contact", "links", "status", "note", "id"]):
+                value = client.get(key, "")
+                item = QTableWidgetItem(str(value) if value is not None else "")
+                item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+                self.clients_table.setItem(row_idx, col_idx, item)
+
+    def _fill_details_form(self, row):
+        if 0 <= row < len(self._clients_data):
+            client = self._clients_data[row]
+            self._selected_client_index = row
+            self._add_mode = False
+            for key, widget in self.details_widgets.items():
+                value = str(client.get(key, ""))
+                if key == "note":
+                    widget.setPlainText(value)
+                else:
+                    widget.setText(value)
+            self.save_button.setEnabled(True)
+            self._load_files_for_client(client["id"])
+
+    def _load_files_for_client(self, client_id):
+        basedir = Path(__file__).parent.parent.parent
+        db_config_path = basedir / "configs" / "db_config.json"
+        config_manager = ConfigManager(str(db_config_path))
+        db_manager = DatabaseManager(config_manager, config_manager)
+        files = db_manager.get_files_by_client_id(client_id)
+        self.files_records_all = files
+        self.files_current_page = 1
+        self._update_files_table()
+
+    def _on_files_search_changed(self):
+        self.files_current_page = 1
+        self._update_files_table()
+
+    def _on_files_sort_changed(self):
+        self.files_current_page = 1
+        self.files_sort_field = self.files_sort_combo.currentText()
+        self.files_sort_order = self.files_sort_order_combo.currentText()
+        self._update_files_table()
+
+    def _files_prev_page(self):
+        if self.files_current_page > 1:
+            self.files_current_page -= 1
+            self._update_files_table()
+
+    def _files_next_page(self):
+        total_rows = len(self.files_records_filtered)
+        total_pages = max(1, (total_rows + self.files_page_size - 1) // self.files_page_size)
+        if self.files_current_page < total_pages:
+            self.files_current_page += 1
+            self._update_files_table()
+
+    def _files_goto_page(self, value):
+        total_rows = len(self.files_records_filtered)
+        total_pages = max(1, (total_rows + self.files_page_size - 1) // self.files_page_size)
+        if 1 <= value <= total_pages:
+            self.files_current_page = value
+            self._update_files_table()
+
+    def _update_files_table(self):
+        search_text = self.files_search_edit.text().strip().lower()
+        # Filter
+        if search_text:
+            self.files_records_filtered = [
+                f for f in self.files_records_all
+                if (
+                    search_text in str(f.get("name", "")).lower() or
+                    search_text in str(f.get("date", "")).lower() or
+                    search_text in str(f.get("price", "")).lower() or
+                    search_text in str(f.get("status", "")).lower() or
+                    search_text in str(f.get("note", "")).lower()
+                )
+            ]
+        else:
+            self.files_records_filtered = list(self.files_records_all)
+        # Sort
+        sort_field = self.files_sort_field
+        sort_order = self.files_sort_order
+        sort_map = {
+            "File Name": "name",
+            "Date": "date",
+            "Price": "price",
+            "Status": "status",
+            "Note": "note"
+        }
+        key = sort_map.get(sort_field, "name")
+        reverse = sort_order == "Descending"
+        try:
+            self.files_records_filtered.sort(key=lambda x: (float(x[key]) if key == "price" and x[key] not in ["", None] else str(x[key]).lower()), reverse=reverse)
+        except Exception:
+            self.files_records_filtered.sort(key=lambda x: str(x[key]).lower(), reverse=reverse)
+        total_rows = len(self.files_records_filtered)
+        total_pages = max(1, (total_rows + self.files_page_size - 1) // self.files_page_size)
+        self.files_page_input.blockSignals(True)
+        self.files_page_input.setMaximum(total_pages)
+        self.files_page_input.setValue(self.files_current_page)
+        self.files_page_input.blockSignals(False)
+        self.files_page_label.setText(f"Page {self.files_current_page} / {total_pages}")
+        start_idx = (self.files_current_page - 1) * self.files_page_size
+        end_idx = start_idx + self.files_page_size
+        page_records = self.files_records_filtered[start_idx:end_idx]
+        self.files_table.setRowCount(len(page_records))
+        total_price = 0
+        status_counts = {}
+        currency = ""
+        for row_idx, file in enumerate(page_records):
+            file_name = file.get("name", "")
+            file_date = file.get("date", "")
+            price = file.get("price", "")
+            currency = file.get("currency", "") if not currency else currency
+            note = file.get("note", "")
+            status = file.get("status", "")
+            try:
+                price_float = float(price)
+                if price_float.is_integer():
+                    price_str = f"{int(price_float):,}".replace(",", ".")
+                else:
+                    price_str = f"{price_float:,.2f}".replace(",", ".")
+            except Exception:
+                price_str = str(price)
+            price_display = f"{currency} {price_str}" if currency else price_str
+            self.files_table.setItem(row_idx, 0, QTableWidgetItem(str(file_name)))
+            self.files_table.setItem(row_idx, 1, QTableWidgetItem(str(file_date)))
+            self.files_table.setItem(row_idx, 2, QTableWidgetItem(price_display))
+            self.files_table.setItem(row_idx, 3, QTableWidgetItem(str(status)))
+            self.files_table.setItem(row_idx, 4, QTableWidgetItem(str(note)))
+            try:
+                total_price += float(price)
+            except Exception:
+                pass
+            if status:
+                status_counts[status] = status_counts.get(status, 0) + 1
+        while self.files_summary_layout.count():
+            item = self.files_summary_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+        summary_label = QLabel(f"Total Files: {total_rows}")
+        summary_label.setStyleSheet("font-size:12px; font-weight:bold; margin-bottom:2px;")
+        self.files_summary_layout.addWidget(summary_label)
+        try:
+            total_price_str = f"{int(total_price):,}".replace(",", ".") if float(total_price).is_integer() else f"{total_price:,.2f}".replace(",", ".")
+        except Exception:
+            total_price_str = str(total_price)
+        total_price_display = f"{currency} {total_price_str}" if currency else total_price_str
+        price_label = QLabel(f"Total Price: {total_price_display}")
+        price_label.setStyleSheet("font-size:12px; font-weight:bold; margin-bottom:2px;")
+        self.files_summary_layout.addWidget(price_label)
+        for status, count in status_counts.items():
+            status_label = QLabel(f"{status}: {count}")
+            status_label.setStyleSheet("font-size:12px; margin-bottom:2px;")
+            self.files_summary_layout.addWidget(status_label)
+
+    def _on_client_row_clicked(self, row, col):
+        self._fill_details_form(row)
+
+    def _on_client_row_double_clicked(self, row, col):
+        self._fill_details_form(row)
+        self.tab_widget.setCurrentIndex(1)
+        client = self._clients_data[row]
+        self._load_files_for_client(client["id"])
+        self.tab_widget.setCurrentIndex(2)
+
+    def _add_client_mode(self):
+        self._selected_client_index = None
+        self._add_mode = True
+        for key, widget in self.details_widgets.items():
+            if key == "note":
+                widget.setPlainText("")
+            else:
+                widget.setText("")
+        self.save_button.setEnabled(True)
+        self.tab_widget.setCurrentIndex(1)
+        self.files_table.setRowCount(0)
+        while self.files_summary_layout.count():
+            item = self.files_summary_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+        self.files_records_all = []
+        self.files_current_page = 1
+        self._update_files_table()
+
+    def _save_client_details(self):
+        basedir = Path(__file__).parent.parent.parent
+        db_config_path = basedir / "configs" / "db_config.json"
+        config_manager = ConfigManager(str(db_config_path))
+        db_manager = DatabaseManager(config_manager, config_manager)
+        updated_data = {}
+        for key, widget in self.details_widgets.items():
+            if key == "note":
+                updated_data[key] = widget.toPlainText()
+            else:
+                updated_data[key] = widget.text()
+        if not updated_data["client_name"].strip():
+            QMessageBox.warning(self, "Validation Error", "Client Name cannot be empty.")
+            return
+        if self._add_mode:
+            clients = db_manager.get_all_clients()
+            existing_names = {client["client_name"] for client in clients}
+            if updated_data["client_name"] in existing_names:
+                QMessageBox.warning(self, "Duplicate Client Name", "Client name already exists. Please choose another name.")
+                return
+            try:
+                db_manager.add_client(
+                    client_name=updated_data["client_name"],
+                    contact=updated_data["contact"],
+                    links=updated_data["links"],
+                    status=updated_data["status"],
+                    note=updated_data["note"]
+                )
+            except Exception as e:
+                QMessageBox.warning(self, "Error", str(e))
+                return
+            self._load_clients_data()
+            self._selected_client_index = None
+            self._add_mode = False
+            for key, widget in self.details_widgets.items():
+                if key == "note":
+                    widget.setPlainText("")
+                else:
+                    widget.setText("")
+            self.save_button.setEnabled(False)
+            self.tab_widget.setCurrentIndex(0)
+            self.files_table.setRowCount(0)
+            while self.files_summary_layout.count():
+                item = self.files_summary_layout.takeAt(0)
+                widget = item.widget()
+                if widget:
+                    widget.deleteLater()
+            self.files_records_all = []
+            self.files_current_page = 1
+            self._update_files_table()
+            QMessageBox.information(self, "Success", "Client added successfully.")
+        else:
+            idx = self._selected_client_index
+            if idx is None or idx >= len(self._clients_data):
+                QMessageBox.warning(self, "No Client Selected", "Please select a client to update.")
+                return
+            client = self._clients_data[idx]
+            old_id = client["id"]
+            try:
+                db_manager.update_client(
+                    client_id=old_id,
+                    client_name=updated_data["client_name"],
+                    contact=updated_data["contact"],
+                    links=updated_data["links"],
+                    status=updated_data["status"],
+                    note=updated_data["note"]
+                )
+            except Exception as e:
+                QMessageBox.warning(self, "Error", str(e))
+                return
+            self._load_clients_data()
+            self._selected_client_index = None
+            self.save_button.setEnabled(False)
+            self.files_table.setRowCount(0)
+            while self.files_summary_layout.count():
+                item = self.files_summary_layout.takeAt(0)
+                widget = item.widget()
+                if widget:
+                    widget.deleteLater()
+            self.files_records_all = []
+            self.files_current_page = 1
+            self._update_files_table()
+            QMessageBox.information(self, "Success", "Client data updated successfully.")

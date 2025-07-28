@@ -700,11 +700,112 @@ class DatabaseManager(QObject):
             return str(row["price"]) if row["price"] is not None else "", row["currency"] or "IDR", row["note"] or ""
         return "", "IDR", ""
 
+    def get_all_clients(self):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "SELECT id, client_name, contact, links, status, note, created_at, updated_at FROM client ORDER BY client_name ASC"
+        )
+        clients = []
+        for row in cursor.fetchall():
+            clients.append({
+                "id": row["id"],
+                "client_name": row["client_name"],
+                "contact": row["contact"],
+                "links": row["links"],
+                "status": row["status"],
+                "note": row["note"],
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"]
+            })
+        self.close()
+        return clients
+
+    def add_client(self, client_name, contact, links, status, note):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "INSERT INTO client (client_name, contact, links, status, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            (client_name, contact, links, status, note)
+        )
+        self.connection.commit()
+        self.create_temp_file()
+        self.close()
+
+    def update_client(self, client_id, client_name, contact, links, status, note):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "UPDATE client SET client_name = ?, contact = ?, links = ?, status = ?, note = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (client_name, contact, links, status, note, client_id)
+        )
+        self.connection.commit()
+        self.create_temp_file()
+        self.close()
+
+    def get_files_by_client_id(self, client_id):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute("""
+            SELECT
+                f.name,
+                f.date,
+                ip.price,
+                ip.currency,
+                ip.note,
+                s.name as status
+            FROM file_client_price fcp
+            JOIN files f ON fcp.file_id = f.id
+            JOIN item_price ip ON fcp.item_price_id = ip.id
+            LEFT JOIN statuses s ON f.status_id = s.id
+            WHERE fcp.client_id = ?
+            ORDER BY f.date DESC
+        """, (client_id,))
+        files = []
+        for row in cursor.fetchall():
+            files.append({
+                "name": row["name"],
+                "date": row["date"],
+                "price": row["price"],
+                "currency": row["currency"],
+                "note": row["note"],
+                "status": row["status"]
+            })
+        self.close()
+        return files
+
+    def get_item_price_id(self, file_id):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT id FROM item_price WHERE file_id = ?", (file_id,))
+        row = cursor.fetchone()
+        self.close()
+        if row:
+            return row["id"]
+        return None
+
+    def assign_file_client_price(self, file_id, item_price_id, client_id):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "SELECT id FROM file_client_price WHERE file_id = ? AND item_price_id = ? AND client_id = ?",
+            (file_id, item_price_id, client_id)
+        )
+        exists = cursor.fetchone()
+        if not exists:
+            cursor.execute(
+                "INSERT INTO file_client_price (file_id, item_price_id, client_id, created_at, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                (file_id, item_price_id, client_id)
+            )
+            self.connection.commit()
+            self.create_temp_file()
+        self.close()
+
     def get_all_teams(self):
         self.connect()
         cursor = self.connection.cursor()
         cursor.execute(
-            "SELECT username, full_name, contact, address, email, phone, attendance_pin, started_at, added_at, bank, account_number, account_holder FROM teams ORDER BY added_at DESC"
+            "SELECT username, full_name, contact, address, email, phone, attendance_pin, started_at, added_at, bank, account_number, account_holder FROM teams ORDER BY username ASC"
         )
         rows = cursor.fetchall()
         teams = []
