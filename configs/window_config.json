@@ -48,8 +48,17 @@
         "Need Upload": {
             "color": "#e91e63",
             "font_weight": "bold"
+        },
+        "Pending": {
+            "color": "#ffb300",
+            "font_weight": "bold"
+        },
+        "Paid": {
+            "color": "#009688",
+            "font_weight": "bold"
         }
     },
+    "operational_percentage": 10,
     "about": {
         "title": "Rak Arsip 3",
         "text": "Rak Arsip 3 adalah aplikasi inhouse untuk manajemen projek dan pengarsipan dokumen di Desainia Studio.",

@@ -762,3 +762,212 @@ class DatabaseManager(QObject):
         self.connection.commit()
         self.close()
         self.create_temp_file()
+
+    def get_latest_open_attendance(self, username, pin):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "SELECT id FROM teams WHERE username = ? AND attendance_pin = ?",
+            (username, pin)
+        )
+        team_row = cursor.fetchone()
+        if not team_row:
+            self.close()
+            return None
+        team_id = team_row[0]
+        cursor.execute(
+            "SELECT id, date, check_in, check_out, note FROM attendance WHERE team_id = ? AND check_in IS NOT NULL AND check_out IS NULL ORDER BY id DESC LIMIT 1",
+            (team_id,)
+        )
+        attendance_row = cursor.fetchone()
+        self.close()
+        if attendance_row:
+            return {
+                "id": attendance_row[0],
+                "date": attendance_row[1],
+                "check_in": attendance_row[2],
+                "check_out": attendance_row[3],
+                "note": attendance_row[4]
+            }
+        return None
+
+    def add_attendance_record(self, username, pin, note="", mode="checkin"):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "SELECT id FROM teams WHERE username = ? AND attendance_pin = ?",
+            (username, pin)
+        )
+        team_row = cursor.fetchone()
+        if not team_row:
+            self.close()
+            return False, "Invalid username or pin."
+        team_id = team_row[0]
+        now_date = datetime.now().strftime("%Y-%m-%d")
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        if mode == "checkin":
+            cursor.execute(
+                "INSERT INTO attendance (team_id, date, check_in, note) VALUES (?, ?, ?, ?)",
+                (team_id, now_date, now_str, note)
+            )
+            self.connection.commit()
+            self.close()
+            self.create_temp_file()
+            return True, "Checked in."
+        elif mode == "checkout":
+            cursor.execute(
+                "SELECT id FROM attendance WHERE team_id = ? AND check_in IS NOT NULL AND check_out IS NULL ORDER BY id DESC LIMIT 1",
+                (team_id,)
+            )
+            open_attendance = cursor.fetchone()
+            if open_attendance:
+                att_id = open_attendance[0]
+                cursor.execute(
+                    "UPDATE attendance SET check_out = ?, note = ? WHERE id = ?",
+                    (now_str, note, att_id)
+                )
+                self.connection.commit()
+                self.close()
+                self.create_temp_file()
+                return True, "Checked out."
+            else:
+                self.close()
+                return False, "No open attendance to check out."
+        else:
+            self.close()
+            return False, "Invalid mode."
+
+    def get_attendance_by_username_pin(self, username, pin):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "SELECT id FROM teams WHERE username = ? AND attendance_pin = ?",
+            (username, pin)
+        )
+        team_row = cursor.fetchone()
+        if not team_row:
+            self.close()
+            return None
+        team_id = team_row[0]
+        cursor.execute(
+            "SELECT date, check_in, check_out, note FROM attendance WHERE team_id = ? ORDER BY id DESC LIMIT 1",
+            (team_id,)
+        )
+        attendance_row = cursor.fetchone()
+        self.close()
+        if attendance_row:
+            return {
+                "date": attendance_row[0],
+                "check_in": attendance_row[1],
+                "check_out": attendance_row[2],
+                "note": attendance_row[3]
+            }
+        return None
+
+    def get_attendance_records_by_username(self, username):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT id FROM teams WHERE username = ?", (username,))
+        team_row = cursor.fetchone()
+        records = []
+        if team_row:
+            team_id = team_row[0]
+            cursor.execute(
+                "SELECT date, check_in, check_out, note, id FROM attendance WHERE team_id = ? ORDER BY id DESC",
+                (team_id,)
+            )
+            records = cursor.fetchall()
+        self.close()
+        return records
+
+    def get_earnings_by_file_id(self, file_id):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute("""
+            SELECT e.id, t.username, t.full_name, e.amount, e.note
+            FROM earnings e
+            JOIN item_price ip ON e.item_price_id = ip.id
+            JOIN teams t ON e.team_id = t.id
+            WHERE ip.file_id = ?
+            ORDER BY e.id ASC
+        """, (file_id,))
+        result = []
+        for row in cursor.fetchall():
+            result.append({
+                "id": row[0],
+                "username": row[1],
+                "full_name": row[2],
+                "amount": row[3],
+                "note": row[4]
+            })
+        self.close()
+        return result
+
+    def assign_earning_with_percentage(self, file_id, username, note, operational_percentage):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT id FROM teams WHERE username = ?", (username,))
+        team_row = cursor.fetchone()
+        if not team_row:
+            self.close()
+            return False
+        team_id = team_row[0]
+        cursor.execute("SELECT id, price FROM item_price WHERE file_id = ?", (file_id,))
+        price_row = cursor.fetchone()
+        if not price_row:
+            self.close()
+            return False
+        item_price_id = price_row[0]
+        price = price_row[1]
+        cursor.execute("SELECT COUNT(*) FROM earnings WHERE item_price_id = ?", (item_price_id,))
+        count = cursor.fetchone()[0]
+        cursor.execute("SELECT id FROM earnings WHERE item_price_id = ? AND team_id = ?", (item_price_id, team_id))
+        exists = cursor.fetchone()
+        if exists:
+            self.close()
+            return False
+        cursor.execute(
+            "INSERT INTO earnings (team_id, item_price_id, amount, note) VALUES (?, ?, ?, ?)",
+            (team_id, item_price_id, 0, note)
+        )
+        self.connection.commit()
+        self.close()
+        self.update_earnings_shares_with_percentage(file_id, operational_percentage)
+        self.create_temp_file()
+        return True
+
+    def update_earnings_shares_with_percentage(self, file_id, operational_percentage):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT id, price FROM item_price WHERE file_id = ?", (file_id,))
+        price_row = cursor.fetchone()
+        if not price_row:
+            self.close()
+            return
+        item_price_id = price_row[0]
+        price = price_row[1]
+        cursor.execute("SELECT id FROM earnings WHERE item_price_id = ?", (item_price_id,))
+        earning_rows = cursor.fetchall()
+        n = len(earning_rows)
+        if n == 0:
+            self.close()
+            return
+        opr_amount = float(price) * (operational_percentage / 100)
+        share_total = float(price) - opr_amount
+        share = share_total / n if n > 0 else 0
+        for row in earning_rows:
+            earning_id = row[0]
+            cursor.execute("UPDATE earnings SET amount = ? WHERE id = ?", (share, earning_id))
+        self.connection.commit()
+        self.close()
+        self.create_temp_file()
+
+    def remove_earning(self, earning_id, file_id):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute("DELETE FROM earnings WHERE id = ?", (earning_id,))
+        self.connection.commit()
+        self.close()
+        operational_percentage = int(self.window_config_manager.get("operational_percentage"))
+        self.update_earnings_shares_with_percentage(file_id, operational_percentage)
+        self.create_temp_file()

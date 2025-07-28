@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget, QGroupBox,
     QCheckBox, QListWidget, QListWidgetItem, QPushButton, QLineEdit,
-    QTextEdit, QLabel, QMessageBox, QFileDialog, QInputDialog, QListView, QAbstractItemView, QProgressBar
+    QTextEdit, QLabel, QMessageBox, QFileDialog, QInputDialog, QListView, QAbstractItemView, QProgressBar, QSpinBox
 )
 from PySide6.QtCore import Qt, QCoreApplication
 import qtawesome as qta
@@ -71,6 +71,18 @@ class PreferencesWindow(QDialog):
         group_layout.addWidget(self.markdown_check)
         group_layout.addWidget(self.open_explorer_check)
         group_layout.addWidget(self.sanitize_name_check)
+        
+        # Operational percentage option
+        opr_row = QHBoxLayout()
+        self.operational_percentage_label = QLabel("Operational Percentage (Opr):")
+        self.operational_percentage_spin = QSpinBox()
+        self.operational_percentage_spin.setMinimum(0)
+        self.operational_percentage_spin.setMaximum(100)
+        self.operational_percentage_spin.setSuffix(" %")
+        opr_row.addWidget(self.operational_percentage_label)
+        opr_row.addWidget(self.operational_percentage_spin)
+        group_layout.addLayout(opr_row)
+        
         group.setLayout(group_layout)
         layout.addWidget(group)
 
@@ -416,6 +428,7 @@ class PreferencesWindow(QDialog):
             self.markdown_check.setChecked(self.config_manager.get("action_options.markdown"))
             self.open_explorer_check.setChecked(self.config_manager.get("action_options.open_explorer"))
             self.sanitize_name_check.setChecked(self.config_manager.get("action_options.sanitize_name"))
+            self.operational_percentage_spin.setValue(int(self.config_manager.get("operational_percentage")))
         except:
             pass
         self.gemini_api_edit.setText(self._get_gemini_api_key())
@@ -777,6 +790,7 @@ class PreferencesWindow(QDialog):
             self.config_manager.set("action_options.markdown", self.markdown_check.isChecked())
             self.config_manager.set("action_options.open_explorer", self.open_explorer_check.isChecked())
             self.config_manager.set("action_options.sanitize_name", self.sanitize_name_check.isChecked())
+            self.config_manager.set("operational_percentage", self.operational_percentage_spin.value())
             self._set_gemini_api_key(self.gemini_api_edit.text().strip())
             QMessageBox.information(self, "Success", "Preferences saved successfully.")
             self.accept()

@@ -449,13 +449,43 @@ class CentralWidget(QWidget):
                 price_note_str = f"{price_str} - {note}"
             else:
                 price_note_str = f"{price_str} -"
+            earnings = self.db_manager.get_earnings_by_file_id(row_data['id'])
+            shares_str = ""
+            amount_str = ""
+            operational_percent_str = ""
+            if earnings:
+                usernames = [e['username'] for e in earnings]
+                shares_str = "Shares: " + ", ".join(usernames)
+                share_amount = earnings[0]['amount'] if len(earnings) > 0 else None
+                if share_amount is not None and currency:
+                    try:
+                        share_float = float(share_amount)
+                        if share_float.is_integer():
+                            share_str = f"{int(share_float):,}".replace(",", ".")
+                        else:
+                            share_str = f"{share_float:,.2f}".replace(",", ".")
+                        amount_str = f"Amount: {share_str} {currency} each"
+                    except Exception:
+                        amount_str = f"Amount: {share_amount} {currency} each"
+                # Calculate operational percentage used for this record
+                try:
+                    price_float = float(price)
+                    n = len(earnings)
+                    share_amount_float = float(earnings[0]["amount"])
+                    used_percentage = round((1 - (share_amount_float * n / price_float)) * 100)
+                    operational_percent_str = f"Operational Percentage: {used_percentage}%"
+                except Exception:
+                    operational_percent_str = ""
             tooltip = (
                 f"Date: {row_data.get('date','')}\n"
                 f"Name: {row_data.get('name','')}\n"
                 f"Root: {row_data.get('root','')}\n"
                 f"Path: {row_data.get('path','')}\n"
                 f"Status: {row_data.get('status','')}\n"
-                f"Price: {price_note_str}"
+                f"Price: {price_note_str}\n"
+                f"{shares_str}\n"
+                f"{amount_str}\n"
+                f"{operational_percent_str}"
             )
             date_item = QTableWidgetItem(row_data['date'])
             date_item.setData(256, row_data)
