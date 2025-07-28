@@ -762,3 +762,104 @@ class DatabaseManager(QObject):
         self.connection.commit()
         self.close()
         self.create_temp_file()
+
+    def get_latest_open_attendance(self, username, pin):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "SELECT id FROM teams WHERE username = ? AND attendance_pin = ?",
+            (username, pin)
+        )
+        team_row = cursor.fetchone()
+        if not team_row:
+            self.close()
+            return None
+        team_id = team_row[0]
+        cursor.execute(
+            "SELECT id, date, check_in, check_out, note FROM attendance WHERE team_id = ? AND check_in IS NOT NULL AND check_out IS NULL ORDER BY id DESC LIMIT 1",
+            (team_id,)
+        )
+        attendance_row = cursor.fetchone()
+        self.close()
+        if attendance_row:
+            return {
+                "id": attendance_row[0],
+                "date": attendance_row[1],
+                "check_in": attendance_row[2],
+                "check_out": attendance_row[3],
+                "note": attendance_row[4]
+            }
+        return None
+
+    def add_attendance_record(self, username, pin, note="", mode="checkin"):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "SELECT id FROM teams WHERE username = ? AND attendance_pin = ?",
+            (username, pin)
+        )
+        team_row = cursor.fetchone()
+        if not team_row:
+            self.close()
+            return False, "Invalid username or pin."
+        team_id = team_row[0]
+        now_date = datetime.now().strftime("%Y-%m-%d")
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        if mode == "checkin":
+            cursor.execute(
+                "INSERT INTO attendance (team_id, date, check_in, note) VALUES (?, ?, ?, ?)",
+                (team_id, now_date, now_str, note)
+            )
+            self.connection.commit()
+            self.close()
+            self.create_temp_file()
+            return True, "Checked in."
+        elif mode == "checkout":
+            cursor.execute(
+                "SELECT id FROM attendance WHERE team_id = ? AND check_in IS NOT NULL AND check_out IS NULL ORDER BY id DESC LIMIT 1",
+                (team_id,)
+            )
+            open_attendance = cursor.fetchone()
+            if open_attendance:
+                att_id = open_attendance[0]
+                cursor.execute(
+                    "UPDATE attendance SET check_out = ?, note = ? WHERE id = ?",
+                    (now_str, note, att_id)
+                )
+                self.connection.commit()
+                self.close()
+                self.create_temp_file()
+                return True, "Checked out."
+            else:
+                self.close()
+                return False, "No open attendance to check out."
+        else:
+            self.close()
+            return False, "Invalid mode."
+
+    def get_attendance_by_username_pin(self, username, pin):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "SELECT id FROM teams WHERE username = ? AND attendance_pin = ?",
+            (username, pin)
+        )
+        team_row = cursor.fetchone()
+        if not team_row:
+            self.close()
+            return None
+        team_id = team_row[0]
+        cursor.execute(
+            "SELECT date, check_in, check_out, note FROM attendance WHERE team_id = ? ORDER BY id DESC LIMIT 1",
+            (team_id,)
+        )
+        attendance_row = cursor.fetchone()
+        self.close()
+        if attendance_row:
+            return {
+                "date": attendance_row[0],
+                "check_in": attendance_row[1],
+                "check_out": attendance_row[2],
+                "note": attendance_row[3]
+            }
+        return None
