@@ -1,5 +1,5 @@
-from PySide6.QtWidgets import QMenuBar, QMenu, QApplication, QDialog
-from PySide6.QtGui import QAction
+from PySide6.QtWidgets import QMenuBar, QMenu, QApplication
+from PySide6.QtGui import QAction, QIcon
 from PySide6.QtCore import QTimer
 import qtawesome as qta
 import webbrowser
@@ -22,28 +22,28 @@ class MainMenu(QMenuBar):
         file_menu.addAction(self.exit_action)
         self.addMenu(file_menu)
 
-        # Data menu for central widget actions
         data_menu = QMenu("Data", self)
         self.refresh_action = QAction(qta.icon('fa6s.arrows-rotate'), "Refresh Table", self)
         self.clear_search_action = QAction(qta.icon('fa6s.xmark'), "Clear Search", self)
         self.sort_action = QAction(qta.icon('fa6s.arrow-down-wide-short'), "Sort Table", self)
         self.paste_search_action = QAction(qta.icon('fa6s.paste'), "Paste to Search", self)
         self.edit_selected_action = QAction(qta.icon('fa6s.pen-to-square'), "Edit Selected Record", self)
+        self.assign_price_action = QAction(qta.icon('fa6s.money-bill-wave'), "Assign Price", self)
         data_menu.addAction(self.refresh_action)
         data_menu.addAction(self.clear_search_action)
         data_menu.addAction(self.sort_action)
         data_menu.addAction(self.paste_search_action)
         data_menu.addAction(self.edit_selected_action)
+        data_menu.addAction(self.assign_price_action)
         self.addMenu(data_menu)
 
+        self.teams_action = QAction("Teams", self)
+        self.teams_action.triggered.connect(self.show_teams_profile)
+        self.addAction(self.teams_action)
 
-        # Teams menu
-        teams_menu = QMenu("Teams", self)
-        self.profile_action = QAction(qta.icon('fa6s.user-group'), "Profile", self)
-        self.attendance_action = QAction(qta.icon('fa6s.calendar-check'), "Attendance", self)
-        teams_menu.addAction(self.profile_action)
-        teams_menu.addAction(self.attendance_action)
-        self.addMenu(teams_menu)
+        self.attendance_action = QAction("Attendance", self)
+        self.attendance_action.triggered.connect(self.show_teams_attendance)
+        self.addAction(self.attendance_action)
 
         help_menu = QMenu("Help", self)
         self.about_action = QAction(qta.icon('fa6s.circle-info'), "About", self)
@@ -52,23 +52,18 @@ class MainMenu(QMenuBar):
         help_menu.addAction(self.repo_action)
         self.addMenu(help_menu)
 
-
         self.exit_action.triggered.connect(self.close_app)
         self.relaunch_action.triggered.connect(self.relaunch_app)
         self.preferences_action.triggered.connect(self.show_preferences)
         self.about_action.triggered.connect(self.show_about)
         self.repo_action.triggered.connect(self.open_repo)
 
-        # Connect Data menu actions to central widget if available
         self.refresh_action.triggered.connect(self._trigger_refresh)
         self.clear_search_action.triggered.connect(self._trigger_clear_search)
         self.sort_action.triggered.connect(self._trigger_sort)
         self.paste_search_action.triggered.connect(self._trigger_paste_search)
         self.edit_selected_action.triggered.connect(self._trigger_edit_selected_record)
-
-        # Connect Teams menu
-        self.profile_action.triggered.connect(self.show_teams_profile)
-        self.attendance_action.triggered.connect(self.show_teams_attendance)
+        self.assign_price_action.triggered.connect(self._trigger_assign_price)
 
     def show_teams_profile(self):
         from gui.dialogs.teams_profile_dialog import TeamsProfileDialog
@@ -114,6 +109,13 @@ class MainMenu(QMenuBar):
         if cw and hasattr(cw, "do_edit_record"):
             cw.do_edit_record()
 
+    def _trigger_assign_price(self):
+        cw = self._get_central_widget()
+        if cw and hasattr(cw, "selected_row_data") and cw.selected_row_data:
+            from gui.dialogs.assign_price_dialog import AssignPriceDialog
+            dialog = AssignPriceDialog(cw.selected_row_data, cw.db_manager, cw)
+            dialog.exec()
+
     def close_app(self):
         QApplication.quit()
 
@@ -137,6 +139,12 @@ class MainMenu(QMenuBar):
         dialog.exec()
 
     def show_about(self):
+        about_config = self.config_manager.get("about")
+        dialog = AboutDialog(about_config, self)
+        dialog.exec()
+
+    def open_repo(self):
+        webbrowser.open("https://github.com/mudrikam/Rak-Arsip-3")
         about_config = self.config_manager.get("about")
         dialog = AboutDialog(about_config, self)
         dialog.exec()

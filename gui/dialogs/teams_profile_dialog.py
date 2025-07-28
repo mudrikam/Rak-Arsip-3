@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QTabWidget, QWidget, QTableWidget, QTableWidgetItem, QLabel, QFormLayout, QLineEdit, QPushButton, QMessageBox, QDateEdit, QHBoxLayout, QInputDialog, QSizePolicy, QHeaderView, QSpinBox, QSpacerItem
 from PySide6.QtCore import Qt, QDate
 from PySide6.QtGui import QColor
+import qtawesome as qta
 from database.db_manager import DatabaseManager
 from manager.config_manager import ConfigManager
 from pathlib import Path
@@ -170,9 +171,53 @@ class TeamsProfileDialog(QDialog):
     def _init_earnings_tab(self):
         tab = QWidget()
         tab_layout = QVBoxLayout(tab)
-        label = QLabel("Earnings tab content will be added here.")
-        tab_layout.addWidget(label)
+        self.earnings_summary_widget = QWidget()
+        self.earnings_summary_layout = QVBoxLayout(self.earnings_summary_widget)
+        self.earnings_summary_layout.setContentsMargins(0, 0, 0, 0)
+        self.earnings_summary_layout.setSpacing(4)
+        tab_layout.addWidget(self.earnings_summary_widget)
+        search_row = QHBoxLayout()
+        self.earnings_search_edit = QLineEdit()
+        self.earnings_search_edit.setPlaceholderText("Search earnings notes or file name...")
+        self.earnings_search_edit.setMinimumHeight(32)
+        self.earnings_search_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        search_row.addWidget(self.earnings_search_edit)
+        tab_layout.addLayout(search_row)
+        self.earnings_table = QTableWidget(tab)
+        self.earnings_table.setColumnCount(7)
+        self.earnings_table.setHorizontalHeaderLabels([
+            "File Name", "Date", "Amount", "Currency", "Note", "Status", "ID"
+        ])
+        self.earnings_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.earnings_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.earnings_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.earnings_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.earnings_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        self.earnings_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        tab_layout.addWidget(self.earnings_table)
+        pagination_row = QHBoxLayout()
+        self.earnings_prev_btn = QPushButton("Prev")
+        self.earnings_next_btn = QPushButton("Next")
+        self.earnings_page_label = QLabel()
+        self.earnings_page_input = QSpinBox()
+        self.earnings_page_input.setMinimum(1)
+        self.earnings_page_input.setMaximum(1)
+        self.earnings_page_input.setFixedWidth(60)
+        pagination_row.addWidget(self.earnings_prev_btn)
+        pagination_row.addWidget(self.earnings_page_label)
+        pagination_row.addWidget(self.earnings_page_input)
+        pagination_row.addWidget(self.earnings_next_btn)
+        pagination_row.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
+        tab_layout.addLayout(pagination_row)
         self.tab_widget.addTab(tab, "Earnings")
+        self.earnings_search_edit.textChanged.connect(self._earnings_search_changed)
+        self.earnings_prev_btn.clicked.connect(self._earnings_prev_page)
+        self.earnings_next_btn.clicked.connect(self._earnings_next_page)
+        self.earnings_page_input.valueChanged.connect(self._earnings_goto_page)
+        self.earnings_records_all = []
+        self.earnings_records_filtered = []
+        self.earnings_page_size = 20
+        self.earnings_current_page = 1
 
     def _load_teams_data(self):
         basedir = Path(__file__).parent.parent.parent
@@ -230,6 +275,7 @@ class TeamsProfileDialog(QDialog):
                     widget.setText(value)
             self.save_button.setEnabled(True)
             self._load_attendance_records(team["username"], team.get("full_name", ""))
+            self._load_earnings_records(team["username"])
 
     def _load_attendance_records(self, username, full_name=""):
         basedir = Path(__file__).parent.parent.parent
@@ -338,6 +384,202 @@ class TeamsProfileDialog(QDialog):
         )
         self.attendance_summary.setText(summary)
 
+    def _load_earnings_records(self, username):
+        basedir = Path(__file__).parent.parent.parent
+        db_config_path = basedir / "configs" / "db_config.json"
+        config_manager = ConfigManager(str(db_config_path))
+        db_manager = DatabaseManager(config_manager, config_manager)
+        files = db_manager.get_files_page(page=1, page_size=10000)
+        earnings_records = []
+        for file in files:
+            file_id = file["id"]
+            file_name = file["name"]
+            file_date = file["date"]
+            price, currency, _ = db_manager.get_item_price_detail(file_id)
+            status = file.get("status", "")
+            earnings = db_manager.get_earnings_by_file_id(file_id)
+            for earning in earnings:
+                if earning["username"] == username:
+                    earnings_records.append((
+                        file_name,
+                        file_date,
+                        earning["amount"],
+                        currency,
+                        earning["note"],
+                        status,
+                        earning["id"]
+                    ))
+        self.earnings_records_all = earnings_records
+        self.earnings_current_page = 1
+        self._update_earnings_table()
+
+    def _earnings_search_changed(self):
+        self.earnings_current_page = 1
+        self._update_earnings_table()
+
+    def _earnings_prev_page(self):
+        if self.earnings_current_page > 1:
+            self.earnings_current_page -= 1
+            self._update_earnings_table()
+
+    def _earnings_next_page(self):
+        total_rows = len(self.earnings_records_filtered)
+        total_pages = max(1, (total_rows + self.earnings_page_size - 1) // self.earnings_page_size)
+        if self.earnings_current_page < total_pages:
+            self.earnings_current_page += 1
+            self._update_earnings_table()
+
+    def _earnings_goto_page(self, value):
+        total_rows = len(self.earnings_records_filtered)
+        total_pages = max(1, (total_rows + self.earnings_page_size - 1) // self.earnings_page_size)
+        if 1 <= value <= total_pages:
+            self.earnings_current_page = value
+            self._update_earnings_table()
+
+    def _update_earnings_table(self):
+        search_text = self.earnings_search_edit.text().strip().lower()
+        if search_text:
+            self.earnings_records_filtered = [
+                r for r in self.earnings_records_all
+                if (
+                    (r[0] and search_text in str(r[0]).lower()) or  # file name
+                    (r[1] and search_text in str(r[1]).lower()) or  # date
+                    (r[2] and search_text in str(r[2]).lower()) or  # amount
+                    (r[3] and search_text in str(r[3]).lower()) or  # currency
+                    (r[4] and search_text in str(r[4]).lower()) or  # note
+                    (r[5] and search_text in str(r[5]).lower()) or  # status
+                    (r[6] and search_text in str(r[6]).lower())     # id
+                )
+            ]
+        else:
+            self.earnings_records_filtered = list(self.earnings_records_all)
+        total_rows = len(self.earnings_records_filtered)
+        total_pages = max(1, (total_rows + self.earnings_page_size - 1) // self.earnings_page_size)
+        self.earnings_page_input.blockSignals(True)
+        self.earnings_page_input.setMaximum(total_pages)
+        self.earnings_page_input.setValue(self.earnings_current_page)
+        self.earnings_page_input.blockSignals(False)
+        self.earnings_page_label.setText(f"Page {self.earnings_current_page} / {total_pages}")
+        start_idx = (self.earnings_current_page - 1) * self.earnings_page_size
+        end_idx = start_idx + self.earnings_page_size
+        page_records = self.earnings_records_filtered[start_idx:end_idx]
+        self.earnings_table.setRowCount(len(page_records))
+        total_amount = 0
+        total_pending = 0
+        total_paid = 0
+        currency = ""
+        for row_idx, record in enumerate(page_records):
+            file_name, file_date, amount, currency, note, status, rec_id = record
+            formatted_date = format_date_indonesian(file_date)
+            try:
+                amount_float = float(amount)
+                if amount_float.is_integer():
+                    amount_str = f"{int(amount_float):,}".replace(",", ".")
+                else:
+                    amount_str = f"{amount_float:,.2f}".replace(",", ".")
+            except Exception:
+                amount_str = str(amount)
+            item_file_name = QTableWidgetItem(str(file_name))
+            item_date = QTableWidgetItem(formatted_date)
+            item_amount = QTableWidgetItem(str(amount_str))
+            item_currency = QTableWidgetItem(str(currency))
+            item_note = QTableWidgetItem(str(note) if note else "")
+            item_status = QTableWidgetItem(str(status))
+            item_id = QTableWidgetItem(str(rec_id))
+            item_file_name.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            item_date.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            item_amount.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            item_currency.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            item_note.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            item_status.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            item_id.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            self.earnings_table.setItem(row_idx, 0, item_file_name)
+            self.earnings_table.setItem(row_idx, 1, item_date)
+            self.earnings_table.setItem(row_idx, 2, item_amount)
+            self.earnings_table.setItem(row_idx, 3, item_currency)
+            self.earnings_table.setItem(row_idx, 4, item_note)
+            self.earnings_table.setItem(row_idx, 5, item_status)
+            self.earnings_table.setItem(row_idx, 6, item_id)
+            try:
+                amt = float(amount)
+                total_amount += amt
+                if str(status).lower() == "pending":
+                    total_pending += amt
+                elif str(status).lower() == "paid":
+                    total_paid += amt
+            except Exception:
+                pass
+        def format_thousands(val):
+            try:
+                val = float(val)
+                return f"{int(val):,}".replace(",", ".")
+            except Exception:
+                return str(val)
+        # Clear previous summary widgets
+        while self.earnings_summary_layout.count():
+            item = self.earnings_summary_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+        # Pending
+        pending_row = QHBoxLayout()
+        pending_icon = QLabel()
+        pending_icon.setPixmap(qta.icon("fa6s.clock", color="#ffb300").pixmap(24, 24))
+        pending_label = QLabel("Pending:")
+        pending_label.setStyleSheet("color:#ffb300; font-size:18px; font-weight:bold;")
+        pending_currency = QLabel(str(currency))
+        pending_currency.setStyleSheet("font-size:18px; font-weight:bold; margin-right:6px;")
+        pending_amount = QLabel(f"{format_thousands(total_pending)}")
+        pending_amount.setStyleSheet("font-size:18px; font-weight:bold;")
+        pending_row.addWidget(pending_icon)
+        pending_row.addWidget(pending_label)
+        pending_row.addWidget(pending_currency)
+        pending_row.addWidget(pending_amount)
+        pending_row.addStretch()
+        pending_widget = QWidget()
+        pending_widget.setLayout(pending_row)
+        self.earnings_summary_layout.addWidget(pending_widget)
+        # Paid
+        paid_row = QHBoxLayout()
+        paid_icon = QLabel()
+        paid_icon.setPixmap(qta.icon("fa6s.money-bill-wave", color="#009688").pixmap(24, 24))
+        paid_label = QLabel("Paid:")
+        paid_label.setStyleSheet("color:#009688; font-size:18px; font-weight:bold;")
+        paid_currency = QLabel(str(currency))
+        paid_currency.setStyleSheet("font-size:18px; font-weight:bold; margin-right:6px;")
+        paid_amount = QLabel(f"{format_thousands(total_paid)}")
+        paid_amount.setStyleSheet("font-size:18px; font-weight:bold;")
+        paid_row.addWidget(paid_icon)
+        paid_row.addWidget(paid_label)
+        paid_row.addWidget(paid_currency)
+        paid_row.addWidget(paid_amount)
+        paid_row.addStretch()
+        paid_widget = QWidget()
+        paid_widget.setLayout(paid_row)
+        self.earnings_summary_layout.addWidget(paid_widget)
+        # All Time
+        all_row = QHBoxLayout()
+        all_icon = QLabel()
+        all_icon.setPixmap(qta.icon("fa6s.chart-column", color="#1976d2").pixmap(24, 24))
+        all_label = QLabel("All Time:")
+        all_label.setStyleSheet("color:#1976d2; font-size:18px; font-weight:bold;")
+        all_currency = QLabel(str(currency))
+        all_currency.setStyleSheet("font-size:18px; font-weight:bold; margin-right:6px;")
+        all_amount = QLabel(f"{format_thousands(total_amount)}")
+        all_amount.setStyleSheet("font-size:18px; font-weight:bold;")
+        all_row.addWidget(all_icon)
+        all_row.addWidget(all_label)
+        all_row.addWidget(all_currency)
+        all_row.addWidget(all_amount)
+        all_row.addStretch()
+        all_widget = QWidget()
+        all_widget.setLayout(all_row)
+        self.earnings_summary_layout.addWidget(all_widget)
+        # Total Records
+        records_label = QLabel(f"Total Earnings Records: {len(self.earnings_records_filtered)}")
+        records_label.setStyleSheet("color:#666; font-size:14px;")
+        self.earnings_summary_layout.addWidget(records_label)
+
     def _on_team_row_clicked(self, row, col):
         self._fill_details_form(row)
 
@@ -363,6 +605,12 @@ class TeamsProfileDialog(QDialog):
         self.attendance_records_filtered = []
         self.attendance_current_page = 1
         self._update_attendance_table()
+        self.earnings_table.setRowCount(0)
+        self.earnings_summary.setText("")
+        self.earnings_records_all = []
+        self.earnings_records_filtered = []
+        self.earnings_current_page = 1
+        self._update_earnings_table()
 
     def _save_team_details(self):
         basedir = Path(__file__).parent.parent.parent
@@ -421,6 +669,12 @@ class TeamsProfileDialog(QDialog):
             self.attendance_records_filtered = []
             self.attendance_current_page = 1
             self._update_attendance_table()
+            self.earnings_table.setRowCount(0)
+            self.earnings_summary.setText("")
+            self.earnings_records_all = []
+            self.earnings_records_filtered = []
+            self.earnings_current_page = 1
+            self._update_earnings_table()
             QMessageBox.information(self, "Success", "Team member added successfully.")
         else:
             idx = self._selected_team_index
@@ -463,4 +717,10 @@ class TeamsProfileDialog(QDialog):
             self.attendance_records_filtered = []
             self.attendance_current_page = 1
             self._update_attendance_table()
+            self.earnings_table.setRowCount(0)
+            self.earnings_summary.setText("")
+            self.earnings_records_all = []
+            self.earnings_records_filtered = []
+            self.earnings_current_page = 1
+            self._update_earnings_table()
             QMessageBox.information(self, "Success", "Team data updated successfully.")

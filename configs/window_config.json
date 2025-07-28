@@ -49,12 +49,12 @@
             "color": "#e91e63",
             "font_weight": "bold"
         },
-        "Paid": {
-            "color": "#009688",
-            "font_weight": "bold"
-        },
         "Pending": {
             "color": "#ffb300",
+            "font_weight": "bold"
+        },
+        "Paid": {
+            "color": "#009688",
             "font_weight": "bold"
         }
     },

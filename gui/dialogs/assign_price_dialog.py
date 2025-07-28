@@ -43,9 +43,9 @@ class AssignPriceDialog(QDialog):
         earnings_label = QLabel("Earnings (username, share):")
         main_layout.addWidget(earnings_label)
         self.earnings_table = QTableWidget()
-        self.earnings_table.setColumnCount(4)
+        self.earnings_table.setColumnCount(3)
         self.earnings_table.setHorizontalHeaderLabels([
-            "Username", "Full Name", f"Share ({self._get_operational_percentage()}% Opr)", ""
+            "Username", "Full Name", f"({self._get_operational_percentage()}% Opr)"
         ])
         self.earnings_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.earnings_table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -53,7 +53,6 @@ class AssignPriceDialog(QDialog):
         self.earnings_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.earnings_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.earnings_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
-        self.earnings_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
         main_layout.addWidget(self.earnings_table)
 
         add_row = QHBoxLayout()
@@ -66,6 +65,11 @@ class AssignPriceDialog(QDialog):
         self.add_team_btn.setFixedWidth(40)
         self.add_team_btn.setToolTip("Add team member to earnings")
         add_row.addWidget(self.add_team_btn)
+        self.remove_team_btn = QPushButton()
+        self.remove_team_btn.setIcon(qta.icon("fa6s.minus"))
+        self.remove_team_btn.setFixedWidth(40)
+        self.remove_team_btn.setToolTip("Remove selected team member from earnings")
+        add_row.addWidget(self.remove_team_btn)
         add_row.addStretch()
         main_layout.addLayout(add_row)
 
@@ -75,6 +79,7 @@ class AssignPriceDialog(QDialog):
         self.button_box.rejected.connect(self.reject)
 
         self.add_team_btn.clicked.connect(self._on_add_team)
+        self.remove_team_btn.clicked.connect(self._on_remove_selected_team)
         self.price_edit.textChanged.connect(self._on_price_changed)
         self.currency_combo.currentTextChanged.connect(self._on_price_changed)
         self.note_edit.textChanged.connect(self._on_note_changed)
@@ -90,21 +95,18 @@ class AssignPriceDialog(QDialog):
         for row_idx, earning in enumerate(earnings):
             item_username = QTableWidgetItem(earning["username"])
             item_fullname = QTableWidgetItem(earning["full_name"])
-            item_share = QTableWidgetItem(str(earning["amount"]))
+            currency = earning.get("currency", None)
+            if not currency:
+                price, currency, _ = self.db_manager.get_item_price_detail(file_id)
+            try:
+                amount_float = float(earning["amount"])
+                amount_str = f"{int(amount_float):,}".replace(",", ".")
+            except Exception:
+                amount_str = str(earning["amount"])
+            item_share = QTableWidgetItem(f"{currency} {amount_str}")
             self.earnings_table.setItem(row_idx, 0, item_username)
             self.earnings_table.setItem(row_idx, 1, item_fullname)
             self.earnings_table.setItem(row_idx, 2, item_share)
-            minus_btn = QPushButton()
-            minus_btn.setIcon(qta.icon("fa6s.minus"))
-            minus_btn.setFixedWidth(32)
-            minus_btn.setToolTip("Remove user from earnings")
-            minus_btn.clicked.connect(lambda checked, eid=earning["id"]: self._on_remove_earning(eid))
-            cell_widget = QWidget()
-            layout = QHBoxLayout(cell_widget)
-            layout.setContentsMargins(0,0,0,0)
-            layout.addWidget(minus_btn)
-            layout.addStretch()
-            self.earnings_table.setCellWidget(row_idx, 3, cell_widget)
 
     def _get_current_operational_percentage(self):
         file_id = self.file_record["id"]
@@ -142,10 +144,19 @@ class AssignPriceDialog(QDialog):
         self.db_manager.assign_earning_with_percentage(file_id, username, note, operational_percentage)
         self.refresh_earnings_table()
 
-    def _on_remove_earning(self, earning_id):
-        if not self._verify_operational_percentage():
+    def _on_remove_selected_team(self):
+        selected_row = self.earnings_table.currentRow()
+        if selected_row < 0:
+            QMessageBox.warning(self, "No Selection", "Please select a team member to remove.")
             return
         file_id = self.file_record["id"]
+        earnings = self.db_manager.get_earnings_by_file_id(file_id)
+        if selected_row >= len(earnings):
+            QMessageBox.warning(self, "Invalid Selection", "Selected row is invalid.")
+            return
+        earning_id = earnings[selected_row]["id"]
+        if not self._verify_operational_percentage():
+            return
         self.db_manager.remove_earning(earning_id, file_id)
         self.refresh_earnings_table()
 
