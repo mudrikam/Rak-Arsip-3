@@ -608,3 +608,33 @@ class DatabaseManager(QObject):
         """
         cursor.execute(sql, params)
         return cursor.fetchone()[0]
+
+    def assign_price(self, file_id, price, currency):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT id FROM item_price WHERE file_id = ?", (file_id,))
+        item_price_row = cursor.fetchone()
+        if item_price_row:
+            item_price_id = item_price_row["id"]
+            cursor.execute(
+                "UPDATE item_price SET price = ?, currency = ? WHERE id = ?",
+                (price, currency, item_price_id)
+            )
+        else:
+            cursor.execute(
+                "INSERT INTO item_price (file_id, price, currency) VALUES (?, ?, ?)",
+                (file_id, price, currency)
+            )
+        self.connection.commit()
+        self.close()
+        self.create_temp_file()
+
+    def get_item_price(self, file_id):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT price, currency FROM item_price WHERE file_id = ?", (file_id,))
+        row = cursor.fetchone()
+        self.close()
+        if row:
+            return row["price"], row["currency"]
+        return None, None

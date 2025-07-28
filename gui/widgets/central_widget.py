@@ -17,6 +17,7 @@ from gui.dialogs.short_dialog import SortDialog
 from helpers.show_statusbar_helper import show_statusbar_message
 from helpers.markdown_generator import MarkdownGenerator
 from gui.dialogs.edit_record_dialog import EditRecordDialog
+from gui.dialogs.assign_price_dialog import AssignPriceDialog
 
 class NoWheelComboBox(QComboBox):
     def wheelEvent(self, event):
@@ -431,12 +432,26 @@ class CentralWidget(QWidget):
         self.table.setRowCount(len(page_data))
         path_column_width = self.table.columnWidth(3)
         for row_idx, row_data in enumerate(page_data):
+            price, currency = self.db_manager.get_item_price(row_data['id'])
+            if price is not None and currency:
+                try:
+                    price_float = float(price)
+                    if price_float.is_integer():
+                        price_str = f"{int(price_float):,}".replace(",", ".")
+                    else:
+                        price_str = f"{price_float:,.2f}".replace(",", ".")
+                    price_str = f"{price_str} {currency}"
+                except Exception:
+                    price_str = f"{price} {currency}"
+            else:
+                price_str = "-"
             tooltip = (
                 f"Date: {row_data.get('date','')}\n"
                 f"Name: {row_data.get('name','')}\n"
                 f"Root: {row_data.get('root','')}\n"
                 f"Path: {row_data.get('path','')}\n"
-                f"Status: {row_data.get('status','')}"
+                f"Status: {row_data.get('status','')}\n"
+                f"Price: {price_str}"
             )
             date_item = QTableWidgetItem(row_data['date'])
             date_item.setData(256, row_data)
@@ -558,11 +573,13 @@ class CentralWidget(QWidget):
         icon_open_explorer = qta.icon("fa6s.folder-tree")
         icon_delete = qta.icon("fa6s.trash")
         icon_edit = qta.icon("fa6s.pen-to-square")
+        icon_assign_price = qta.icon("fa6s.money-bill-wave")
         action_copy_name = QAction(icon_copy_name, "Copy Name\tCtrl+C", self)
         action_copy_path = QAction(icon_copy_path, "Copy Path\tCtrl+X", self)
         action_open_explorer = QAction(icon_open_explorer, "Open in Explorer\tCtrl+E", self)
         action_delete = QAction(icon_delete, "Delete Record", self)
         action_edit = QAction(icon_edit, "Edit Record", self)
+        action_assign_price = QAction(icon_assign_price, "Assign Price", self)
 
         def do_copy_name():
             QApplication.clipboard().setText(str(row_data['name']))
@@ -671,15 +688,22 @@ class CentralWidget(QWidget):
                 QMessageBox.information(self, "Success", "Record updated.")
                 show_statusbar_message(self, f"Record updated: {new_data['name']}")
 
+        def do_assign_price():
+            dialog = AssignPriceDialog(row_data, self.db_manager, self)
+            if dialog.exec() == QDialog.Accepted:
+                show_statusbar_message(self, "Price assigned.")
+
         action_copy_name.triggered.connect(do_copy_name)
         action_copy_path.triggered.connect(do_copy_path)
         action_open_explorer.triggered.connect(do_open_explorer)
         action_delete.triggered.connect(do_delete_record)
         action_edit.triggered.connect(do_edit_record)
+        action_assign_price.triggered.connect(do_assign_price)
         menu.addAction(action_copy_name)
         menu.addAction(action_copy_path)
         menu.addAction(action_open_explorer)
         menu.addAction(action_edit)
+        menu.addAction(action_assign_price)
         menu.addSeparator()
         menu.addAction(action_delete)
         menu.exec(self.table.viewport().mapToGlobal(pos))
