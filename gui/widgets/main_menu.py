@@ -40,7 +40,9 @@ class MainMenu(QMenuBar):
         # Teams menu
         teams_menu = QMenu("Teams", self)
         self.profile_action = QAction(qta.icon('fa6s.user-group'), "Profile", self)
+        self.attendance_action = QAction(qta.icon('fa6s.calendar-check'), "Attendance", self)
         teams_menu.addAction(self.profile_action)
+        teams_menu.addAction(self.attendance_action)
         self.addMenu(teams_menu)
 
         help_menu = QMenu("Help", self)
@@ -66,9 +68,16 @@ class MainMenu(QMenuBar):
 
         # Connect Teams menu
         self.profile_action.triggered.connect(self.show_teams_profile)
+        self.attendance_action.triggered.connect(self.show_teams_attendance)
+
     def show_teams_profile(self):
         from gui.dialogs.teams_profile_dialog import TeamsProfileDialog
         dialog = TeamsProfileDialog(self)
+        dialog.exec()
+
+    def show_teams_attendance(self):
+        from gui.dialogs.teams_attendance_dialog import TeamsAttendanceDialog
+        dialog = TeamsAttendanceDialog(self)
         dialog.exec()
 
     def _get_central_widget(self):
