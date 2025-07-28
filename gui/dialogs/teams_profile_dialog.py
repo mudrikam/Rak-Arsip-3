@@ -50,7 +50,7 @@ class TeamsProfileDialog(QDialog):
         self.teams_table = QTableWidget(tab)
         self.teams_table.setColumnCount(12)
         self.teams_table.setHorizontalHeaderLabels([
-            "Username", "Full Name", "Contact", "Address", "Email", "Phone", "Attendance Pin", "Started At", "Added At", "Bank", "Account Number", "Account Holder"
+            "Username", "Name", "Contact", "Address", "Email", "Phone", "Attendance Pin", "Started At", "Added At", "Bank", "Account Number", "Account Holder"
         ])
         self.teams_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.teams_table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -174,7 +174,7 @@ class TeamsProfileDialog(QDialog):
         self.earnings_summary_widget = QWidget()
         self.earnings_summary_layout = QVBoxLayout(self.earnings_summary_widget)
         self.earnings_summary_layout.setContentsMargins(0, 0, 0, 0)
-        self.earnings_summary_layout.setSpacing(4)
+        self.earnings_summary_layout.setSpacing(2)
         tab_layout.addWidget(self.earnings_summary_widget)
         search_row = QHBoxLayout()
         self.earnings_search_edit = QLineEdit()
@@ -376,7 +376,7 @@ class TeamsProfileDialog(QDialog):
         if full_name is None and self._selected_team_index is not None and 0 <= self._selected_team_index < len(self._teams_data):
             full_name = self._teams_data[self._selected_team_index].get("full_name", "")
         summary = (
-            f"Full Name: {full_name or ''}\n"
+            f"Name: {full_name or ''}\n"
             f"Total Days: {len(total_days)}\n"
             f"Total Records: {total_records}\n"
             f"Total Work Hours: {total_hours}\n"
@@ -411,7 +411,7 @@ class TeamsProfileDialog(QDialog):
                     ))
         self.earnings_records_all = earnings_records
         self.earnings_current_page = 1
-        self._update_earnings_table()
+        self._update_earnings_table(username)
 
     def _earnings_search_changed(self):
         self.earnings_current_page = 1
@@ -436,19 +436,19 @@ class TeamsProfileDialog(QDialog):
             self.earnings_current_page = value
             self._update_earnings_table()
 
-    def _update_earnings_table(self):
+    def _update_earnings_table(self, username=None):
         search_text = self.earnings_search_edit.text().strip().lower()
         if search_text:
             self.earnings_records_filtered = [
                 r for r in self.earnings_records_all
                 if (
-                    (r[0] and search_text in str(r[0]).lower()) or  # file name
-                    (r[1] and search_text in str(r[1]).lower()) or  # date
-                    (r[2] and search_text in str(r[2]).lower()) or  # amount
-                    (r[3] and search_text in str(r[3]).lower()) or  # currency
-                    (r[4] and search_text in str(r[4]).lower()) or  # note
-                    (r[5] and search_text in str(r[5]).lower()) or  # status
-                    (r[6] and search_text in str(r[6]).lower())     # id
+                    (r[0] and search_text in str(r[0]).lower()) or
+                    (r[1] and search_text in str(r[1]).lower()) or
+                    (r[2] and search_text in str(r[2]).lower()) or
+                    (r[3] and search_text in str(r[3]).lower()) or
+                    (r[4] and search_text in str(r[4]).lower()) or
+                    (r[5] and search_text in str(r[5]).lower()) or
+                    (r[6] and search_text in str(r[6]).lower())
                 )
             ]
         else:
@@ -515,22 +515,35 @@ class TeamsProfileDialog(QDialog):
                 return f"{int(val):,}".replace(",", ".")
             except Exception:
                 return str(val)
-        # Clear previous summary widgets
         while self.earnings_summary_layout.count():
             item = self.earnings_summary_layout.takeAt(0)
             widget = item.widget()
             if widget:
                 widget.deleteLater()
-        # Pending
+        full_name = ""
+        if username:
+            basedir = Path(__file__).parent.parent.parent
+            db_config_path = basedir / "configs" / "db_config.json"
+            config_manager = ConfigManager(str(db_config_path))
+            db_manager = DatabaseManager(config_manager, config_manager)
+            teams = db_manager.get_all_teams()
+            for team in teams:
+                if team["username"] == username:
+                    full_name = team.get("full_name", "")
+                    break
+        full_name_label = QLabel(f"Name: {full_name}")
+        full_name_label.setStyleSheet("font-size:12px; font-weight:bold; margin-bottom:2px;")
+        self.earnings_summary_layout.addWidget(full_name_label)
         pending_row = QHBoxLayout()
         pending_icon = QLabel()
-        pending_icon.setPixmap(qta.icon("fa6s.clock", color="#ffb300").pixmap(24, 24))
+        pending_icon.setPixmap(qta.icon("fa6s.clock", color="#ffb300").pixmap(16, 16))
         pending_label = QLabel("Pending:")
-        pending_label.setStyleSheet("color:#ffb300; font-size:18px; font-weight:bold;")
+        pending_label.setStyleSheet("color:#ffb300; font-size:12px; font-weight:bold;")
         pending_currency = QLabel(str(currency))
-        pending_currency.setStyleSheet("font-size:18px; font-weight:bold; margin-right:6px;")
+        pending_currency.setStyleSheet("font-size:12px; font-weight:bold; margin-right:6px;")
         pending_amount = QLabel(f"{format_thousands(total_pending)}")
-        pending_amount.setStyleSheet("font-size:18px; font-weight:bold;")
+        pending_amount.setStyleSheet("font-size:12px; font-weight:bold;")
+        pending_row.setSpacing(4)
         pending_row.addWidget(pending_icon)
         pending_row.addWidget(pending_label)
         pending_row.addWidget(pending_currency)
@@ -539,16 +552,16 @@ class TeamsProfileDialog(QDialog):
         pending_widget = QWidget()
         pending_widget.setLayout(pending_row)
         self.earnings_summary_layout.addWidget(pending_widget)
-        # Paid
         paid_row = QHBoxLayout()
         paid_icon = QLabel()
-        paid_icon.setPixmap(qta.icon("fa6s.money-bill-wave", color="#009688").pixmap(24, 24))
+        paid_icon.setPixmap(qta.icon("fa6s.money-bill-wave", color="#009688").pixmap(16, 16))
         paid_label = QLabel("Paid:")
-        paid_label.setStyleSheet("color:#009688; font-size:18px; font-weight:bold;")
+        paid_label.setStyleSheet("color:#009688; font-size:12px; font-weight:bold;")
         paid_currency = QLabel(str(currency))
-        paid_currency.setStyleSheet("font-size:18px; font-weight:bold; margin-right:6px;")
+        paid_currency.setStyleSheet("font-size:12px; font-weight:bold; margin-right:6px;")
         paid_amount = QLabel(f"{format_thousands(total_paid)}")
-        paid_amount.setStyleSheet("font-size:18px; font-weight:bold;")
+        paid_amount.setStyleSheet("font-size:12px; font-weight:bold;")
+        paid_row.setSpacing(4)
         paid_row.addWidget(paid_icon)
         paid_row.addWidget(paid_label)
         paid_row.addWidget(paid_currency)
@@ -557,16 +570,16 @@ class TeamsProfileDialog(QDialog):
         paid_widget = QWidget()
         paid_widget.setLayout(paid_row)
         self.earnings_summary_layout.addWidget(paid_widget)
-        # All Time
         all_row = QHBoxLayout()
         all_icon = QLabel()
-        all_icon.setPixmap(qta.icon("fa6s.chart-column", color="#1976d2").pixmap(24, 24))
+        all_icon.setPixmap(qta.icon("fa6s.chart-column", color="#1976d2").pixmap(16, 16))
         all_label = QLabel("All Time:")
-        all_label.setStyleSheet("color:#1976d2; font-size:18px; font-weight:bold;")
+        all_label.setStyleSheet("color:#1976d2; font-size:12px; font-weight:bold;")
         all_currency = QLabel(str(currency))
-        all_currency.setStyleSheet("font-size:18px; font-weight:bold; margin-right:6px;")
+        all_currency.setStyleSheet("font-size:12px; font-weight:bold; margin-right:6px;")
         all_amount = QLabel(f"{format_thousands(total_amount)}")
-        all_amount.setStyleSheet("font-size:18px; font-weight:bold;")
+        all_amount.setStyleSheet("font-size:12px; font-weight:bold;")
+        all_row.setSpacing(4)
         all_row.addWidget(all_icon)
         all_row.addWidget(all_label)
         all_row.addWidget(all_currency)
@@ -575,9 +588,8 @@ class TeamsProfileDialog(QDialog):
         all_widget = QWidget()
         all_widget.setLayout(all_row)
         self.earnings_summary_layout.addWidget(all_widget)
-        # Total Records
         records_label = QLabel(f"Total Earnings Records: {len(self.earnings_records_filtered)}")
-        records_label.setStyleSheet("color:#666; font-size:14px;")
+        records_label.setStyleSheet("color:#666; font-size:11px; margin-top:2px;")
         self.earnings_summary_layout.addWidget(records_label)
 
     def _on_team_row_clicked(self, row, col):
