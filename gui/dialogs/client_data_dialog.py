@@ -6,6 +6,8 @@ from PySide6.QtCore import Qt
 from database.db_manager import DatabaseManager
 from manager.config_manager import ConfigManager
 from pathlib import Path
+import webbrowser
+import qtawesome as qta
 
 class ClientDataDialog(QDialog):
     def __init__(self, parent=None):
@@ -25,7 +27,7 @@ class ClientDataDialog(QDialog):
         self.clients_table = QTableWidget(tab)
         self.clients_table.setColumnCount(6)
         self.clients_table.setHorizontalHeaderLabels([
-            "Name", "Contact", "Links", "Status", "Note", "ID"
+            "Name", "Contact", "Links", "Status", "Note", "Files"
         ])
         self.clients_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.clients_table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -36,6 +38,26 @@ class ClientDataDialog(QDialog):
         tab_layout.addWidget(self.clients_table)
         self.tab_widget.addTab(tab, "Clients")
         self._load_clients_data()
+
+    def _load_clients_data(self):
+        basedir = Path(__file__).parent.parent.parent
+        db_config_path = basedir / "configs" / "db_config.json"
+        config_manager = ConfigManager(str(db_config_path))
+        db_manager = DatabaseManager(config_manager, config_manager)
+        clients = db_manager.get_all_clients()
+        self.clients_table.setRowCount(len(clients))
+        self._clients_data = []
+        for row_idx, client in enumerate(clients):
+            self._clients_data.append(client)
+            for col_idx, key in enumerate(["client_name", "contact", "links", "status", "note"]):
+                value = client.get(key, "")
+                item = QTableWidgetItem(str(value) if value is not None else "")
+                item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+                self.clients_table.setItem(row_idx, col_idx, item)
+            file_count = db_manager.get_file_count_by_client_id(client["id"])
+            item = QTableWidgetItem(str(file_count))
+            item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            self.clients_table.setItem(row_idx, 5, item)
 
     def _init_details_tab(self):
         tab = QWidget()
@@ -57,6 +79,37 @@ class ClientDataDialog(QDialog):
                 self.details_layout.addRow(label, w)
                 self.details_widgets[key] = w
                 self.details_editable[key] = True
+            elif key == "links":
+                links_widget = QWidget()
+                links_layout = QVBoxLayout(links_widget)
+                links_layout.setContentsMargins(0, 0, 0, 0)
+                entry_row = QHBoxLayout()
+                self.link_entry = QLineEdit("")
+                self.link_entry.setPlaceholderText("Enter link and press Add")
+                self.add_link_btn = QPushButton("Add Link")
+                self.add_link_btn.clicked.connect(self._add_link)
+                entry_row.addWidget(self.link_entry)
+                entry_row.addWidget(self.add_link_btn)
+                links_layout.addLayout(entry_row)
+                self.links_table = QTableWidget()
+                self.links_table.setColumnCount(2)
+                self.links_table.setHorizontalHeaderLabels(["Link", "Actions"])
+                self.links_table.setEditTriggers(QTableWidget.NoEditTriggers)
+                self.links_table.setSelectionBehavior(QTableWidget.SelectRows)
+                self.links_table.setSelectionMode(QTableWidget.SingleSelection)
+                self.links_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+                self.links_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+                links_layout.addWidget(self.links_table)
+                self.details_layout.addRow(label, links_widget)
+                self.details_widgets[key] = self.links_table
+                self.details_editable[key] = True
+                self.links_table.cellClicked.connect(self._on_link_table_cell_clicked)
+            elif key == "status":
+                self.status_combo = QComboBox()
+                self.status_combo.addItems(["Active", "Repeat", "Dormant"])
+                self.details_layout.addRow(label, self.status_combo)
+                self.details_widgets[key] = self.status_combo
+                self.details_editable[key] = True
             else:
                 w = QLineEdit("")
                 self.details_layout.addRow(label, w)
@@ -74,6 +127,7 @@ class ClientDataDialog(QDialog):
         self._selected_client_index = None
         self._add_mode = False
         self.save_button.setEnabled(False)
+        self._editing_link_index = None
 
     def _init_files_tab(self):
         tab = QWidget()
@@ -145,11 +199,15 @@ class ClientDataDialog(QDialog):
         self._clients_data = []
         for row_idx, client in enumerate(clients):
             self._clients_data.append(client)
-            for col_idx, key in enumerate(["client_name", "contact", "links", "status", "note", "id"]):
+            for col_idx, key in enumerate(["client_name", "contact", "links", "status", "note"]):
                 value = client.get(key, "")
                 item = QTableWidgetItem(str(value) if value is not None else "")
                 item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
                 self.clients_table.setItem(row_idx, col_idx, item)
+            file_count = db_manager.get_file_count_by_client_id(client["id"])
+            item = QTableWidgetItem(str(file_count))
+            item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            self.clients_table.setItem(row_idx, 5, item)
 
     def _fill_details_form(self, row):
         if 0 <= row < len(self._clients_data):
@@ -157,13 +215,117 @@ class ClientDataDialog(QDialog):
             self._selected_client_index = row
             self._add_mode = False
             for key, widget in self.details_widgets.items():
-                value = str(client.get(key, ""))
                 if key == "note":
-                    widget.setPlainText(value)
+                    widget.setPlainText(str(client.get(key, "")))
+                elif key == "links":
+                    self._populate_links_table(str(client.get("links", "")))
+                elif key == "status":
+                    status_val = str(client.get("status", "Active"))
+                    idx = self.status_combo.findText(status_val)
+                    if idx != -1:
+                        self.status_combo.setCurrentIndex(idx)
+                    else:
+                        self.status_combo.setCurrentIndex(0)
                 else:
-                    widget.setText(value)
+                    widget.setText(str(client.get(key, "")))
             self.save_button.setEnabled(True)
             self._load_files_for_client(client["id"])
+
+    def _populate_links_table(self, links_str):
+        self.links_table.setRowCount(0)
+        links = [l for l in links_str.split("|") if l.strip()]
+        for idx, link in enumerate(links):
+            self.links_table.insertRow(idx)
+            link_item = QTableWidgetItem(link)
+            self.links_table.setItem(idx, 0, link_item)
+            actions_widget = QWidget()
+            actions_layout = QHBoxLayout(actions_widget)
+            actions_layout.setContentsMargins(0, 0, 0, 0)
+            open_btn = QPushButton()
+            open_btn.setIcon(qta.icon("fa6s.up-right-from-square"))
+            open_btn.setToolTip("Open link")
+            open_btn.clicked.connect(lambda _, url=link: webbrowser.open(url))
+            edit_btn = QPushButton()
+            edit_btn.setIcon(qta.icon("fa6s.pen-to-square"))
+            edit_btn.setToolTip("Edit link")
+            edit_btn.clicked.connect(lambda _, idx=idx: self._edit_link(idx))
+            delete_btn = QPushButton()
+            delete_btn.setIcon(qta.icon("fa6s.trash"))
+            delete_btn.setToolTip("Delete link")
+            delete_btn.clicked.connect(lambda _, idx=idx: self._delete_link(idx))
+            actions_layout.addWidget(open_btn)
+            actions_layout.addWidget(edit_btn)
+            actions_layout.addWidget(delete_btn)
+            self.links_table.setCellWidget(idx, 1, actions_widget)
+
+    def _get_links_list(self):
+        links = []
+        for i in range(self.links_table.rowCount()):
+            item = self.links_table.item(i, 0)
+            if item:
+                links.append(item.text())
+        return links
+
+    def _add_link(self):
+        link_text = self.link_entry.text().strip()
+        if not link_text:
+            QMessageBox.warning(self, "Validation Error", "Link cannot be empty.")
+            return
+        if self._editing_link_index is not None:
+            item = self.links_table.item(self._editing_link_index, 0)
+            if item:
+                item.setText(link_text)
+            self._editing_link_index = None
+            self.add_link_btn.setText("Add Link")
+            self.link_entry.clear()
+            return
+        for i in range(self.links_table.rowCount()):
+            item = self.links_table.item(i, 0)
+            if item and item.text() == link_text:
+                QMessageBox.warning(self, "Duplicate Link", "Link already exists.")
+                return
+        row = self.links_table.rowCount()
+        self.links_table.insertRow(row)
+        link_item = QTableWidgetItem(link_text)
+        self.links_table.setItem(row, 0, link_item)
+        actions_widget = QWidget()
+        actions_layout = QHBoxLayout(actions_widget)
+        actions_layout.setContentsMargins(0, 0, 0, 0)
+        open_btn = QPushButton()
+        open_btn.setIcon(qta.icon("fa6s.up-right-from-square"))
+        open_btn.setToolTip("Open link")
+        open_btn.clicked.connect(lambda _, url=link_text: webbrowser.open(url))
+        edit_btn = QPushButton()
+        edit_btn.setIcon(qta.icon("fa6s.pen-to-square"))
+        edit_btn.setToolTip("Edit link")
+        edit_btn.clicked.connect(lambda _, idx=row: self._edit_link(idx))
+        delete_btn = QPushButton()
+        delete_btn.setIcon(qta.icon("fa6s.trash"))
+        delete_btn.setToolTip("Delete link")
+        delete_btn.clicked.connect(lambda _, idx=row: self._delete_link(idx))
+        actions_layout.addWidget(open_btn)
+        actions_layout.addWidget(edit_btn)
+        actions_layout.addWidget(delete_btn)
+        self.links_table.setCellWidget(row, 1, actions_widget)
+        self.link_entry.clear()
+
+    def _edit_link(self, idx):
+        item = self.links_table.item(idx, 0)
+        if item:
+            self.link_entry.setText(item.text())
+            self._editing_link_index = idx
+            self.add_link_btn.setText("Update Link")
+
+    def _delete_link(self, idx):
+        reply = QMessageBox.question(self, "Delete Link", "Are you sure you want to delete this link?", QMessageBox.Yes | QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            self.links_table.removeRow(idx)
+            self._editing_link_index = None
+            self.add_link_btn.setText("Add Link")
+            self.link_entry.clear()
+
+    def _on_link_table_cell_clicked(self, row, col):
+        pass
 
     def _load_files_for_client(self, client_id):
         basedir = Path(__file__).parent.parent.parent
@@ -314,6 +476,13 @@ class ClientDataDialog(QDialog):
         for key, widget in self.details_widgets.items():
             if key == "note":
                 widget.setPlainText("")
+            elif key == "links":
+                self.links_table.setRowCount(0)
+                self.link_entry.clear()
+                self._editing_link_index = None
+                self.add_link_btn.setText("Add Link")
+            elif key == "status":
+                self.status_combo.setCurrentIndex(0)
             else:
                 widget.setText("")
         self.save_button.setEnabled(True)
@@ -337,6 +506,11 @@ class ClientDataDialog(QDialog):
         for key, widget in self.details_widgets.items():
             if key == "note":
                 updated_data[key] = widget.toPlainText()
+            elif key == "links":
+                links = self._get_links_list()
+                updated_data[key] = "|".join(links)
+            elif key == "status":
+                updated_data[key] = self.status_combo.currentText()
             else:
                 updated_data[key] = widget.text()
         if not updated_data["client_name"].strip():
@@ -365,6 +539,13 @@ class ClientDataDialog(QDialog):
             for key, widget in self.details_widgets.items():
                 if key == "note":
                     widget.setPlainText("")
+                elif key == "links":
+                    self.links_table.setRowCount(0)
+                    self.link_entry.clear()
+                    self._editing_link_index = None
+                    self.add_link_btn.setText("Add Link")
+                elif key == "status":
+                    self.status_combo.setCurrentIndex(0)
                 else:
                     widget.setText("")
             self.save_button.setEnabled(False)
@@ -398,6 +579,19 @@ class ClientDataDialog(QDialog):
             except Exception as e:
                 QMessageBox.warning(self, "Error", str(e))
                 return
+            self._load_clients_data()
+            self._selected_client_index = None
+            self.save_button.setEnabled(False)
+            self.files_table.setRowCount(0)
+            while self.files_summary_layout.count():
+                item = self.files_summary_layout.takeAt(0)
+                widget = item.widget()
+                if widget:
+                    widget.deleteLater()
+            self.files_records_all = []
+            self.files_current_page = 1
+            self._update_files_table()
+            QMessageBox.information(self, "Success", "Client data updated successfully.")
             self._load_clients_data()
             self._selected_client_index = None
             self.save_button.setEnabled(False)

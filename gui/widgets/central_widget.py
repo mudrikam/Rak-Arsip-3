@@ -476,12 +476,15 @@ class CentralWidget(QWidget):
                     operational_percent_str = f"Operational Percentage: {used_percentage}%"
                 except Exception:
                     operational_percent_str = ""
+            # Fetch client name for this file
+            client_name = self.db_manager.get_client_name_by_file_id(row_data['id'])
             tooltip = (
                 f"Date: {row_data.get('date','')}\n"
                 f"Name: {row_data.get('name','')}\n"
                 f"Root: {row_data.get('root','')}\n"
                 f"Path: {row_data.get('path','')}\n"
                 f"Status: {row_data.get('status','')}\n"
+                f"Client: {client_name}\n"
                 f"Price: {price_note_str}\n"
                 f"{shares_str}\n"
                 f"{amount_str}\n"

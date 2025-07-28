@@ -42,6 +42,12 @@ class AssignPriceDialog(QDialog):
         self.client_combo.addItem("")
         for client in clients_sorted:
             self.client_combo.addItem(client["client_name"], client["id"])
+        assigned_client_id = db_manager.get_assigned_client_id_for_file(file_id)
+        if assigned_client_id:
+            for idx in range(self.client_combo.count()):
+                if self.client_combo.itemData(idx) == assigned_client_id:
+                    self.client_combo.setCurrentIndex(idx)
+                    break
         form_layout.addRow(QLabel("Client:"), self.client_combo)
 
         main_layout.addLayout(form_layout)
@@ -196,7 +202,6 @@ class AssignPriceDialog(QDialog):
         client_index = self.client_combo.currentIndex()
         client_id = self.client_combo.currentData()
         file_id = self.file_record["id"]
-        price = self.price_edit.text().strip()
         item_price_id = self.db_manager.get_item_price_id(file_id)
         if client_id and item_price_id:
             self.db_manager.assign_file_client_price(file_id, item_price_id, client_id)

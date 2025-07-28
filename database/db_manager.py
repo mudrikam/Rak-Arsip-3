@@ -774,12 +774,16 @@ class DatabaseManager(QObject):
         self.close()
         return files
 
-    def get_item_price_id(self, file_id):
-        self.connect()
-        cursor = self.connection.cursor()
-        cursor.execute("SELECT id FROM item_price WHERE file_id = ?", (file_id,))
-        row = cursor.fetchone()
-        self.close()
+    def get_item_price_id(self, file_id, cursor=None):
+        if cursor is None:
+            self.connect()
+            cursor = self.connection.cursor()
+            cursor.execute("SELECT id FROM item_price WHERE file_id = ?", (file_id,))
+            row = cursor.fetchone()
+            self.close()
+        else:
+            cursor.execute("SELECT id FROM item_price WHERE file_id = ?", (file_id,))
+            row = cursor.fetchone()
         if row:
             return row["id"]
         return None
@@ -1072,3 +1076,43 @@ class DatabaseManager(QObject):
         operational_percentage = int(self.window_config_manager.get("operational_percentage"))
         self.update_earnings_shares_with_percentage(file_id, operational_percentage)
         self.create_temp_file()
+
+    def get_client_name_by_file_id(self, file_id):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute("""
+            SELECT c.client_name
+            FROM file_client_price fcp
+            JOIN client c ON fcp.client_id = c.id
+            WHERE fcp.file_id = ?
+            LIMIT 1
+        """, (file_id,))
+        row = cursor.fetchone()
+        self.close()
+        if row:
+            return row[0]
+        return ""
+
+    def get_file_count_by_client_id(self, client_id):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT COUNT(*) FROM file_client_price WHERE client_id = ?", (client_id,))
+        count = cursor.fetchone()[0]
+        self.close()
+        return count
+
+    def get_assigned_client_id_for_file(self, file_id):
+        self.connect()
+        cursor = self.connection.cursor()
+        item_price_id = self.get_item_price_id(file_id, cursor)
+        assigned_client_id = None
+        if item_price_id:
+            cursor.execute(
+                "SELECT client_id FROM file_client_price WHERE file_id = ? AND item_price_id = ?",
+                (file_id, item_price_id)
+            )
+            row = cursor.fetchone()
+            if row:
+                assigned_client_id = row[0]
+        self.close()
+        return assigned_client_id
