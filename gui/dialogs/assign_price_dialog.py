@@ -34,6 +34,22 @@ class AssignPriceDialog(QDialog):
         form_layout.addRow(QLabel("Price:"), self.price_edit)
         form_layout.addRow(QLabel("Currency:"), self.currency_combo)
         form_layout.addRow(QLabel("Note:"), self.note_edit)
+
+        # Dropdown klien (urut A-Z)
+        self.client_combo = QComboBox()
+        clients = db_manager.get_all_clients()
+        clients_sorted = sorted(clients, key=lambda c: c["client_name"].lower())
+        self.client_combo.addItem("")
+        for client in clients_sorted:
+            self.client_combo.addItem(client["client_name"], client["id"])
+        assigned_client_id = db_manager.get_assigned_client_id_for_file(file_id)
+        if assigned_client_id:
+            for idx in range(self.client_combo.count()):
+                if self.client_combo.itemData(idx) == assigned_client_id:
+                    self.client_combo.setCurrentIndex(idx)
+                    break
+        form_layout.addRow(QLabel("Client:"), self.client_combo)
+
         main_layout.addLayout(form_layout)
 
         self.file_record = file_record
@@ -58,7 +74,8 @@ class AssignPriceDialog(QDialog):
         add_row = QHBoxLayout()
         self.team_combo = QComboBox()
         teams = db_manager.get_all_teams()
-        self.team_combo.addItems([team["username"] for team in teams])
+        teams_sorted = sorted(teams, key=lambda t: t["username"].lower())
+        self.team_combo.addItems([team["username"] for team in teams_sorted])
         add_row.addWidget(self.team_combo)
         self.add_team_btn = QPushButton()
         self.add_team_btn.setIcon(qta.icon("fa6s.plus"))
@@ -83,6 +100,7 @@ class AssignPriceDialog(QDialog):
         self.price_edit.textChanged.connect(self._on_price_changed)
         self.currency_combo.currentTextChanged.connect(self._on_price_changed)
         self.note_edit.textChanged.connect(self._on_note_changed)
+        self.client_combo.currentIndexChanged.connect(self._on_client_changed)
         self.refresh_earnings_table()
 
     def _get_operational_percentage(self):
@@ -179,6 +197,14 @@ class AssignPriceDialog(QDialog):
         note = self.note_edit.text().strip()
         file_id = self.file_record["id"]
         self.db_manager.assign_price(file_id, price, currency, note)
+
+    def _on_client_changed(self):
+        client_index = self.client_combo.currentIndex()
+        client_id = self.client_combo.currentData()
+        file_id = self.file_record["id"]
+        item_price_id = self.db_manager.get_item_price_id(file_id)
+        if client_id and item_price_id:
+            self.db_manager.assign_file_client_price(file_id, item_price_id, client_id)
 
     def _on_accept(self):
         self._parent.refresh_table()

@@ -5,6 +5,7 @@ import qtawesome as qta
 import webbrowser
 from gui.dialogs.about_dialog import AboutDialog
 from gui.windows.preferences_window import PreferencesWindow
+from gui.dialogs.client_data_dialog import ClientDataDialog
 import sys
 import os
 
@@ -45,6 +46,10 @@ class MainMenu(QMenuBar):
         self.attendance_action.triggered.connect(self.show_teams_attendance)
         self.addAction(self.attendance_action)
 
+        self.client_action = QAction("Client", self)
+        self.client_action.triggered.connect(self.show_client_dialog)
+        self.addAction(self.client_action)
+
         help_menu = QMenu("Help", self)
         self.about_action = QAction(qta.icon('fa6s.circle-info'), "About", self)
         self.repo_action = QAction(qta.icon('fa6b.github'), "Repo", self)
@@ -73,6 +78,10 @@ class MainMenu(QMenuBar):
     def show_teams_attendance(self):
         from gui.dialogs.teams_attendance_dialog import TeamsAttendanceDialog
         dialog = TeamsAttendanceDialog(self)
+        dialog.exec()
+
+    def show_client_dialog(self):
+        dialog = ClientDataDialog(self)
         dialog.exec()
 
     def _get_central_widget(self):

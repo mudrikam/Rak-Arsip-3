@@ -115,7 +115,7 @@ class TeamsAttendanceDialog(QDialog):
                 )
         else:
             self.toggle_button.setStyleSheet(
-                "background-color: #cccccc; color: #888888; font-weight: bold; padding: 8px; border-radius: 8px;"
+                "background-color: rgba(90, 90, 90, 0.55); color: #888888; font-weight: bold; padding: 8px; border-radius: 8px;"
             )
 
     def _format_date(self, date_str):

@@ -91,6 +91,27 @@
             "updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
             "FOREIGN KEY (team_id)": "REFERENCES teams(id)",
             "FOREIGN KEY (item_price_id)": "REFERENCES item_price(id)"
+        },
+        "client": {
+            "id": "INTEGER PRIMARY KEY AUTOINCREMENT",
+            "client_name": "TEXT NOT NULL",
+            "contact": "TEXT",
+            "links": "TEXT",
+            "status": "TEXT",
+            "note": "TEXT",
+            "created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+            "updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP"
+        },
+        "file_client_price": {
+            "id": "INTEGER PRIMARY KEY AUTOINCREMENT",
+            "file_id": "INTEGER NOT NULL",
+            "item_price_id": "INTEGER NOT NULL",
+            "client_id": "INTEGER NOT NULL",
+            "created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+            "updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+            "FOREIGN KEY (file_id)": "REFERENCES files(id)",
+            "FOREIGN KEY (item_price_id)": "REFERENCES item_price(id)",
+            "FOREIGN KEY (client_id)": "REFERENCES client(id)"
         }
     }
 }
