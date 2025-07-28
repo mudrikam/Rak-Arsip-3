@@ -36,12 +36,20 @@ class MainMenu(QMenuBar):
         data_menu.addAction(self.edit_selected_action)
         self.addMenu(data_menu)
 
+
+        # Teams menu
+        teams_menu = QMenu("Teams", self)
+        self.profile_action = QAction(qta.icon('fa6s.user-group'), "Profile", self)
+        teams_menu.addAction(self.profile_action)
+        self.addMenu(teams_menu)
+
         help_menu = QMenu("Help", self)
         self.about_action = QAction(qta.icon('fa6s.circle-info'), "About", self)
         self.repo_action = QAction(qta.icon('fa6b.github'), "Repo", self)
         help_menu.addAction(self.about_action)
         help_menu.addAction(self.repo_action)
         self.addMenu(help_menu)
+
 
         self.exit_action.triggered.connect(self.close_app)
         self.relaunch_action.triggered.connect(self.relaunch_app)
@@ -55,6 +63,13 @@ class MainMenu(QMenuBar):
         self.sort_action.triggered.connect(self._trigger_sort)
         self.paste_search_action.triggered.connect(self._trigger_paste_search)
         self.edit_selected_action.triggered.connect(self._trigger_edit_selected_record)
+
+        # Connect Teams menu
+        self.profile_action.triggered.connect(self.show_teams_profile)
+    def show_teams_profile(self):
+        from gui.dialogs.teams_profile_dialog import TeamsProfileDialog
+        dialog = TeamsProfileDialog(self)
+        dialog.exec()
 
     def _get_central_widget(self):
         # Try to get central widget from parent window

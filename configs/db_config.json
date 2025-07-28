@@ -55,6 +55,9 @@
             "phone": "TEXT",
             "attendance_pin": "TEXT",
             "profile_image": "TEXT",
+            "bank": "TEXT",
+            "account_number": "TEXT",
+            "account_holder": "TEXT",
             "started_at": "DATETIME",
             "added_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
             "updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP"

@@ -99,6 +99,7 @@ class DatabaseManager(QObject):
             self.connection = None
 
     def create_tables(self):
+        self.connect()
         cursor = self.connection.cursor()
         for table_name, columns in self.tables_config.items():
             column_defs = []
@@ -112,11 +113,14 @@ class DatabaseManager(QObject):
             create_sql = f"CREATE TABLE IF NOT EXISTS {table_name} ({', '.join(all_defs)})"
             cursor.execute(create_sql)
         self.connection.commit()
+        self.close()
 
     def initialize_statuses(self):
+        self.connect()
         cursor = self.connection.cursor()
         cursor.execute("SELECT COUNT(*) FROM statuses")
         if cursor.fetchone()[0] > 0:
+            self.close()
             return
         status_config = self.window_config_manager.get("status_options")
         for status_name, config in status_config.items():
@@ -125,13 +129,18 @@ class DatabaseManager(QObject):
                 (status_name, config["color"], config["font_weight"])
             )
         self.connection.commit()
+        self.close()
 
     def get_all_categories(self):
+        self.connect()
         cursor = self.connection.cursor()
         cursor.execute("SELECT DISTINCT name FROM categories ORDER BY name")
-        return [row[0] for row in cursor.fetchall()]
+        result = [row[0] for row in cursor.fetchall()]
+        self.close()
+        return result
 
     def get_subcategories_by_category(self, category_name):
+        self.connect()
         cursor = self.connection.cursor()
         cursor.execute("""
             SELECT DISTINCT sc.name 
@@ -140,20 +149,27 @@ class DatabaseManager(QObject):
             WHERE c.name = ? 
             ORDER BY sc.name
         """, (category_name,))
-        return [row[0] for row in cursor.fetchall()]
+        result = [row[0] for row in cursor.fetchall()]
+        self.close()
+        return result
 
     def get_or_create_category(self, category_name):
+        self.connect()
         cursor = self.connection.cursor()
         cursor.execute("SELECT id FROM categories WHERE name = ?", (category_name,))
         result = cursor.fetchone()
         if result:
+            self.close()
             return result[0]
         cursor.execute("INSERT INTO categories (name) VALUES (?)", (category_name,))
         self.connection.commit()
         self.create_temp_file()
-        return cursor.lastrowid
+        last_id = cursor.lastrowid
+        self.close()
+        return last_id
 
     def get_or_create_subcategory(self, category_id, subcategory_name):
+        self.connect()
         cursor = self.connection.cursor()
         cursor.execute(
             "SELECT id FROM subcategories WHERE category_id = ? AND name = ?",
@@ -161,6 +177,7 @@ class DatabaseManager(QObject):
         )
         result = cursor.fetchone()
         if result:
+            self.close()
             return result[0]
         cursor.execute(
             "INSERT INTO subcategories (category_id, name) VALUES (?, ?)",
@@ -168,25 +185,36 @@ class DatabaseManager(QObject):
         )
         self.connection.commit()
         self.create_temp_file()
-        return cursor.lastrowid
+        last_id = cursor.lastrowid
+        self.close()
+        return last_id
 
     def get_status_id(self, status_name):
+        self.connect()
         cursor = self.connection.cursor()
         cursor.execute("SELECT id FROM statuses WHERE name = ?", (status_name,))
         result = cursor.fetchone()
+        self.close()
         return result[0] if result else None
 
     def get_all_templates(self):
+        self.connect()
         cursor = self.connection.cursor()
         cursor.execute("SELECT id, name, content FROM templates ORDER BY name")
-        return cursor.fetchall()
+        result = cursor.fetchall()
+        self.close()
+        return result
 
     def get_template_by_id(self, template_id):
+        self.connect()
         cursor = self.connection.cursor()
         cursor.execute("SELECT id, name, content FROM templates WHERE id = ?", (template_id,))
-        return cursor.fetchone()
+        result = cursor.fetchone()
+        self.close()
+        return result
 
     def insert_template(self, name, content):
+        self.connect()
         cursor = self.connection.cursor()
         cursor.execute(
             "INSERT INTO templates (name, content) VALUES (?, ?)",
@@ -194,7 +222,9 @@ class DatabaseManager(QObject):
         )
         self.connection.commit()
         self.create_temp_file()
-        return cursor.lastrowid
+        last_id = cursor.lastrowid
+        self.close()
+        return last_id
 
     def create_unique_path(self, base_path):
         if not os.path.exists(base_path):
@@ -219,6 +249,7 @@ class DatabaseManager(QObject):
         return unique_main_path
 
     def insert_file(self, date, name, root, path, status_id, category_id=None, subcategory_id=None, template_id=None):
+        self.connect()
         cursor = self.connection.cursor()
         cursor.execute("""
             INSERT INTO files (date, name, root, path, status_id, category_id, subcategory_id, template_id)
@@ -226,72 +257,90 @@ class DatabaseManager(QObject):
         """, (date, name, root, path, status_id, category_id, subcategory_id, template_id))
         self.connection.commit()
         self.create_temp_file()
-        return cursor.lastrowid
+        last_id = cursor.lastrowid
+        self.close()
+        return last_id
 
     def update_file_status(self, file_id, status_id):
+        self.connect()
         cursor = self.connection.cursor()
         cursor.execute(
             "UPDATE files SET status_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
             (status_id, file_id)
         )
         self.connection.commit()
+        self.close()
         self.create_temp_file()
 
     def update_file_record(self, file_id, name, root, path, status_id, category_id, subcategory_id):
+        self.connect()
         cursor = self.connection.cursor()
         cursor.execute("""
             UPDATE files SET name = ?, root = ?, path = ?, status_id = ?, category_id = ?, subcategory_id = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
         """, (name, root, path, status_id, category_id, subcategory_id, file_id))
         self.connection.commit()
+        self.close()
         self.create_temp_file()
 
     def delete_category(self, category_name):
+        self.connect()
         cursor = self.connection.cursor()
         cursor.execute("SELECT id FROM categories WHERE name = ?", (category_name,))
         result = cursor.fetchone()
         if not result:
+            self.close()
             return
         category_id = result[0]
         cursor.execute("UPDATE files SET category_id = NULL WHERE category_id = ?", (category_id,))
         cursor.execute("DELETE FROM subcategories WHERE category_id = ?", (category_id,))
         cursor.execute("DELETE FROM categories WHERE id = ?", (category_id,))
         self.connection.commit()
+        self.close()
         self.create_temp_file()
 
     def delete_subcategory(self, category_name, subcategory_name):
+        self.connect()
         cursor = self.connection.cursor()
         cursor.execute("SELECT id FROM categories WHERE name = ?", (category_name,))
         category = cursor.fetchone()
         if not category:
+            self.close()
             return
         category_id = category[0]
         cursor.execute("SELECT id FROM subcategories WHERE category_id = ? AND name = ?", (category_id, subcategory_name))
         subcategory = cursor.fetchone()
         if not subcategory:
+            self.close()
             return
         subcategory_id = subcategory[0]
         cursor.execute("UPDATE files SET subcategory_id = NULL WHERE subcategory_id = ?", (subcategory_id,))
         cursor.execute("DELETE FROM subcategories WHERE id = ?", (subcategory_id,))
         self.connection.commit()
+        self.close()
         self.create_temp_file()
 
     def delete_template(self, template_name):
+        self.connect()
         cursor = self.connection.cursor()
         cursor.execute("SELECT id FROM templates WHERE name = ?", (template_name,))
         result = cursor.fetchone()
         if not result:
+            self.close()
             return
         template_id = result[0]
         cursor.execute("UPDATE files SET template_id = NULL WHERE template_id = ?", (template_id,))
         cursor.execute("DELETE FROM templates WHERE id = ?", (template_id,))
         self.connection.commit()
+        self.close()
         self.create_temp_file()
 
     def delete_file(self, file_id):
+        self.connect()
         cursor = self.connection.cursor()
         cursor.execute("DELETE FROM files WHERE id = ?", (file_id,))
         self.connection.commit()
+        self.close()
         self.create_temp_file()
 
     def auto_backup_database_daily(self):
@@ -351,21 +400,18 @@ class DatabaseManager(QObject):
                 pass
 
     def cleanup_old_backups(self, backup_dir):
-        try:
-            backups = []
-            for fname in os.listdir(backup_dir):
-                if fname.startswith("archive_database_") and fname.endswith(".db"):
-                    fpath = os.path.join(backup_dir, fname)
-                    backups.append((fpath, os.path.getmtime(fpath)))
-            backups.sort(key=lambda x: x[1])
-            while len(backups) >= 7:
-                try:
-                    os.remove(backups[0][0])
-                    backups.pop(0)
-                except Exception as e:
-                    print(f"Error removing old backup: {e}")
-        except Exception as e:
-            print(f"Error cleaning up backups: {e}")
+        backups = []
+        for fname in os.listdir(backup_dir):
+            if fname.startswith("archive_database_") and fname.endswith(".db"):
+                fpath = os.path.join(backup_dir, fname)
+                backups.append((fpath, os.path.getmtime(fpath)))
+        backups.sort(key=lambda x: x[1])
+        while len(backups) >= 7:
+            try:
+                os.remove(backups[0][0])
+                backups.pop(0)
+            except Exception as e:
+                print(f"Error removing old backup: {e}")
 
     def import_from_csv(self, csv_path, progress_callback=None):
         import csv
@@ -488,6 +534,7 @@ class DatabaseManager(QObject):
             self.close()
 
     def get_files_page(self, page=1, page_size=20, search_query=None, sort_field="date", sort_order="desc", status_value=None):
+        self.connect()
         cursor = self.connection.cursor()
         offset = (page - 1) * page_size
         params = []
@@ -581,9 +628,11 @@ class DatabaseManager(QObject):
                 "subcategory": row["subcategory"],
                 "template": row["template"]
             })
+        self.close()
         return result
 
     def count_files(self, search_query=None, status_value=None):
+        self.connect()
         cursor = self.connection.cursor()
         params = []
         where_clauses = []
@@ -607,7 +656,9 @@ class DatabaseManager(QObject):
             {where_sql}
         """
         cursor.execute(sql, params)
-        return cursor.fetchone()[0]
+        count = cursor.fetchone()[0]
+        self.close()
+        return count
 
     def assign_price(self, file_id, price, currency, note=""):
         self.connect()
@@ -648,3 +699,66 @@ class DatabaseManager(QObject):
         if row:
             return str(row["price"]) if row["price"] is not None else "", row["currency"] or "IDR", row["note"] or ""
         return "", "IDR", ""
+
+    def get_all_teams(self):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "SELECT username, full_name, contact, address, email, phone, attendance_pin, started_at, added_at, bank, account_number, account_holder FROM teams ORDER BY added_at DESC"
+        )
+        rows = cursor.fetchall()
+        teams = []
+        for row in rows:
+            teams.append({
+                "username": row[0],
+                "full_name": row[1],
+                "contact": row[2],
+                "address": row[3],
+                "email": row[4],
+                "phone": row[5],
+                "attendance_pin": row[6],
+                "started_at": row[7],
+                "added_at": row[8],
+                "bank": row[9],
+                "account_number": row[10],
+                "account_holder": row[11]
+            })
+        self.close()
+        return teams
+
+    def update_team(self, old_username, new_username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder):
+        if not new_username or not full_name:
+            raise ValueError("Username and Full Name cannot be empty.")
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute("""
+            UPDATE teams SET
+                username = ?,
+                full_name = ?,
+                contact = ?,
+                address = ?,
+                email = ?,
+                phone = ?,
+                attendance_pin = ?,
+                started_at = ?,
+                bank = ?,
+                account_number = ?,
+                account_holder = ?
+            WHERE username = ?
+        """, (new_username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder, old_username))
+        self.connection.commit()
+        self.close()
+        self.create_temp_file()
+
+    def add_team(self, username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder):
+        if not username or not full_name:
+            raise ValueError("Username and Full Name cannot be empty.")
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute("""
+            INSERT INTO teams (username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder, added_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        """, (username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder))
+        self.connection.commit()
+        self.close()
+        self.create_temp_file()
