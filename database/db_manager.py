@@ -168,13 +168,15 @@ class DatabaseManager(QObject):
         return result
 
     def get_or_create_category(self, category_name):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         cursor.execute("SELECT id FROM categories WHERE name = ?", (category_name,))
         result = cursor.fetchone()
+        self.close()
         if result:
-            self.close()
             return result[0]
+        self.connect()
+        cursor = self.connection.cursor()
         cursor.execute("INSERT INTO categories (name) VALUES (?)", (category_name,))
         self.connection.commit()
         self.create_temp_file()
@@ -183,16 +185,18 @@ class DatabaseManager(QObject):
         return last_id
 
     def get_or_create_subcategory(self, category_id, subcategory_name):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         cursor.execute(
             "SELECT id FROM subcategories WHERE category_id = ? AND name = ?",
             (category_id, subcategory_name)
         )
         result = cursor.fetchone()
+        self.close()
         if result:
-            self.close()
             return result[0]
+        self.connect()
+        cursor = self.connection.cursor()
         cursor.execute(
             "INSERT INTO subcategories (category_id, name) VALUES (?, ?)",
             (category_id, subcategory_name)
@@ -719,24 +723,32 @@ class DatabaseManager(QObject):
         return count
 
     def assign_price(self, file_id, price, currency, note=""):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         cursor.execute("SELECT id FROM item_price WHERE file_id = ?", (file_id,))
         item_price_row = cursor.fetchone()
+        self.close()
         if item_price_row:
             item_price_id = item_price_row["id"]
+            self.connect()
+            cursor = self.connection.cursor()
             cursor.execute(
                 "UPDATE item_price SET price = ?, currency = ?, note = ? WHERE id = ?",
                 (price, currency, note, item_price_id)
             )
+            self.connection.commit()
+            self.close()
+            self.create_temp_file()
         else:
+            self.connect()
+            cursor = self.connection.cursor()
             cursor.execute(
                 "INSERT INTO item_price (file_id, price, currency, note) VALUES (?, ?, ?, ?)",
                 (file_id, price, currency, note)
             )
-        self.connection.commit()
-        self.close()
-        self.create_temp_file()
+            self.connection.commit()
+            self.close()
+            self.create_temp_file()
 
     def get_item_price(self, file_id):
         self.connect(write=False)
@@ -982,20 +994,22 @@ class DatabaseManager(QObject):
         return None
 
     def add_attendance_record(self, username, pin, note="", mode="checkin"):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         cursor.execute(
             "SELECT id FROM teams WHERE username = ? AND attendance_pin = ?",
             (username, pin)
         )
         team_row = cursor.fetchone()
+        self.close()
         if not team_row:
-            self.close()
             return False, "Invalid username or pin."
         team_id = team_row[0]
         now_date = datetime.now().strftime("%Y-%m-%d")
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         if mode == "checkin":
+            self.connect()
+            cursor = self.connection.cursor()
             cursor.execute(
                 "INSERT INTO attendance (team_id, date, check_in, note) VALUES (?, ?, ?, ?)",
                 (team_id, now_date, now_str, note)
@@ -1005,13 +1019,18 @@ class DatabaseManager(QObject):
             self.create_temp_file()
             return True, "Checked in."
         elif mode == "checkout":
+            self.connect(write=False)
+            cursor = self.connection.cursor()
             cursor.execute(
                 "SELECT id FROM attendance WHERE team_id = ? AND check_in IS NOT NULL AND check_out IS NULL ORDER BY id DESC LIMIT 1",
                 (team_id,)
             )
             open_attendance = cursor.fetchone()
+            self.close()
             if open_attendance:
                 att_id = open_attendance[0]
+                self.connect()
+                cursor = self.connection.cursor()
                 cursor.execute(
                     "UPDATE attendance SET check_out = ?, note = ? WHERE id = ?",
                     (now_str, note, att_id)
@@ -1021,10 +1040,8 @@ class DatabaseManager(QObject):
                 self.create_temp_file()
                 return True, "Checked out."
             else:
-                self.close()
                 return False, "No open attendance to check out."
         else:
-            self.close()
             return False, "Invalid mode."
 
     def get_attendance_by_username_pin(self, username, pin):
@@ -1324,42 +1341,53 @@ class DatabaseManager(QObject):
         return batch_numbers
 
     def add_batch_number(self, batch_number, note="", client_id=None):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         cursor.execute("SELECT COUNT(*) FROM batch_list WHERE batch_number = ?", (batch_number,))
         exists = cursor.fetchone()[0]
+        self.close()
         if not exists:
             if client_id is None:
                 raise ValueError("client_id is required for batch_list")
+            self.connect()
+            cursor = self.connection.cursor()
             cursor.execute(
                 "INSERT INTO batch_list (batch_number, client_id, note, created_at, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
                 (batch_number, client_id, note)
             )
             self.connection.commit()
             self.create_temp_file()
-        self.close()
+            self.close()
 
     def assign_file_client_batch(self, file_id, client_id, batch_number, note=""):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         cursor.execute(
             "SELECT id FROM file_client_batch WHERE file_id = ? AND client_id = ?",
             (file_id, client_id)
         )
         row = cursor.fetchone()
+        self.close()
         if row:
+            self.connect()
+            cursor = self.connection.cursor()
             cursor.execute(
                 "UPDATE file_client_batch SET batch_number = ?, note = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                 (batch_number, note, row[0])
             )
+            self.connection.commit()
+            self.create_temp_file()
+            self.close()
         elif client_id and batch_number:
+            self.connect()
+            cursor = self.connection.cursor()
             cursor.execute(
                 "INSERT INTO file_client_batch (file_id, client_id, batch_number, note, created_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
                 (file_id, client_id, batch_number, note)
             )
-        self.connection.commit()
-        self.create_temp_file()
-        self.close()
+            self.connection.commit()
+            self.create_temp_file()
+            self.close()
 
     def get_assigned_batch_number(self, file_id, client_id):
         self.connect(write=False)
