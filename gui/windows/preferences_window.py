@@ -671,7 +671,9 @@ class PreferencesWindow(QDialog):
                 "SELECT COUNT(*) FROM item_price",
                 "SELECT COUNT(*) FROM earnings",
                 "SELECT COUNT(*) FROM client",
-                "SELECT COUNT(*) FROM file_client_price"
+                "SELECT COUNT(*) FROM file_client_price",
+                "SELECT COUNT(*) FROM batch_list",
+                "SELECT COUNT(*) FROM file_client_batch"
             ]
             for query in table_queries:
                 cursor.execute(query)

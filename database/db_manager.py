@@ -513,6 +513,18 @@ class DatabaseManager(QObject):
                             cursor.execute("REPLACE INTO file_client_price (id, file_id, item_price_id, client_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)", (row[0], row[1], row[2], row[3], row[4], row[5]))
                         except Exception as e:
                             print(f"Error importing file_client_price: {e}")
+                    # batch_list
+                    elif current_table == "batch_list" and len(row) >= 6:
+                        try:
+                            cursor.execute("REPLACE INTO batch_list (id, batch_number, client_id, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)", (row[0], row[1], row[2], row[3], row[4], row[5]))
+                        except Exception as e:
+                            print(f"Error importing batch_list: {e}")
+                    # file_client_batch
+                    elif current_table == "file_client_batch" and len(row) >= 7:
+                        try:
+                            cursor.execute("REPLACE INTO file_client_batch (id, batch_number, client_id, file_id, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)", (row[0], row[1], row[2], row[3], row[4], row[5], row[6]))
+                        except Exception as e:
+                            print(f"Error importing file_client_batch: {e}")
                     processed += 1
                     if progress_callback and (processed % 10 == 0 or processed == total_rows):
                         progress_callback(processed, total_rows)
@@ -549,7 +561,9 @@ class DatabaseManager(QObject):
                     ("item_price", "SELECT id, file_id, price, currency, note, created_at, updated_at FROM item_price"),
                     ("earnings", "SELECT id, team_id, item_price_id, amount, note, created_at, updated_at FROM earnings"),
                     ("client", "SELECT id, client_name, contact, links, status, note, created_at, updated_at FROM client"),
-                    ("file_client_price", "SELECT id, file_id, item_price_id, client_id, created_at, updated_at FROM file_client_price")
+                    ("file_client_price", "SELECT id, file_id, item_price_id, client_id, created_at, updated_at FROM file_client_price"),
+                    ("batch_list", "SELECT id, batch_number, client_id, note, created_at, updated_at FROM batch_list"),
+                    ("file_client_batch", "SELECT id, batch_number, client_id, file_id, note, created_at, updated_at FROM file_client_batch")
                 ]
                 processed = 0
                 total_rows = 0

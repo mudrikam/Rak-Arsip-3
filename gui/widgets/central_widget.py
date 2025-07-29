@@ -183,7 +183,7 @@ class CentralWidget(QWidget):
         self.setLayout(layout)
 
         self.refresh_btn.clicked.connect(self.refresh_table)
-        self.search_edit.textChanged.connect(self.apply_search)
+        self.search_edit.returnPressed.connect(self.apply_search)
         self.prev_btn.clicked.connect(self.prev_page)
         self.next_btn.clicked.connect(self.next_page)
         self.page_input.valueChanged.connect(self.goto_page)
