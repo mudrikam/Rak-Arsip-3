@@ -1094,7 +1094,8 @@ class DatabaseManager(QObject):
         return result
 
     def assign_earning_with_percentage(self, file_id, username, note, operational_percentage):
-        self.connect()
+        # Read-only check
+        self.connect(write=False)
         cursor = self.connection.cursor()
         cursor.execute("SELECT id FROM teams WHERE username = ?", (username,))
         team_row = cursor.fetchone()
@@ -1113,9 +1114,12 @@ class DatabaseManager(QObject):
         count = cursor.fetchone()[0]
         cursor.execute("SELECT id FROM earnings WHERE item_price_id = ? AND team_id = ?", (item_price_id, team_id))
         exists = cursor.fetchone()
+        self.close()
         if exists:
-            self.close()
             return False
+        # Insert (write)
+        self.connect()
+        cursor = self.connection.cursor()
         cursor.execute(
             "INSERT INTO earnings (team_id, item_price_id, amount, note) VALUES (?, ?, ?, ?)",
             (team_id, item_price_id, 0, note)
