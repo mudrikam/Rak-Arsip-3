@@ -197,6 +197,10 @@ class CentralWidget(QWidget):
         copy_path_shortcut.activated.connect(self.copy_path)
         open_explorer_shortcut = QShortcut(QKeySequence("Ctrl+E"), self)
         open_explorer_shortcut.activated.connect(self.open_explorer)
+        assign_price_shortcut = QShortcut(QKeySequence("Shift+A"), self)
+        assign_price_shortcut.activated.connect(self.assign_price_shortcut)
+        edit_record_shortcut = QShortcut(QKeySequence("Shift+E"), self)
+        edit_record_shortcut.activated.connect(self.edit_record_shortcut)
 
         self._search_query = ""
         self._status_filter = None
@@ -267,6 +271,52 @@ class CentralWidget(QWidget):
             else:
                 subprocess.Popen(["xdg-open", path if os.path.exists(path) else os.path.dirname(path)])
             show_statusbar_message(self, f"Opened in explorer: {path}")
+
+    def assign_price_shortcut(self):
+        if not self.selected_row_data:
+            show_statusbar_message(self, "No record selected for assign price.")
+            return
+        dialog = AssignPriceDialog(self.selected_row_data, self.db_manager, self)
+        if dialog.exec() == QDialog.Accepted:
+            show_statusbar_message(self, "Price assigned.")
+
+    def edit_record_shortcut(self):
+        if not self.selected_row_data:
+            show_statusbar_message(self, "No record selected for editing.")
+            return
+        row_data = self.selected_row_data
+        dialog = EditRecordDialog(
+            row_data,
+            self.status_options,
+            self.db_manager,
+            self,
+            main_action_dock=self._main_window.main_action_dock if hasattr(self._main_window, "main_action_dock") else None
+        )
+        if dialog.exec() == QDialog.Accepted:
+            new_data = dialog.get_data()
+            file_id = row_data['id']
+            try:
+                self.db_manager.connect()
+                status_id = self.db_manager.get_status_id(new_data['status'])
+                category_id = self.db_manager.get_or_create_category(new_data['category']) if new_data['category'] else None
+                subcategory_id = self.db_manager.get_or_create_subcategory(
+                    category_id,
+                    new_data['subcategory']
+                ) if new_data['subcategory'] and new_data['category'] else None
+                self.db_manager.update_file_record(
+                    file_id=file_id,
+                    name=new_data['name'],
+                    root=new_data['root'],
+                    path=new_data['full_path'],
+                    status_id=status_id,
+                    category_id=category_id,
+                    subcategory_id=subcategory_id
+                )
+            finally:
+                self.db_manager.close()
+            self.load_data_from_database()
+            QMessageBox.information(self, "Success", "Record updated.")
+            show_statusbar_message(self, f"Record updated: {new_data['name']}")
 
     def _on_table_double_click(self, row, column):
         item = self.table.item(row, 0)
@@ -615,8 +665,8 @@ class CentralWidget(QWidget):
         action_copy_path = QAction(icon_copy_path, "Copy Path\tCtrl+X", self)
         action_open_explorer = QAction(icon_open_explorer, "Open in Explorer\tCtrl+E", self)
         action_delete = QAction(icon_delete, "Delete Record", self)
-        action_edit = QAction(icon_edit, "Edit Record", self)
-        action_assign_price = QAction(icon_assign_price, "Assign Price", self)
+        action_edit = QAction(icon_edit, "Edit Record\tShift+E", self)
+        action_assign_price = QAction(icon_assign_price, "Assign Price\tShift+A", self)
 
         def do_copy_name():
             QApplication.clipboard().setText(str(row_data['name']))
