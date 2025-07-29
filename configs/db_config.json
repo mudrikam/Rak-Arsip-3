@@ -128,9 +128,11 @@
         "batch_list": {
             "id": "INTEGER PRIMARY KEY AUTOINCREMENT",
             "batch_number": "TEXT NOT NULL UNIQUE",
+            "client_id": "INTEGER NOT NULL",
             "note": "TEXT",
             "created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
-            "updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP"
+            "updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+            "FOREIGN KEY (client_id)": "REFERENCES client(id)"
         }
     }
 }
