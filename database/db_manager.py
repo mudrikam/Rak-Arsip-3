@@ -94,11 +94,16 @@ class DatabaseManager(QObject):
         except Exception as e:
             print(f"Error creating temp file: {e}")
 
-    def connect(self):
+    def connect(self, write=True):
         if self.connection is None:
-            self.connection = sqlite3.connect(self.db_path)
-            self.connection.row_factory = sqlite3.Row
-            self.enable_wal_mode()
+            if write:
+                self.connection = sqlite3.connect(self.db_path)
+                self.connection.row_factory = sqlite3.Row
+                self.enable_wal_mode()
+            else:
+                uri = f'file:{self.db_path}?mode=ro'
+                self.connection = sqlite3.connect(uri, uri=True)
+                self.connection.row_factory = sqlite3.Row
         return self.connection
 
     def close(self):
@@ -141,7 +146,7 @@ class DatabaseManager(QObject):
         self.close()
 
     def get_all_categories(self):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         cursor.execute("SELECT DISTINCT name FROM categories ORDER BY name")
         result = [row[0] for row in cursor.fetchall()]
@@ -149,7 +154,7 @@ class DatabaseManager(QObject):
         return result
 
     def get_subcategories_by_category(self, category_name):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         cursor.execute("""
             SELECT DISTINCT sc.name 
@@ -199,7 +204,7 @@ class DatabaseManager(QObject):
         return last_id
 
     def get_status_id(self, status_name):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         cursor.execute("SELECT id FROM statuses WHERE name = ?", (status_name,))
         result = cursor.fetchone()
@@ -207,7 +212,7 @@ class DatabaseManager(QObject):
         return result[0] if result else None
 
     def get_all_templates(self):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         cursor.execute("SELECT id, name, content FROM templates ORDER BY name")
         result = cursor.fetchall()
@@ -215,7 +220,7 @@ class DatabaseManager(QObject):
         return result
 
     def get_template_by_id(self, template_id):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         cursor.execute("SELECT id, name, content FROM templates WHERE id = ?", (template_id,))
         result = cursor.fetchone()
@@ -587,7 +592,7 @@ class DatabaseManager(QObject):
             self.close()
 
     def get_files_page(self, page=1, page_size=20, search_query=None, sort_field="date", sort_order="desc", status_value=None):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         offset = (page - 1) * page_size
         params = []
@@ -685,7 +690,7 @@ class DatabaseManager(QObject):
         return result
 
     def count_files(self, search_query=None, status_value=None):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         params = []
         where_clauses = []
@@ -734,7 +739,7 @@ class DatabaseManager(QObject):
         self.create_temp_file()
 
     def get_item_price(self, file_id):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         cursor.execute("SELECT price, currency FROM item_price WHERE file_id = ?", (file_id,))
         row = cursor.fetchone()
@@ -744,7 +749,7 @@ class DatabaseManager(QObject):
         return None, None
 
     def get_item_price_detail(self, file_id):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         cursor.execute("SELECT price, currency, note FROM item_price WHERE file_id = ?", (file_id,))
         row = cursor.fetchone()
@@ -754,7 +759,7 @@ class DatabaseManager(QObject):
         return "", "IDR", ""
 
     def get_all_clients(self):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         cursor.execute(
             "SELECT id, client_name, contact, links, status, note, created_at, updated_at FROM client ORDER BY client_name ASC"
@@ -797,7 +802,7 @@ class DatabaseManager(QObject):
         self.close()
 
     def get_files_by_client_id(self, client_id):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         cursor.execute("""
             SELECT
@@ -831,7 +836,7 @@ class DatabaseManager(QObject):
 
     def get_item_price_id(self, file_id, cursor=None):
         if cursor is None:
-            self.connect()
+            self.connect(write=False)
             cursor = self.connection.cursor()
             cursor.execute("SELECT id FROM item_price WHERE file_id = ?", (file_id,))
             row = cursor.fetchone()
@@ -886,7 +891,7 @@ class DatabaseManager(QObject):
         self.create_temp_file()
 
     def get_all_teams(self):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         cursor.execute(
             "SELECT username, full_name, contact, address, email, phone, attendance_pin, started_at, added_at, bank, account_number, account_holder FROM teams ORDER BY username ASC"
@@ -949,7 +954,7 @@ class DatabaseManager(QObject):
         self.create_temp_file()
 
     def get_latest_open_attendance(self, username, pin):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         cursor.execute(
             "SELECT id FROM teams WHERE username = ? AND attendance_pin = ?",
@@ -1023,7 +1028,7 @@ class DatabaseManager(QObject):
             return False, "Invalid mode."
 
     def get_attendance_by_username_pin(self, username, pin):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         cursor.execute(
             "SELECT id FROM teams WHERE username = ? AND attendance_pin = ?",
@@ -1050,7 +1055,7 @@ class DatabaseManager(QObject):
         return None
 
     def get_attendance_records_by_username(self, username):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         cursor.execute("SELECT id FROM teams WHERE username = ?", (username,))
         team_row = cursor.fetchone()
@@ -1066,7 +1071,7 @@ class DatabaseManager(QObject):
         return records
 
     def get_earnings_by_file_id(self, file_id):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         cursor.execute("""
             SELECT e.id, t.username, t.full_name, e.amount, e.note
@@ -1158,7 +1163,7 @@ class DatabaseManager(QObject):
         self.create_temp_file()
 
     def get_client_name_by_file_id(self, file_id):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         cursor.execute("""
             SELECT c.client_name
@@ -1174,7 +1179,7 @@ class DatabaseManager(QObject):
         return ""
 
     def get_file_count_by_client_id(self, client_id):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         cursor.execute("SELECT COUNT(*) FROM file_client_price WHERE client_id = ?", (client_id,))
         count = cursor.fetchone()[0]
@@ -1182,7 +1187,7 @@ class DatabaseManager(QObject):
         return count
 
     def get_assigned_client_id_for_file(self, file_id):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         item_price_id = self.get_item_price_id(file_id, cursor)
         assigned_client_id = None
@@ -1198,7 +1203,7 @@ class DatabaseManager(QObject):
         return assigned_client_id
 
     def get_team_profile_data(self, username=None):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         params = []
         where = ""
@@ -1307,7 +1312,7 @@ class DatabaseManager(QObject):
         }
 
     def get_all_batch_numbers(self):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         cursor.execute("SELECT batch_number FROM batch_list ORDER BY batch_number ASC")
         batch_numbers = [row[0] for row in cursor.fetchall()]
@@ -1353,7 +1358,7 @@ class DatabaseManager(QObject):
         self.close()
 
     def get_assigned_batch_number(self, file_id, client_id):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         cursor.execute(
             "SELECT batch_number FROM file_client_batch WHERE file_id = ? AND client_id = ? ORDER BY id DESC LIMIT 1",
@@ -1366,7 +1371,7 @@ class DatabaseManager(QObject):
         return ""
 
     def get_batch_list_note_and_client(self, batch_number):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         cursor.execute("SELECT note, client_id FROM batch_list WHERE batch_number = ?", (batch_number,))
         row = cursor.fetchone()
@@ -1410,7 +1415,7 @@ class DatabaseManager(QObject):
         self.create_temp_file()
 
     def count_file_client_batch_by_batch_number(self, batch_number):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         cursor.execute("SELECT COUNT(*) FROM file_client_batch WHERE batch_number = ?", (batch_number,))
         count = cursor.fetchone()[0]
@@ -1427,7 +1432,7 @@ class DatabaseManager(QObject):
         self.close()
 
     def get_batch_number_for_file_client(self, file_id, client_id):
-        self.connect()
+        self.connect(write=False)
         cursor = self.connection.cursor()
         cursor.execute(
             "SELECT batch_number FROM file_client_batch WHERE file_id = ? AND client_id = ? ORDER BY id DESC LIMIT 1",
