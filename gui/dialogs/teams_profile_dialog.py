@@ -226,11 +226,11 @@ class TeamsProfileDialog(QDialog):
         db_config_path = basedir / "configs" / "db_config.json"
         config_manager = ConfigManager(str(db_config_path))
         db_manager = DatabaseManager(config_manager, config_manager)
-        teams = db_manager.get_all_teams()
+        # Fetch all teams and related attendance in one connection
+        teams, open_attendance_map = db_manager.get_all_teams_with_open_attendance()
         self.teams_table.setRowCount(len(teams))
-        self._teams_data = []
+        self._teams_data = teams
         for row_idx, team_data in enumerate(teams):
-            self._teams_data.append(team_data)
             for col_idx, key in enumerate([
                 "username", "full_name", "contact", "address", "email", "phone", "attendance_pin", "started_at", "added_at", "bank", "account_number", "account_holder"
             ]):
@@ -243,9 +243,7 @@ class TeamsProfileDialog(QDialog):
                 item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
                 self.teams_table.setItem(row_idx, col_idx, item)
             username = team_data["username"]
-            pin = team_data["attendance_pin"]
-            open_attendance = db_manager.get_latest_open_attendance(username, pin)
-            if open_attendance:
+            if open_attendance_map.get(username):
                 color = QColor(52, 186, 14, int(0.57 * 255))
                 for col in range(self.teams_table.columnCount()):
                     self.teams_table.item(row_idx, col).setBackground(color)
@@ -461,7 +459,7 @@ class TeamsProfileDialog(QDialog):
         db_config_path = basedir / "configs" / "db_config.json"
         config_manager = ConfigManager(str(db_config_path))
         db_manager = DatabaseManager(config_manager, config_manager)
-        files = db_manager.get_files_page(page=1, page_size=10000)
+        files, earnings_map, client_map = db_manager.get_files_and_earnings_for_team(username)
         earnings_records = []
         for file in files:
             file_id = file["id"]
@@ -469,12 +467,10 @@ class TeamsProfileDialog(QDialog):
             file_date = file["date"]
             price, currency, _ = db_manager.get_item_price_detail(file_id)
             status = file.get("status", "")
-            earnings = db_manager.get_earnings_by_file_id(file_id)
-            client_name = db_manager.get_client_name_by_file_id(file_id)
-            for earning in earnings:
+            client_name = client_map.get(file_id, "")
+            for earning in earnings_map.get(file_id, []):
                 if earning["username"] == username:
                     amount = earning["amount"]
-                    # Format amount as "IDR 10.000" (no decimals, no commas, no .00)
                     try:
                         amount_int = int(float(amount))
                         amount_str = f"{amount_int:,}".replace(",", ".")
@@ -593,12 +589,7 @@ class TeamsProfileDialog(QDialog):
                 widget.deleteLater()
         full_name = ""
         if username:
-            basedir = Path(__file__).parent.parent.parent
-            db_config_path = basedir / "configs" / "db_config.json"
-            config_manager = ConfigManager(str(db_config_path))
-            db_manager = DatabaseManager(config_manager, config_manager)
-            teams = db_manager.get_all_teams()
-            for team in teams:
+            for team in self._teams_data:
                 if team["username"] == username:
                     full_name = team.get("full_name", "")
                     break
@@ -674,7 +665,6 @@ class TeamsProfileDialog(QDialog):
         self.save_button.setEnabled(True)
         self.tab_widget.setCurrentIndex(1)
         self.attendance_table.setRowCount(0)
-        # Attendance summary widget clear
         while self.attendance_summary_layout.count():
             item = self.attendance_summary_layout.takeAt(0)
             widget = item.widget()
@@ -712,7 +702,7 @@ class TeamsProfileDialog(QDialog):
             QMessageBox.warning(self, "Validation Error", "Username and Full Name cannot be empty.")
             return
         if self._add_mode:
-            teams = db_manager.get_all_teams()
+            teams, _ = db_manager.get_all_teams_with_open_attendance()
             existing_usernames = {team["username"] for team in teams}
             if updated_data["username"] in existing_usernames:
                 QMessageBox.warning(self, "Duplicate Username", "Username already exists. Please choose another username.")
@@ -747,13 +737,21 @@ class TeamsProfileDialog(QDialog):
             self.save_button.setEnabled(False)
             self.tab_widget.setCurrentIndex(0)
             self.attendance_table.setRowCount(0)
-            self.attendance_summary.setText("")
+            while self.attendance_summary_layout.count():
+                item = self.attendance_summary_layout.takeAt(0)
+                widget = item.widget()
+                if widget:
+                    widget.deleteLater()
             self.attendance_records_all = []
             self.attendance_records_filtered = []
             self.attendance_current_page = 1
             self._update_attendance_table()
             self.earnings_table.setRowCount(0)
-            self.earnings_summary.setText("")
+            while self.earnings_summary_layout.count():
+                item = self.earnings_summary_layout.takeAt(0)
+                widget = item.widget()
+                if widget:
+                    widget.deleteLater()
             self.earnings_records_all = []
             self.earnings_records_filtered = []
             self.earnings_current_page = 1
@@ -795,13 +793,21 @@ class TeamsProfileDialog(QDialog):
             self._selected_team_index = None
             self.save_button.setEnabled(False)
             self.attendance_table.setRowCount(0)
-            self.attendance_summary.setText("")
+            while self.attendance_summary_layout.count():
+                item = self.attendance_summary_layout.takeAt(0)
+                widget = item.widget()
+                if widget:
+                    widget.deleteLater()
             self.attendance_records_all = []
             self.attendance_records_filtered = []
             self.attendance_current_page = 1
             self._update_attendance_table()
             self.earnings_table.setRowCount(0)
-            self.earnings_summary.setText("")
+            while self.earnings_summary_layout.count():
+                item = self.earnings_summary_layout.takeAt(0)
+                widget = item.widget()
+                if widget:
+                    widget.deleteLater()
             self.earnings_records_all = []
             self.earnings_records_filtered = []
             self.earnings_current_page = 1
