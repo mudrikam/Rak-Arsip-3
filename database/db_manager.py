@@ -23,15 +23,13 @@ class DatabaseManager(QObject):
         self.ensure_database_exists()
         self.setup_file_watcher()
         self.auto_backup_database_daily()
-        
+
     def ensure_database_exists(self):
         db_dir = os.path.dirname(self.db_path)
         if db_dir and not os.path.exists(db_dir):
             os.makedirs(db_dir)
-        
         if not os.path.exists(self.temp_dir):
             os.makedirs(self.temp_dir)
-        
         if self.db_config.get("create_if_not_exists"):
             self.connect()
             self.create_tables()
@@ -73,6 +71,15 @@ class DatabaseManager(QObject):
                                 os.remove(file_path)
                             except:
                                 pass
+                # Lock file untuk operasi tim
+                if temp_file.startswith("team_rw_lock_") and temp_file.endswith(".tmp"):
+                    file_path = os.path.join(self.temp_dir, temp_file)
+                    file_age = time.time() - os.path.getctime(file_path)
+                    if file_age > 10:
+                        try:
+                            os.remove(file_path)
+                        except:
+                            pass
         except Exception as e:
             print(f"Error checking temp files: {e}")
 
@@ -85,6 +92,30 @@ class DatabaseManager(QObject):
                 f.write(f"Database change by session {self.session_id} at {timestamp}")
         except Exception as e:
             print(f"Error creating temp file: {e}")
+
+    def create_team_rw_lock(self):
+        timestamp = int(time.time() * 1000)
+        lock_filename = f"team_rw_lock_{self.session_id}_{timestamp}.tmp"
+        lock_path = os.path.join(self.temp_dir, lock_filename)
+        with open(lock_path, 'w') as f:
+            f.write(f"Team RW lock by session {self.session_id} at {timestamp}")
+        return lock_path
+
+    def remove_team_rw_lock(self, lock_path):
+        try:
+            if os.path.exists(lock_path):
+                os.remove(lock_path)
+        except Exception as e:
+            print(f"Error removing team RW lock: {e}")
+
+    def wait_for_team_rw(self):
+        # Tunggu jika ada lock file tim lain
+        for temp_file in os.listdir(self.temp_dir):
+            if temp_file.startswith("team_rw_lock_") and temp_file.endswith(".tmp"):
+                file_path = os.path.join(self.temp_dir, temp_file)
+                file_age = time.time() - os.path.getctime(file_path)
+                if file_age < 10:
+                    time.sleep(0.1)
 
     def connect(self):
         if self.connection is None:
@@ -828,67 +859,85 @@ class DatabaseManager(QObject):
         self.close()
 
     def get_all_teams(self):
-        self.connect()
-        cursor = self.connection.cursor()
-        cursor.execute(
-            "SELECT username, full_name, contact, address, email, phone, attendance_pin, started_at, added_at, bank, account_number, account_holder FROM teams ORDER BY username ASC"
-        )
-        rows = cursor.fetchall()
-        teams = []
-        for row in rows:
-            teams.append({
-                "username": row[0],
-                "full_name": row[1],
-                "contact": row[2],
-                "address": row[3],
-                "email": row[4],
-                "phone": row[5],
-                "attendance_pin": row[6],
-                "started_at": row[7],
-                "added_at": row[8],
-                "bank": row[9],
-                "account_number": row[10],
-                "account_holder": row[11]
-            })
-        self.close()
-        return teams
+        self.wait_for_team_rw()
+        lock_path = self.create_team_rw_lock()
+        conn = sqlite3.connect(self.db_path, isolation_level="EXCLUSIVE")
+        conn.row_factory = sqlite3.Row
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT username, full_name, contact, address, email, phone, attendance_pin, started_at, added_at, bank, account_number, account_holder FROM teams ORDER BY username ASC"
+            )
+            rows = cursor.fetchall()
+            teams = []
+            for row in rows:
+                teams.append({
+                    "username": row[0],
+                    "full_name": row[1],
+                    "contact": row[2],
+                    "address": row[3],
+                    "email": row[4],
+                    "phone": row[5],
+                    "attendance_pin": row[6],
+                    "started_at": row[7],
+                    "added_at": row[8],
+                    "bank": row[9],
+                    "account_number": row[10],
+                    "account_holder": row[11]
+                })
+            return teams
+        finally:
+            conn.close()
+            self.remove_team_rw_lock(lock_path)
 
     def update_team(self, old_username, new_username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder):
         if not new_username or not full_name:
             raise ValueError("Username and Full Name cannot be empty.")
-        self.connect()
-        cursor = self.connection.cursor()
-        cursor.execute("""
-            UPDATE teams SET
-                username = ?,
-                full_name = ?,
-                contact = ?,
-                address = ?,
-                email = ?,
-                phone = ?,
-                attendance_pin = ?,
-                started_at = ?,
-                bank = ?,
-                account_number = ?,
-                account_holder = ?
-            WHERE username = ?
-        """, (new_username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder, old_username))
-        self.connection.commit()
-        self.close()
-        self.create_temp_file()
+        self.wait_for_team_rw()
+        lock_path = self.create_team_rw_lock()
+        conn = sqlite3.connect(self.db_path, isolation_level="EXCLUSIVE")
+        conn.row_factory = sqlite3.Row
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE teams SET
+                    username = ?,
+                    full_name = ?,
+                    contact = ?,
+                    address = ?,
+                    email = ?,
+                    phone = ?,
+                    attendance_pin = ?,
+                    started_at = ?,
+                    bank = ?,
+                    account_number = ?,
+                    account_holder = ?
+                WHERE username = ?
+            """, (new_username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder, old_username))
+            conn.commit()
+            self.create_temp_file()
+        finally:
+            conn.close()
+            self.remove_team_rw_lock(lock_path)
 
     def add_team(self, username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder):
         if not username or not full_name:
             raise ValueError("Username and Full Name cannot be empty.")
-        self.connect()
-        cursor = self.connection.cursor()
-        cursor.execute("""
-            INSERT INTO teams (username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder, added_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        """, (username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder))
-        self.connection.commit()
-        self.close()
-        self.create_temp_file()
+        self.wait_for_team_rw()
+        lock_path = self.create_team_rw_lock()
+        conn = sqlite3.connect(self.db_path, isolation_level="EXCLUSIVE")
+        conn.row_factory = sqlite3.Row
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO teams (username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder, added_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            """, (username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder))
+            conn.commit()
+            self.create_temp_file()
+        finally:
+            conn.close()
+            self.remove_team_rw_lock(lock_path)
 
     def get_latest_open_attendance(self, username, pin):
         self.connect()
