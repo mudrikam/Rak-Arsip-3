@@ -481,20 +481,25 @@ class PropertiesWidget(QDockWidget):
             return text
         return "\n".join(textwrap.wrap(text, width=width))
 
-    def _find_all_images(self, directory, max_depth=3, current_depth=0):
-        image_files = []
-        if current_depth > max_depth:
-            return image_files
+    def _find_all_images(self, directory, max_depth=3, current_depth=0, found=None, limit=10):
+        if found is None:
+            found = []
+        if current_depth > max_depth or len(found) >= limit:
+            return found
         try:
             for item in directory.iterdir():
+                if len(found) >= limit:
+                    break
                 if item.is_file() and item.suffix.lower() in self.supported_formats:
-                    image_files.append(item)
+                    found.append(item)
             for item in directory.iterdir():
+                if len(found) >= limit:
+                    break
                 if item.is_dir():
-                    image_files.extend(self._find_all_images(item, max_depth, current_depth + 1))
+                    self._find_all_images(item, max_depth, current_depth + 1, found, limit)
         except Exception:
             pass
-        return image_files
+        return found
 
     def load_preview_image(self, file_path, file_name):
         try:
@@ -522,12 +527,12 @@ class PropertiesWidget(QDockWidget):
                     preview_dir = item
                     break
 
-            all_images = self._find_all_images(directory)
+            all_images = self._find_all_images(directory, limit=10)
             all_images = sorted(set(all_images), key=lambda x: str(x))
 
             preview_images = []
             if preview_dir and preview_dir.exists():
-                preview_images = self._find_all_images(preview_dir)
+                preview_images = self._find_all_images(preview_dir, limit=10)
                 preview_images = sorted(set(preview_images), key=lambda x: str(x))
 
             # Prioritas 1: gambar di folder Preview dengan nama sama dengan project
@@ -558,6 +563,8 @@ class PropertiesWidget(QDockWidget):
                     combined_images.extend(preview_images)
                 # Hindari duplikat jika gambar Preview sudah ada di all_images
                 combined_images.extend([img for img in all_images if img not in combined_images])
+                if len(combined_images) > 10:
+                    combined_images = combined_images[:10]
                 self._image_files = combined_images
                 try:
                     self._image_index = self._image_files.index(preferred_image)

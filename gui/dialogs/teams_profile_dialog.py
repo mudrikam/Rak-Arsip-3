@@ -1,6 +1,6 @@
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QTabWidget, QWidget, QTableWidget, QTableWidgetItem, QLabel, QFormLayout, QLineEdit, QPushButton, QMessageBox, QDateEdit, QHBoxLayout, QInputDialog, QSizePolicy, QHeaderView, QSpinBox, QSpacerItem
-from PySide6.QtCore import Qt, QDate
-from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QTabWidget, QWidget, QTableWidget, QTableWidgetItem, QLabel, QFormLayout, QLineEdit, QPushButton, QMessageBox, QDateEdit, QHBoxLayout, QInputDialog, QSizePolicy, QHeaderView, QSpinBox, QSpacerItem, QApplication, QToolTip
+from PySide6.QtCore import Qt, QDate, QPoint
+from PySide6.QtGui import QColor, QIcon, QClipboard
 import qtawesome as qta
 from database.db_manager import DatabaseManager
 from manager.config_manager import ConfigManager
@@ -68,6 +68,7 @@ class TeamsProfileDialog(QDialog):
         tab_layout.addLayout(self.details_layout)
         self.details_widgets = {}
         self.details_editable = {}
+        self.details_copy_buttons = {}
         fields = [
             ("Username", "username", True),
             ("Full Name", "full_name", True),
@@ -83,29 +84,42 @@ class TeamsProfileDialog(QDialog):
             ("Account Holder", "account_holder", True)
         ]
         for label, key, editable in fields:
+            row_widget = QWidget()
+            row_layout = QHBoxLayout(row_widget)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            row_layout.setSpacing(4)
             if key == "started_at":
                 w = QDateEdit()
                 w.setCalendarPopup(True)
                 w.setDisplayFormat("yyyy-MM-dd")
-                self.details_layout.addRow(label, w)
+                row_layout.addWidget(w)
                 self.details_widgets[key] = w
                 self.details_editable[key] = True
             elif key == "attendance_pin":
                 w = QLineEdit("")
                 w.setEchoMode(QLineEdit.Password)
-                self.details_layout.addRow(label, w)
+                row_layout.addWidget(w)
                 self.details_widgets[key] = w
                 self.details_editable[key] = True
             elif editable:
                 w = QLineEdit("")
-                self.details_layout.addRow(label, w)
+                row_layout.addWidget(w)
                 self.details_widgets[key] = w
                 self.details_editable[key] = True
             else:
                 w = QLabel("")
-                self.details_layout.addRow(label, w)
+                row_layout.addWidget(w)
                 self.details_widgets[key] = w
                 self.details_editable[key] = False
+            copy_btn = QPushButton()
+            copy_btn.setIcon(qta.icon("fa6s.copy"))
+            copy_btn.setFixedWidth(28)
+            copy_btn.setFixedHeight(28)
+            copy_btn.setToolTip(f"Copy {label}")
+            copy_btn.clicked.connect(lambda _, k=key, btn=copy_btn: self._copy_detail_to_clipboard(k, btn))
+            row_layout.addWidget(copy_btn)
+            self.details_copy_buttons[key] = copy_btn
+            self.details_layout.addRow(label, row_widget)
         button_layout = QHBoxLayout()
         self.save_button = QPushButton("Save")
         self.save_button.clicked.connect(self._save_team_details)
@@ -118,6 +132,23 @@ class TeamsProfileDialog(QDialog):
         self._selected_team_index = None
         self._add_mode = False
         self.save_button.setEnabled(False)
+
+    def _copy_detail_to_clipboard(self, key, btn=None):
+        widget = self.details_widgets.get(key)
+        value = ""
+        if isinstance(widget, QLineEdit):
+            value = widget.text()
+        elif isinstance(widget, QLabel):
+            value = widget.text()
+        elif isinstance(widget, QDateEdit):
+            value = widget.date().toString("yyyy-MM-dd")
+        clipboard = self.parent().clipboard() if self.parent() and hasattr(self.parent(), "clipboard") else None
+        if clipboard is None:
+            clipboard = QApplication.clipboard()
+        clipboard.setText(value)
+        if btn is not None:
+            global_pos = btn.mapToGlobal(btn.rect().bottomRight())
+            QToolTip.showText(global_pos, "Copied!", btn)
 
     def _init_attendance_tab(self):
         tab = QWidget()
@@ -135,9 +166,9 @@ class TeamsProfileDialog(QDialog):
         search_row.addWidget(self.attendance_search_edit)
         tab_layout.addLayout(search_row)
         self.attendance_table = QTableWidget(tab)
-        self.attendance_table.setColumnCount(5)
+        self.attendance_table.setColumnCount(4)
         self.attendance_table.setHorizontalHeaderLabels([
-            "Date", "Check In", "Check Out", "Note", "ID"
+            "Date", "Check In", "Check Out", "Note"
         ])
         self.attendance_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.attendance_table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -292,7 +323,8 @@ class TeamsProfileDialog(QDialog):
         tid = team["id"]
         full_name = team.get("full_name", "")
         records = self._attendance_map.get(tid, [])
-        self.attendance_records_all = records
+        # Remove the last element (ID) from each record tuple for display
+        self.attendance_records_all = [r[:4] for r in records]
         self.attendance_current_page = 1
         self._update_attendance_table(full_name)
 
@@ -328,8 +360,7 @@ class TeamsProfileDialog(QDialog):
                     (r[0] and search_text in str(r[0]).lower()) or  # date
                     (r[1] and search_text in str(r[1]).lower()) or  # check_in
                     (r[2] and search_text in str(r[2]).lower()) or  # check_out
-                    (r[3] and search_text in str(r[3]).lower()) or  # note
-                    (r[4] and search_text in str(r[4]).lower())     # id
+                    (r[3] and search_text in str(r[3]).lower())     # note
                 )
             ]
         else:
@@ -350,7 +381,7 @@ class TeamsProfileDialog(QDialog):
         total_seconds = 0
         last_checkout = "-"
         for row_idx, record in enumerate(page_records):
-            date, check_in, check_out, note, rec_id = record
+            date, check_in, check_out, note = record
             formatted_date = format_date_indonesian(date)
             formatted_checkin = format_date_indonesian(check_in, with_time=True) if check_in else ""
             formatted_checkout = format_date_indonesian(check_out, with_time=True) if check_out else ""
@@ -358,17 +389,14 @@ class TeamsProfileDialog(QDialog):
             item_checkin = QTableWidgetItem(formatted_checkin)
             item_checkout = QTableWidgetItem(formatted_checkout)
             item_note = QTableWidgetItem(str(note) if note else "")
-            item_id = QTableWidgetItem(str(rec_id))
             item_date.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
             item_checkin.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
             item_checkout.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
             item_note.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-            item_id.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
             self.attendance_table.setItem(row_idx, 0, item_date)
             self.attendance_table.setItem(row_idx, 1, item_checkin)
             self.attendance_table.setItem(row_idx, 2, item_checkout)
             self.attendance_table.setItem(row_idx, 3, item_note)
-            self.attendance_table.setItem(row_idx, 4, item_id)
             if date:
                 total_days.add(date)
             if check_in and check_out:
@@ -628,21 +656,21 @@ class TeamsProfileDialog(QDialog):
         paid_widget = QWidget()
         paid_widget.setLayout(paid_row)
         self.earnings_summary_layout.addWidget(paid_widget)
-        all_row = QHBoxLayout()
-        all_icon = QLabel()
-        all_icon.setPixmap(qta.icon("fa6s.chart-column", color="#1976d2").pixmap(16, 16))
-        all_label = QLabel("All Time:")
-        all_label.setStyleSheet("color:#1976d2; font-size:12px; font-weight:bold;")
-        all_amount = QLabel(f"{currency_label} {format_thousands(total_amount)}" if currency_label else format_thousands(total_amount))
-        all_amount.setStyleSheet("font-size:12px; font-weight:bold;")
-        all_row.setSpacing(4)
-        all_row.addWidget(all_icon)
-        all_row.addWidget(all_label)
-        all_row.addWidget(all_amount)
-        all_row.addStretch()
-        all_widget = QWidget()
-        all_widget.setLayout(all_row)
-        self.earnings_summary_layout.addWidget(all_widget)
+        estimate_row = QHBoxLayout()
+        estimate_icon = QLabel()
+        estimate_icon.setPixmap(qta.icon("fa6s.chart-column", color="#1976d2").pixmap(16, 16))
+        estimate_label = QLabel("Total Estimate:")
+        estimate_label.setStyleSheet("color:#1976d2; font-size:12px; font-weight:bold;")
+        estimate_amount = QLabel(f"{currency_label} {format_thousands(total_amount)}" if currency_label else format_thousands(total_amount))
+        estimate_amount.setStyleSheet("font-size:12px; font-weight:bold;")
+        estimate_row.setSpacing(4)
+        estimate_row.addWidget(estimate_icon)
+        estimate_row.addWidget(estimate_label)
+        estimate_row.addWidget(estimate_amount)
+        estimate_row.addStretch()
+        estimate_widget = QWidget()
+        estimate_widget.setLayout(estimate_row)
+        self.earnings_summary_layout.addWidget(estimate_widget)
         records_label = QLabel(f"Total Earnings Records: {len(self.earnings_records_filtered)}")
         records_label.setStyleSheet("color:#666; font-size:11px; margin-top:2px;")
         self.earnings_summary_layout.addWidget(records_label)

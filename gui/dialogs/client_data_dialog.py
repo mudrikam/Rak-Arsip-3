@@ -1,8 +1,8 @@
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QTabWidget, QWidget, QTableWidget, QTableWidgetItem, QLabel,
-    QFormLayout, QLineEdit, QPushButton, QMessageBox, QHBoxLayout, QSizePolicy, QHeaderView, QComboBox, QTextEdit, QSpinBox, QSpacerItem
+    QFormLayout, QLineEdit, QPushButton, QMessageBox, QHBoxLayout, QSizePolicy, QHeaderView, QComboBox, QTextEdit, QSpinBox, QSpacerItem, QApplication, QToolTip
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QPoint
 from database.db_manager import DatabaseManager
 from manager.config_manager import ConfigManager
 from pathlib import Path
@@ -66,6 +66,7 @@ class ClientDataDialog(QDialog):
         tab_layout.addLayout(self.details_layout)
         self.details_widgets = {}
         self.details_editable = {}
+        self.details_copy_buttons = {}
         fields = [
             ("Name", "client_name", True),
             ("Contact", "contact", True),
@@ -74,9 +75,13 @@ class ClientDataDialog(QDialog):
             ("Note", "note", True)
         ]
         for label, key, editable in fields:
+            row_widget = QWidget()
+            row_layout = QHBoxLayout(row_widget)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            row_layout.setSpacing(4)
             if key == "note":
                 w = QTextEdit("")
-                self.details_layout.addRow(label, w)
+                row_layout.addWidget(w)
                 self.details_widgets[key] = w
                 self.details_editable[key] = True
             elif key == "links":
@@ -100,21 +105,32 @@ class ClientDataDialog(QDialog):
                 self.links_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
                 self.links_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
                 links_layout.addWidget(self.links_table)
-                self.details_layout.addRow(label, links_widget)
+                row_layout.addWidget(links_widget)
                 self.details_widgets[key] = self.links_table
                 self.details_editable[key] = True
                 self.links_table.cellClicked.connect(self._on_link_table_cell_clicked)
             elif key == "status":
                 self.status_combo = QComboBox()
                 self.status_combo.addItems(["Active", "Repeat", "Dormant"])
-                self.details_layout.addRow(label, self.status_combo)
+                row_layout.addWidget(self.status_combo)
                 self.details_widgets[key] = self.status_combo
                 self.details_editable[key] = True
             else:
                 w = QLineEdit("")
-                self.details_layout.addRow(label, w)
+                row_layout.addWidget(w)
                 self.details_widgets[key] = w
                 self.details_editable[key] = True
+            # Only add copy button for client_name, contact, note
+            if key not in ("links", "status"):
+                copy_btn = QPushButton()
+                copy_btn.setIcon(qta.icon("fa6s.copy"))
+                copy_btn.setFixedWidth(28)
+                copy_btn.setFixedHeight(28)
+                copy_btn.setToolTip(f"Copy {label}")
+                copy_btn.clicked.connect(lambda _, k=key, btn=copy_btn: self._copy_detail_to_clipboard(k, btn))
+                row_layout.addWidget(copy_btn)
+                self.details_copy_buttons[key] = copy_btn
+            self.details_layout.addRow(label, row_widget)
         button_layout = QHBoxLayout()
         self.save_button = QPushButton("Save")
         self.save_button.clicked.connect(self._save_client_details)
@@ -128,6 +144,23 @@ class ClientDataDialog(QDialog):
         self._add_mode = False
         self.save_button.setEnabled(False)
         self._editing_link_index = None
+
+    def _copy_detail_to_clipboard(self, key, btn=None):
+        widget = self.details_widgets.get(key)
+        value = ""
+        if key == "note" and isinstance(widget, QTextEdit):
+            value = widget.toPlainText()
+        elif isinstance(widget, QLineEdit):
+            value = widget.text()
+        else:
+            value = ""
+        clipboard = self.parent().clipboard() if self.parent() and hasattr(self.parent(), "clipboard") else None
+        if clipboard is None:
+            clipboard = QApplication.clipboard()
+        clipboard.setText(value)
+        if btn is not None:
+            global_pos = btn.mapToGlobal(btn.rect().bottomRight())
+            QToolTip.showText(global_pos, "Copied!", btn)
 
     def _init_files_tab(self):
         tab = QWidget()
@@ -188,6 +221,8 @@ class ClientDataDialog(QDialog):
         self.files_current_page = 1
         self.files_sort_field = "File Name"
         self.files_sort_order = "Descending"
+        self._selected_client_name = ""
+        self._selected_client_id = None
 
     def _load_clients_data(self):
         basedir = Path(__file__).parent.parent.parent
@@ -229,6 +264,8 @@ class ClientDataDialog(QDialog):
                 else:
                     widget.setText(str(client.get(key, "")))
             self.save_button.setEnabled(True)
+            self._selected_client_name = client.get("client_name", "")
+            self._selected_client_id = client.get("id", None)
             self._load_files_for_client(client["id"])
 
     def _populate_links_table(self, links_str):
@@ -444,6 +481,12 @@ class ClientDataDialog(QDialog):
             widget = item.widget()
             if widget:
                 widget.deleteLater()
+        # Tambahkan nama klien di paling atas summary
+        client_name = self._selected_client_name if hasattr(self, "_selected_client_name") else ""
+        if client_name:
+            client_label = QLabel(f"Client: {client_name}")
+            client_label.setStyleSheet("font-size:13px; font-weight:bold; margin-bottom:2px;")
+            self.files_summary_layout.addWidget(client_label)
         summary_label = QLabel(f"Total Files: {total_rows}")
         summary_label.setStyleSheet("font-size:12px; font-weight:bold; margin-bottom:2px;")
         self.files_summary_layout.addWidget(summary_label)

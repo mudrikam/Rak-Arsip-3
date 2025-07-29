@@ -844,6 +844,20 @@ class DatabaseManager(QObject):
             self.create_temp_file()
         self.close()
 
+    def update_file_client_relation(self, file_id, item_price_id, client_id):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute("DELETE FROM file_client_price WHERE file_id = ?", (file_id,))
+        self.connection.commit()
+        if client_id and item_price_id:
+            cursor.execute(
+                "INSERT INTO file_client_price (file_id, item_price_id, client_id, created_at, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                (file_id, item_price_id, client_id)
+            )
+            self.connection.commit()
+            self.create_temp_file()
+        self.close()
+
     def get_all_teams(self):
         self.connect()
         cursor = self.connection.cursor()

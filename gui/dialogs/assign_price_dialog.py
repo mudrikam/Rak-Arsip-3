@@ -108,6 +108,7 @@ class AssignPriceDialog(QDialog):
         self.currency_combo.currentTextChanged.connect(self._on_price_changed)
         self.note_edit.textChanged.connect(self._on_note_changed)
         self.client_combo.currentIndexChanged.connect(self._on_client_changed)
+        self._last_client_id = self.client_combo.currentData()
         self.refresh_earnings_table()
 
     def _get_operational_percentage(self):
@@ -231,13 +232,19 @@ class AssignPriceDialog(QDialog):
         self.db_manager.assign_price(file_id, price, currency, note)
 
     def _on_client_changed(self):
-        client_index = self.client_combo.currentIndex()
         client_id = self.client_combo.currentData()
         file_id = self.file_record["id"]
         item_price_id = self.db_manager.get_item_price_id(file_id)
-        if client_id and item_price_id:
-            self.db_manager.assign_file_client_price(file_id, item_price_id, client_id)
+        self.db_manager.update_file_client_relation(file_id, item_price_id, client_id)
 
     def _on_accept(self):
+        price = self.price_edit.text().strip()
+        currency = self.currency_combo.currentText()
+        note = self.note_edit.text().strip()
+        file_id = self.file_record["id"]
+        self.db_manager.assign_price(file_id, price, currency, note)
+        client_id = self.client_combo.currentData()
+        item_price_id = self.db_manager.get_item_price_id(file_id)
+        self.db_manager.update_file_client_relation(file_id, item_price_id, client_id)
         self._parent.refresh_table()
         self.accept()
