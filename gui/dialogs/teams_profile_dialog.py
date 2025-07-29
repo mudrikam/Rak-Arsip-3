@@ -111,14 +111,16 @@ class TeamsProfileDialog(QDialog):
                 row_layout.addWidget(w)
                 self.details_widgets[key] = w
                 self.details_editable[key] = False
-            copy_btn = QPushButton()
-            copy_btn.setIcon(qta.icon("fa6s.copy"))
-            copy_btn.setFixedWidth(28)
-            copy_btn.setFixedHeight(28)
-            copy_btn.setToolTip(f"Copy {label}")
-            copy_btn.clicked.connect(lambda _, k=key, btn=copy_btn: self._copy_detail_to_clipboard(k, btn))
-            row_layout.addWidget(copy_btn)
-            self.details_copy_buttons[key] = copy_btn
+            # Only add copy button for fields except attendance_pin, started_at, added_at
+            if key not in ("attendance_pin", "started_at", "added_at"):
+                copy_btn = QPushButton()
+                copy_btn.setIcon(qta.icon("fa6s.copy"))
+                copy_btn.setFixedWidth(28)
+                copy_btn.setFixedHeight(28)
+                copy_btn.setToolTip(f"Copy {label}")
+                copy_btn.clicked.connect(lambda _, k=key, btn=copy_btn: self._copy_detail_to_clipboard(k, btn))
+                row_layout.addWidget(copy_btn)
+                self.details_copy_buttons[key] = copy_btn
             self.details_layout.addRow(label, row_widget)
         button_layout = QHBoxLayout()
         self.save_button = QPushButton("Save")
