@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QDialog, QFormLayout, QLineEdit, QComboBox, QDialogButtonBox, QLabel, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem, QPushButton, QHeaderView, QWidget, QMessageBox, QInputDialog, QSizePolicy
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QObject, QEvent
 import qtawesome as qta
 
 class AssignPriceDialog(QDialog):
@@ -131,7 +131,8 @@ class AssignPriceDialog(QDialog):
         self.add_team_btn.clicked.connect(self._on_add_team)
         self.remove_team_btn.clicked.connect(self._on_remove_selected_team)
         self.edit_note_btn.clicked.connect(self._on_edit_note)
-        self.price_edit.textChanged.connect(self._on_price_changed)
+        # Only save price on focus out, not on every textChanged
+        self.price_edit.installEventFilter(self)
         self.currency_combo.currentTextChanged.connect(self._on_price_changed)
         self.note_edit.textChanged.connect(self._on_note_changed)
         self.client_combo.currentIndexChanged.connect(self._on_client_changed)
@@ -140,6 +141,11 @@ class AssignPriceDialog(QDialog):
         self.delete_batch_btn.clicked.connect(self._on_delete_batch)
         self._last_client_id = self.client_combo.currentData()
         self.refresh_earnings_table()
+
+    def eventFilter(self, obj, event):
+        if obj == self.price_edit and event.type() == QEvent.FocusOut:
+            self._on_price_changed()
+        return super().eventFilter(obj, event)
 
     def _refresh_batch_combo(self):
         self.batch_combo.clear()
