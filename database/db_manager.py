@@ -23,15 +23,13 @@ class DatabaseManager(QObject):
         self.ensure_database_exists()
         self.setup_file_watcher()
         self.auto_backup_database_daily()
-        
+
     def ensure_database_exists(self):
         db_dir = os.path.dirname(self.db_path)
         if db_dir and not os.path.exists(db_dir):
             os.makedirs(db_dir)
-        
         if not os.path.exists(self.temp_dir):
             os.makedirs(self.temp_dir)
-        
         if self.db_config.get("create_if_not_exists"):
             self.connect()
             self.create_tables()
@@ -47,6 +45,16 @@ class DatabaseManager(QObject):
         cursor.execute("PRAGMA mmap_size=268435456")
         cursor.execute("PRAGMA busy_timeout=3000")
         self.connection.commit()
+
+    def cleanup_wal_shm_files(self):
+        wal_path = self.db_path + "-wal"
+        shm_path = self.db_path + "-shm"
+        for f in [wal_path, shm_path]:
+            try:
+                if os.path.exists(f):
+                    os.remove(f)
+            except Exception as e:
+                print(f"Error removing {f}: {e}")
 
     def setup_file_watcher(self):
         self.file_watcher_timer = QTimer()
@@ -97,6 +105,7 @@ class DatabaseManager(QObject):
         if self.connection:
             self.connection.close()
             self.connection = None
+            self.cleanup_wal_shm_files()
 
     def create_tables(self):
         self.connect()
@@ -513,6 +522,14 @@ class DatabaseManager(QObject):
             raise
         finally:
             conn.close()
+            wal_path = self.db_path + "-wal"
+            shm_path = self.db_path + "-shm"
+            for f in [wal_path, shm_path]:
+                try:
+                    if os.path.exists(f):
+                        os.remove(f)
+                except Exception as e:
+                    print(f"Error removing {f}: {e}")
 
     def export_to_csv(self, csv_path, progress_callback=None):
         import csv
