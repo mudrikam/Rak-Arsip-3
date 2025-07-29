@@ -58,7 +58,7 @@ class TeamsProfileDialog(QDialog):
         self.teams_table.cellClicked.connect(self._on_team_row_clicked)
         self.teams_table.cellDoubleClicked.connect(self._on_team_row_double_clicked)
         tab_layout.addWidget(self.teams_table)
-        self.tab_widget.addTab(tab, "Teams")
+        self.tab_widget.addTab(tab, qta.icon("fa6s.users"), "Teams")
         self._load_teams_data()
 
     def _init_details_tab(self):
@@ -114,7 +114,7 @@ class TeamsProfileDialog(QDialog):
         button_layout.addWidget(self.save_button)
         button_layout.addWidget(self.add_button)
         tab_layout.addLayout(button_layout)
-        self.tab_widget.addTab(tab, "Details")
+        self.tab_widget.addTab(tab, qta.icon("fa6s.id-card"), "Details")
         self._selected_team_index = None
         self._add_mode = False
         self.save_button.setEnabled(False)
@@ -160,7 +160,7 @@ class TeamsProfileDialog(QDialog):
         pagination_row.addWidget(self.attendance_next_btn)
         pagination_row.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
         tab_layout.addLayout(pagination_row)
-        self.tab_widget.addTab(tab, "Attendance Records")
+        self.tab_widget.addTab(tab, qta.icon("fa6s.calendar-days"), "Attendance Records")
         self.attendance_search_edit.textChanged.connect(self._attendance_search_changed)
         self.attendance_prev_btn.clicked.connect(self._attendance_prev_page)
         self.attendance_next_btn.clicked.connect(self._attendance_next_page)
@@ -211,7 +211,7 @@ class TeamsProfileDialog(QDialog):
         pagination_row.addWidget(self.earnings_next_btn)
         pagination_row.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
         tab_layout.addLayout(pagination_row)
-        self.tab_widget.addTab(tab, "Earnings")
+        self.tab_widget.addTab(tab, qta.icon("fa6s.money-bill-wave"), "Earnings")
         self.earnings_search_edit.textChanged.connect(self._earnings_search_changed)
         self.earnings_prev_btn.clicked.connect(self._earnings_prev_page)
         self.earnings_next_btn.clicked.connect(self._earnings_next_page)

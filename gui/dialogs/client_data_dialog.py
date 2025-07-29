@@ -36,7 +36,7 @@ class ClientDataDialog(QDialog):
         self.clients_table.cellClicked.connect(self._on_client_row_clicked)
         self.clients_table.cellDoubleClicked.connect(self._on_client_row_double_clicked)
         tab_layout.addWidget(self.clients_table)
-        self.tab_widget.addTab(tab, "Clients")
+        self.tab_widget.addTab(tab, qta.icon("fa6s.users"), "Clients")
         self._load_clients_data()
 
     def _load_clients_data(self):
@@ -123,7 +123,7 @@ class ClientDataDialog(QDialog):
         button_layout.addWidget(self.save_button)
         button_layout.addWidget(self.add_button)
         tab_layout.addLayout(button_layout)
-        self.tab_widget.addTab(tab, "Details")
+        self.tab_widget.addTab(tab, qta.icon("fa6s.id-card"), "Details")
         self._selected_client_index = None
         self._add_mode = False
         self.save_button.setEnabled(False)
@@ -175,7 +175,7 @@ class ClientDataDialog(QDialog):
         pagination_row.addWidget(self.files_next_btn)
         pagination_row.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
         tab_layout.addLayout(pagination_row)
-        self.tab_widget.addTab(tab, "Files")
+        self.tab_widget.addTab(tab, qta.icon("fa6s.folder-open"), "Files")
         self.files_prev_btn.clicked.connect(self._files_prev_page)
         self.files_next_btn.clicked.connect(self._files_next_page)
         self.files_page_input.valueChanged.connect(self._files_goto_page)
