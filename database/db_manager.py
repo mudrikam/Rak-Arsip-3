@@ -787,6 +787,7 @@ class DatabaseManager(QObject):
         cursor = self.connection.cursor()
         cursor.execute("""
             SELECT
+                f.id as file_id,
                 f.name,
                 f.date,
                 ip.price,
@@ -803,6 +804,7 @@ class DatabaseManager(QObject):
         files = []
         for row in cursor.fetchall():
             files.append({
+                "file_id": row["file_id"],
                 "name": row["name"],
                 "date": row["date"],
                 "price": row["price"],
@@ -857,6 +859,17 @@ class DatabaseManager(QObject):
             self.connection.commit()
             self.create_temp_file()
         self.close()
+
+    def update_file_client_batch_client(self, file_id, old_client_id, new_client_id):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "UPDATE file_client_batch SET client_id = ?, updated_at = CURRENT_TIMESTAMP WHERE file_id = ? AND client_id = ?",
+            (new_client_id, file_id, old_client_id)
+        )
+        self.connection.commit()
+        self.close()
+        self.create_temp_file()
 
     def get_all_teams(self):
         self.connect()
@@ -1398,3 +1411,16 @@ class DatabaseManager(QObject):
         self.connection.commit()
         self.create_temp_file()
         self.close()
+
+    def get_batch_number_for_file_client(self, file_id, client_id):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "SELECT batch_number FROM file_client_batch WHERE file_id = ? AND client_id = ? ORDER BY id DESC LIMIT 1",
+            (file_id, client_id)
+        )
+        row = cursor.fetchone()
+        self.close()
+        if row:
+            return row[0]
+        return ""

@@ -381,7 +381,13 @@ class AssignPriceDialog(QDialog):
         client_id = self.client_combo.currentData()
         file_id = self.file_record["id"]
         item_price_id = self.db_manager.get_item_price_id(file_id)
+        # update file_client_price relation
         self.db_manager.update_file_client_relation(file_id, item_price_id, client_id)
+        # update file_client_batch client_id if batch exists for old client
+        old_client_id = self._last_client_id
+        if old_client_id and client_id and old_client_id != client_id:
+            self.db_manager.update_file_client_batch_client(file_id, old_client_id, client_id)
+        self._last_client_id = client_id
         batch_number = self.batch_combo.currentText().strip()
         self._set_assigned_batch_combo()
 
@@ -393,7 +399,12 @@ class AssignPriceDialog(QDialog):
         self.db_manager.assign_price(file_id, price, currency, note)
         client_id = self.client_combo.currentData()
         item_price_id = self.db_manager.get_item_price_id(file_id)
+        old_client_id = self._last_client_id
         self.db_manager.update_file_client_relation(file_id, item_price_id, client_id)
+        # update file_client_batch client_id if batch exists for old client
+        if old_client_id and client_id and old_client_id != client_id:
+            self.db_manager.update_file_client_batch_client(file_id, old_client_id, client_id)
+        self._last_client_id = client_id
         batch_number = self.batch_combo.currentText().strip()
         batch_list = [self.batch_combo.itemText(i) for i in range(self.batch_combo.count())]
         if batch_number and client_id and batch_number in batch_list:

@@ -177,7 +177,7 @@ class ClientDataDialog(QDialog):
         self.files_search_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.files_search_row.addWidget(self.files_search_edit)
         self.files_sort_combo = QComboBox()
-        self.files_sort_combo.addItems(["File Name", "Date", "Price", "Status", "Note"])
+        self.files_sort_combo.addItems(["File Name", "Date", "Price", "Status", "Note", "Batch"])
         self.files_sort_order_combo = QComboBox()
         self.files_sort_order_combo.addItems(["Ascending", "Descending"])
         self.files_search_row.addWidget(QLabel("Sort by:"))
@@ -185,9 +185,9 @@ class ClientDataDialog(QDialog):
         self.files_search_row.addWidget(self.files_sort_order_combo)
         tab_layout.addLayout(self.files_search_row)
         self.files_table = QTableWidget(tab)
-        self.files_table.setColumnCount(5)
+        self.files_table.setColumnCount(6)
         self.files_table.setHorizontalHeaderLabels([
-            "File Name", "Date", "Price", "Status", "Note"
+            "File Name", "Date", "Price", "Status", "Note", "Batch"
         ])
         self.files_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.files_table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -370,8 +370,13 @@ class ClientDataDialog(QDialog):
         config_manager = ConfigManager(str(db_config_path))
         db_manager = DatabaseManager(config_manager, config_manager)
         files = db_manager.get_files_by_client_id(client_id)
+        # Tambahkan batch number untuk setiap file
+        for f in files:
+            batch_number = db_manager.get_batch_number_for_file_client(f.get("file_id", None) or f.get("id", None), client_id)
+            f["batch"] = batch_number
         self.files_records_all = files
         self.files_current_page = 1
+        self._selected_client_id = client_id
         self._update_files_table()
 
     def _on_files_search_changed(self):
@@ -414,7 +419,8 @@ class ClientDataDialog(QDialog):
                     search_text in str(f.get("date", "")).lower() or
                     search_text in str(f.get("price", "")).lower() or
                     search_text in str(f.get("status", "")).lower() or
-                    search_text in str(f.get("note", "")).lower()
+                    search_text in str(f.get("note", "")).lower() or
+                    search_text in str(f.get("batch", "")).lower()
                 )
             ]
         else:
@@ -427,7 +433,8 @@ class ClientDataDialog(QDialog):
             "Date": "date",
             "Price": "price",
             "Status": "status",
-            "Note": "note"
+            "Note": "note",
+            "Batch": "batch"
         }
         key = sort_map.get(sort_field, "name")
         reverse = sort_order == "Descending"
@@ -456,6 +463,7 @@ class ClientDataDialog(QDialog):
             currency = file.get("currency", "") if not currency else currency
             note = file.get("note", "")
             status = file.get("status", "")
+            batch = file.get("batch", "")
             try:
                 price_float = float(price)
                 if price_float.is_integer():
@@ -470,6 +478,7 @@ class ClientDataDialog(QDialog):
             self.files_table.setItem(row_idx, 2, QTableWidgetItem(price_display))
             self.files_table.setItem(row_idx, 3, QTableWidgetItem(str(status)))
             self.files_table.setItem(row_idx, 4, QTableWidgetItem(str(note)))
+            self.files_table.setItem(row_idx, 5, QTableWidgetItem(str(batch)))
             try:
                 total_price += float(price)
             except Exception:
@@ -481,7 +490,6 @@ class ClientDataDialog(QDialog):
             widget = item.widget()
             if widget:
                 widget.deleteLater()
-        # Tambahkan nama klien di paling atas summary
         client_name = self._selected_client_name if hasattr(self, "_selected_client_name") else ""
         if client_name:
             client_label = QLabel(f"Client: {client_name}")
