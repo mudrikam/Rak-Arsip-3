@@ -1249,3 +1249,112 @@ class DatabaseManager(QObject):
                 assigned_client_id = row[0]
         self.close()
         return assigned_client_id
+
+    def get_team_profile_data(self, username=None):
+        self.connect()
+        cursor = self.connection.cursor()
+        params = []
+        where = ""
+        if username:
+            where = "WHERE t.username = ?"
+            params.append(username)
+        cursor.execute(f"""
+            SELECT
+                t.id, t.username, t.full_name, t.contact, t.address, t.email, t.phone, t.attendance_pin,
+                t.started_at, t.added_at, t.bank, t.account_number, t.account_holder,
+                t.profile_image,
+                -- Attendance summary
+                (SELECT COUNT(DISTINCT a.date) FROM attendance a WHERE a.team_id = t.id) as total_days,
+                (SELECT COUNT(*) FROM attendance a WHERE a.team_id = t.id) as total_records,
+                (SELECT SUM(
+                    CASE WHEN a.check_in IS NOT NULL AND a.check_out IS NOT NULL
+                        THEN (strftime('%s', a.check_out) - strftime('%s', a.check_in))
+                        ELSE 0 END
+                ) FROM attendance a WHERE a.team_id = t.id) as total_seconds,
+                (SELECT a.check_out FROM attendance a WHERE a.team_id = t.id AND a.check_out IS NOT NULL ORDER BY a.id DESC LIMIT 1) as last_checkout
+            FROM teams t
+            {where}
+            ORDER BY t.username ASC
+        """, params)
+        teams = []
+        team_ids = []
+        for row in cursor.fetchall():
+            team = {
+                "id": row[0],
+                "username": row[1],
+                "full_name": row[2],
+                "contact": row[3],
+                "address": row[4],
+                "email": row[5],
+                "phone": row[6],
+                "attendance_pin": row[7],
+                "started_at": row[8],
+                "added_at": row[9],
+                "bank": row[10],
+                "account_number": row[11],
+                "account_holder": row[12],
+                "profile_image": row[13],
+                "attendance_summary": {
+                    "total_days": row[14] or 0,
+                    "total_records": row[15] or 0,
+                    "total_seconds": row[16] or 0,
+                    "last_checkout": row[17] or "-"
+                }
+            }
+            teams.append(team)
+            team_ids.append(row[0])
+        attendance_map = {}
+        earnings_map = {}
+        client_map = {}
+        if team_ids:
+            # Attendance records
+            cursor.execute(
+                f"SELECT team_id, date, check_in, check_out, note, id FROM attendance WHERE team_id IN ({','.join(['?']*len(team_ids))}) ORDER BY id DESC",
+                tuple(team_ids)
+            )
+            for row in cursor.fetchall():
+                tid = row[0]
+                attendance_map.setdefault(tid, []).append((row[1], row[2], row[3], row[4], row[5]))
+            # Earnings and files
+            cursor.execute(
+                f"""
+                SELECT
+                    t.id as team_id, f.id as file_id, f.name, f.date, f.status_id, s.name as status,
+                    ip.price, ip.currency,
+                    e.amount, e.note,
+                    c.client_name
+                FROM teams t
+                LEFT JOIN earnings e ON e.team_id = t.id
+                LEFT JOIN item_price ip ON e.item_price_id = ip.id
+                LEFT JOIN files f ON ip.file_id = f.id
+                LEFT JOIN statuses s ON f.status_id = s.id
+                LEFT JOIN file_client_price fcp ON f.id = fcp.file_id
+                LEFT JOIN client c ON fcp.client_id = c.id
+                WHERE t.id IN ({','.join(['?']*len(team_ids))})
+                """,
+                tuple(team_ids)
+            )
+            for row in cursor.fetchall():
+                tid = row[0]
+                file_id = row[1]
+                if file_id is None:
+                    continue
+                earning = {
+                    "file_id": file_id,
+                    "file_name": row[2],
+                    "file_date": row[3],
+                    "status_id": row[4],
+                    "status": row[5],
+                    "price": row[6],
+                    "currency": row[7],
+                    "amount": row[8],
+                    "note": row[9],
+                    "client_name": row[10]
+                }
+                earnings_map.setdefault(tid, []).append(earning)
+        self.close()
+        return {
+            "teams": teams,
+            "attendance_map": attendance_map,
+            "earnings_map": earnings_map
+        }

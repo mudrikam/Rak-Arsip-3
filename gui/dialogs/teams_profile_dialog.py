@@ -221,16 +221,20 @@ class TeamsProfileDialog(QDialog):
         self.earnings_page_size = 20
         self.earnings_current_page = 1
 
-    def _load_teams_data(self):
+    def _fetch_team_data(self):
         basedir = Path(__file__).parent.parent.parent
         db_config_path = basedir / "configs" / "db_config.json"
         config_manager = ConfigManager(str(db_config_path))
         db_manager = DatabaseManager(config_manager, config_manager)
-        # Fetch all teams and related attendance in one connection
-        teams, open_attendance_map = db_manager.get_all_teams_with_open_attendance()
-        self.teams_table.setRowCount(len(teams))
-        self._teams_data = teams
-        for row_idx, team_data in enumerate(teams):
+        self._team_profile_data = db_manager.get_team_profile_data()
+        self._teams_data = self._team_profile_data["teams"]
+        self._attendance_map = self._team_profile_data["attendance_map"]
+        self._earnings_map = self._team_profile_data["earnings_map"]
+
+    def _load_teams_data(self):
+        self._fetch_team_data()
+        self.teams_table.setRowCount(len(self._teams_data))
+        for row_idx, team_data in enumerate(self._teams_data):
             for col_idx, key in enumerate([
                 "username", "full_name", "contact", "address", "email", "phone", "attendance_pin", "started_at", "added_at", "bank", "account_number", "account_holder"
             ]):
@@ -243,7 +247,14 @@ class TeamsProfileDialog(QDialog):
                 item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
                 self.teams_table.setItem(row_idx, col_idx, item)
             username = team_data["username"]
-            if open_attendance_map.get(username):
+            tid = team_data["id"]
+            open_attendance = False
+            if tid in self._attendance_map:
+                for att in self._attendance_map[tid]:
+                    if att[1] and not att[2]:
+                        open_attendance = True
+                        break
+            if open_attendance:
                 color = QColor(52, 186, 14, int(0.57 * 255))
                 for col in range(self.teams_table.columnCount()):
                     self.teams_table.item(row_idx, col).setBackground(color)
@@ -274,15 +285,13 @@ class TeamsProfileDialog(QDialog):
                 else:
                     widget.setText(value)
             self.save_button.setEnabled(True)
-            self._load_attendance_records(team["username"], team.get("full_name", ""))
-            self._load_earnings_records(team["username"])
+            self._load_attendance_records(team)
+            self._load_earnings_records(team)
 
-    def _load_attendance_records(self, username, full_name=""):
-        basedir = Path(__file__).parent.parent.parent
-        db_config_path = basedir / "configs" / "db_config.json"
-        config_manager = ConfigManager(str(db_config_path))
-        db_manager = DatabaseManager(config_manager, config_manager)
-        records = db_manager.get_attendance_records_by_username(username)
+    def _load_attendance_records(self, team):
+        tid = team["id"]
+        full_name = team.get("full_name", "")
+        records = self._attendance_map.get(tid, [])
         self.attendance_records_all = records
         self.attendance_current_page = 1
         self._update_attendance_table(full_name)
@@ -454,37 +463,30 @@ class TeamsProfileDialog(QDialog):
         filtered_label.setStyleSheet("color:#666; font-size:11px; margin-top:2px;")
         self.attendance_summary_layout.addWidget(filtered_label)
 
-    def _load_earnings_records(self, username):
-        basedir = Path(__file__).parent.parent.parent
-        db_config_path = basedir / "configs" / "db_config.json"
-        config_manager = ConfigManager(str(db_config_path))
-        db_manager = DatabaseManager(config_manager, config_manager)
-        files, earnings_map, client_map = db_manager.get_files_and_earnings_for_team(username)
+    def _load_earnings_records(self, team):
+        tid = team["id"]
+        username = team["username"]
+        earnings = self._earnings_map.get(tid, [])
         earnings_records = []
-        for file in files:
-            file_id = file["id"]
-            file_name = file["name"]
-            file_date = file["date"]
-            price, currency, _ = db_manager.get_item_price_detail(file_id)
-            status = file.get("status", "")
-            client_name = client_map.get(file_id, "")
-            for earning in earnings_map.get(file_id, []):
-                if earning["username"] == username:
-                    amount = earning["amount"]
-                    try:
-                        amount_int = int(float(amount))
-                        amount_str = f"{amount_int:,}".replace(",", ".")
-                    except Exception:
-                        amount_str = str(amount)
-                    amount_display = f"{currency} {amount_str}" if currency else str(amount_str)
-                    earnings_records.append((
-                        file_name,
-                        file_date,
-                        amount_display,
-                        earning["note"],
-                        status,
-                        client_name
-                    ))
+        for earning in earnings:
+            file_name = earning["file_name"]
+            file_date = earning["file_date"]
+            amount = earning["amount"]
+            currency = earning["currency"] or "IDR"
+            try:
+                amount_int = int(float(amount))
+                amount_str = f"{amount_int:,}".replace(",", ".")
+            except Exception:
+                amount_str = str(amount)
+            amount_display = f"{currency} {amount_str}" if currency else str(amount_str)
+            earnings_records.append((
+                file_name,
+                file_date,
+                amount_display,
+                earning["note"],
+                earning["status"],
+                earning["client_name"]
+            ))
         self.earnings_records_all = earnings_records
         self.earnings_current_page = 1
         self._update_earnings_table(username)
@@ -702,8 +704,8 @@ class TeamsProfileDialog(QDialog):
             QMessageBox.warning(self, "Validation Error", "Username and Full Name cannot be empty.")
             return
         if self._add_mode:
-            teams, _ = db_manager.get_all_teams_with_open_attendance()
-            existing_usernames = {team["username"] for team in teams}
+            self._fetch_team_data()
+            existing_usernames = {team["username"] for team in self._teams_data}
             if updated_data["username"] in existing_usernames:
                 QMessageBox.warning(self, "Duplicate Username", "Username already exists. Please choose another username.")
                 return
