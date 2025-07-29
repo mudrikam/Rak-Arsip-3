@@ -125,6 +125,16 @@ class PropertiesWidget(QDockWidget):
         status_row.addStretch()
         layout.addLayout(status_row)
 
+        # Batch Number row
+        batch_row = QHBoxLayout()
+        self.batch_icon = QLabel()
+        self.batch_icon.setPixmap(qta.icon("fa6s.hashtag", color="#666").pixmap(16, 16))
+        self.batch_label = QLabel("-", self.scroll_content)
+        batch_row.addWidget(self.batch_icon)
+        batch_row.addWidget(self.batch_label)
+        batch_row.addStretch()
+        layout.addLayout(batch_row)
+
         # Price and Note row
         price_row = QHBoxLayout()
         self.price_icon = QLabel()
@@ -327,14 +337,23 @@ class PropertiesWidget(QDockWidget):
         status = row_data.get('status', '-')
         self.status_label.setText(f"{status}")
         self._apply_status_color(status)
-        # Price and Note
-        price_str = "-"
-        note_str = "-"
+        # Batch Number
+        batch_number = "-"
         db_manager = None
         if hasattr(self.parent_window, "db_manager"):
             db_manager = self.parent_window.db_manager
         elif hasattr(self.parent_window, "main_action_dock") and hasattr(self.parent_window.main_action_dock, "db_manager"):
             db_manager = self.parent_window.main_action_dock.db_manager
+        if db_manager and row_data.get("id"):
+            client_id = db_manager.get_assigned_client_id_for_file(row_data["id"])
+            if client_id:
+                batch_val = db_manager.get_assigned_batch_number(row_data["id"], client_id)
+                if batch_val:
+                    batch_number = batch_val
+        self.batch_label.setText(batch_number)
+        # Price and Note
+        price_str = "-"
+        note_str = "-"
         if db_manager and row_data.get("id"):
             price, currency, note = db_manager.get_item_price_detail(row_data["id"])
             try:

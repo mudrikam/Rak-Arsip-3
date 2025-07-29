@@ -526,8 +526,13 @@ class CentralWidget(QWidget):
                     operational_percent_str = f"Operational Percentage: {used_percentage}%"
                 except Exception:
                     operational_percent_str = ""
-            # Fetch client name for this file
+            client_id = self.db_manager.get_assigned_client_id_for_file(row_data['id'])
             client_name = self.db_manager.get_client_name_by_file_id(row_data['id'])
+            batch_number = "-"
+            if client_id:
+                batch_number_val = self.db_manager.get_assigned_batch_number(row_data['id'], client_id)
+                if batch_number_val:
+                    batch_number = batch_number_val
             tooltip = (
                 f"Date: {row_data.get('date','')}\n"
                 f"Name: {row_data.get('name','')}\n"
@@ -535,6 +540,7 @@ class CentralWidget(QWidget):
                 f"Path: {row_data.get('path','')}\n"
                 f"Status: {row_data.get('status','')}\n"
                 f"Client: {client_name}\n"
+                f"Batch Number: {batch_number}\n"
                 f"Price: {price_note_str}\n"
                 f"{shares_str}\n"
                 f"{amount_str}\n"

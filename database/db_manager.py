@@ -787,6 +787,7 @@ class DatabaseManager(QObject):
         cursor = self.connection.cursor()
         cursor.execute("""
             SELECT
+                f.id as file_id,
                 f.name,
                 f.date,
                 ip.price,
@@ -803,6 +804,7 @@ class DatabaseManager(QObject):
         files = []
         for row in cursor.fetchall():
             files.append({
+                "file_id": row["file_id"],
                 "name": row["name"],
                 "date": row["date"],
                 "price": row["price"],
@@ -857,6 +859,17 @@ class DatabaseManager(QObject):
             self.connection.commit()
             self.create_temp_file()
         self.close()
+
+    def update_file_client_batch_client(self, file_id, old_client_id, new_client_id):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "UPDATE file_client_batch SET client_id = ?, updated_at = CURRENT_TIMESTAMP WHERE file_id = ? AND client_id = ?",
+            (new_client_id, file_id, old_client_id)
+        )
+        self.connection.commit()
+        self.close()
+        self.create_temp_file()
 
     def get_all_teams(self):
         self.connect()
@@ -1278,3 +1291,136 @@ class DatabaseManager(QObject):
             "attendance_map": attendance_map,
             "earnings_map": earnings_map
         }
+
+    def get_all_batch_numbers(self):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT batch_number FROM batch_list ORDER BY batch_number ASC")
+        batch_numbers = [row[0] for row in cursor.fetchall()]
+        self.close()
+        return batch_numbers
+
+    def add_batch_number(self, batch_number, note="", client_id=None):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT COUNT(*) FROM batch_list WHERE batch_number = ?", (batch_number,))
+        exists = cursor.fetchone()[0]
+        if not exists:
+            if client_id is None:
+                raise ValueError("client_id is required for batch_list")
+            cursor.execute(
+                "INSERT INTO batch_list (batch_number, client_id, note, created_at, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                (batch_number, client_id, note)
+            )
+            self.connection.commit()
+            self.create_temp_file()
+        self.close()
+
+    def assign_file_client_batch(self, file_id, client_id, batch_number, note=""):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "SELECT id FROM file_client_batch WHERE file_id = ? AND client_id = ?",
+            (file_id, client_id)
+        )
+        row = cursor.fetchone()
+        if row:
+            cursor.execute(
+                "UPDATE file_client_batch SET batch_number = ?, note = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (batch_number, note, row[0])
+            )
+        elif client_id and batch_number:
+            cursor.execute(
+                "INSERT INTO file_client_batch (file_id, client_id, batch_number, note, created_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                (file_id, client_id, batch_number, note)
+            )
+        self.connection.commit()
+        self.create_temp_file()
+        self.close()
+
+    def get_assigned_batch_number(self, file_id, client_id):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "SELECT batch_number FROM file_client_batch WHERE file_id = ? AND client_id = ? ORDER BY id DESC LIMIT 1",
+            (file_id, client_id)
+        )
+        row = cursor.fetchone()
+        self.close()
+        if row:
+            return row[0]
+        return ""
+
+    def get_batch_list_note_and_client(self, batch_number):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT note, client_id FROM batch_list WHERE batch_number = ?", (batch_number,))
+        row = cursor.fetchone()
+        self.close()
+        if row:
+            return (row["note"] if row["note"] else "", row["client_id"])
+        return ("", None)
+
+    def update_batch_list_note_and_client(self, batch_number, note, client_id):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "UPDATE batch_list SET note = ?, client_id = ?, updated_at = CURRENT_TIMESTAMP WHERE batch_number = ?",
+            (note, client_id, batch_number)
+        )
+        self.connection.commit()
+        self.create_temp_file()
+        self.close()
+
+    def update_batch_number_and_note_and_client(self, old_batch_number, new_batch_number, note, client_id):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "UPDATE batch_list SET batch_number = ?, note = ?, client_id = ?, updated_at = CURRENT_TIMESTAMP WHERE batch_number = ?",
+            (new_batch_number, note, client_id, old_batch_number)
+        )
+        cursor.execute(
+            "UPDATE file_client_batch SET batch_number = ?, updated_at = CURRENT_TIMESTAMP WHERE batch_number = ?",
+            (new_batch_number, old_batch_number)
+        )
+        self.connection.commit()
+        self.create_temp_file()
+        self.close()
+
+    def update_earning_note(self, earning_id, note):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute("UPDATE earnings SET note = ? WHERE id = ?", (note, earning_id))
+        self.connection.commit()
+        self.close()
+        self.create_temp_file()
+
+    def count_file_client_batch_by_batch_number(self, batch_number):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT COUNT(*) FROM file_client_batch WHERE batch_number = ?", (batch_number,))
+        count = cursor.fetchone()[0]
+        self.close()
+        return count
+
+    def delete_batch_and_file_client_batch(self, batch_number):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute("DELETE FROM file_client_batch WHERE batch_number = ?", (batch_number,))
+        cursor.execute("DELETE FROM batch_list WHERE batch_number = ?", (batch_number,))
+        self.connection.commit()
+        self.create_temp_file()
+        self.close()
+
+    def get_batch_number_for_file_client(self, file_id, client_id):
+        self.connect()
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "SELECT batch_number FROM file_client_batch WHERE file_id = ? AND client_id = ? ORDER BY id DESC LIMIT 1",
+            (file_id, client_id)
+        )
+        row = cursor.fetchone()
+        self.close()
+        if row:
+            return row[0]
+        return ""

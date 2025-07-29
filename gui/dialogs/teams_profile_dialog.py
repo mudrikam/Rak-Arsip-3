@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QTabWidget, QWidget, QTableWidget, QTableWidgetItem, QLabel, QFormLayout, QLineEdit, QPushButton, QMessageBox, QDateEdit, QHBoxLayout, QInputDialog, QSizePolicy, QHeaderView, QSpinBox, QSpacerItem, QApplication, QToolTip
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QTabWidget, QWidget, QTableWidget, QTableWidgetItem, QLabel, QFormLayout, QLineEdit, QPushButton, QMessageBox, QDateEdit, QHBoxLayout, QInputDialog, QSizePolicy, QHeaderView, QSpinBox, QSpacerItem, QApplication, QToolTip, QComboBox
 from PySide6.QtCore import Qt, QDate, QPoint
 from PySide6.QtGui import QColor, QIcon, QClipboard
 import qtawesome as qta
@@ -217,11 +217,25 @@ class TeamsProfileDialog(QDialog):
         self.earnings_search_edit.setMinimumHeight(32)
         self.earnings_search_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         search_row.addWidget(self.earnings_search_edit)
+        # Sort by combobox
+        self.earnings_sort_combo = QComboBox()
+        self.earnings_sort_combo.addItems(["File Name", "Date", "Amount", "Status", "Client", "Batch"])
+        self.earnings_sort_order_combo = QComboBox()
+        self.earnings_sort_order_combo.addItems(["Ascending", "Descending"])
+        search_row.addWidget(QLabel("Sort by:"))
+        search_row.addWidget(self.earnings_sort_combo)
+        search_row.addWidget(self.earnings_sort_order_combo)
+        # Batch filter combobox
+        self.earnings_batch_filter_combo = QComboBox()
+        self.earnings_batch_filter_combo.setMinimumWidth(120)
+        self.earnings_batch_filter_combo.addItem("All Batches")
+        search_row.addWidget(QLabel("Batch:"))
+        search_row.addWidget(self.earnings_batch_filter_combo)
         tab_layout.addLayout(search_row)
         self.earnings_table = QTableWidget(tab)
-        self.earnings_table.setColumnCount(6)
+        self.earnings_table.setColumnCount(7)
         self.earnings_table.setHorizontalHeaderLabels([
-            "File Name", "Date", "Amount", "Note", "Status", "Client"
+            "File Name", "Date", "Amount", "Note", "Status", "Client", "Batch"
         ])
         self.earnings_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.earnings_table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -249,10 +263,16 @@ class TeamsProfileDialog(QDialog):
         self.earnings_prev_btn.clicked.connect(self._earnings_prev_page)
         self.earnings_next_btn.clicked.connect(self._earnings_next_page)
         self.earnings_page_input.valueChanged.connect(self._earnings_goto_page)
+        self.earnings_batch_filter_combo.currentIndexChanged.connect(self._on_earnings_batch_filter_changed)
+        self.earnings_sort_combo.currentIndexChanged.connect(self._on_earnings_sort_changed)
+        self.earnings_sort_order_combo.currentIndexChanged.connect(self._on_earnings_sort_changed)
         self.earnings_records_all = []
         self.earnings_records_filtered = []
         self.earnings_page_size = 20
         self.earnings_current_page = 1
+        self._earnings_batch_filter_value = None
+        self.earnings_sort_field = "File Name"
+        self.earnings_sort_order = "Descending"
 
     def _fetch_team_data(self):
         basedir = Path(__file__).parent.parent.parent
@@ -496,13 +516,36 @@ class TeamsProfileDialog(QDialog):
     def _load_earnings_records(self, team):
         tid = team["id"]
         username = team["username"]
+        self._earnings_current_username = username
         earnings = self._earnings_map.get(tid, [])
+        basedir = Path(__file__).parent.parent.parent
+        db_config_path = basedir / "configs" / "db_config.json"
+        config_manager = ConfigManager(str(db_config_path))
+        db_manager = DatabaseManager(config_manager, config_manager)
         earnings_records = []
+        batch_set = set()
         for earning in earnings:
             file_name = earning["file_name"]
             file_date = earning["file_date"]
             amount = earning["amount"]
             currency = earning["currency"] or "IDR"
+            file_id = earning.get("file_id")
+            client_id = None
+            client_name = earning["client_name"]
+            # Try to get client_id for this file if possible
+            if client_name:
+                clients = db_manager.get_all_clients()
+                for c in clients:
+                    if c["client_name"] == client_name:
+                        client_id = c["id"]
+                        break
+            if not client_id:
+                # fallback: try to get from file_client_price
+                client_id = db_manager.get_assigned_client_id_for_file(file_id)
+            batch = ""
+            if file_id and client_id:
+                batch = db_manager.get_batch_number_for_file_client(file_id, client_id)
+            batch_set.add(batch)
             try:
                 amount_int = int(float(amount))
                 amount_str = f"{amount_int:,}".replace(",", ".")
@@ -515,51 +558,114 @@ class TeamsProfileDialog(QDialog):
                 amount_display,
                 earning["note"],
                 earning["status"],
-                earning["client_name"]
+                client_name,
+                batch
             ))
         self.earnings_records_all = earnings_records
         self.earnings_current_page = 1
-        self._update_earnings_table(username)
+        self._refresh_earnings_batch_filter_combo(batch_set)
+        self._update_earnings_table(self._earnings_current_username)
+
+    def _refresh_earnings_batch_filter_combo(self, batch_set):
+        self.earnings_batch_filter_combo.blockSignals(True)
+        self.earnings_batch_filter_combo.clear()
+        self.earnings_batch_filter_combo.addItem("All Batches")
+        batch_list = sorted([b for b in batch_set if b])
+        for batch in batch_list:
+            self.earnings_batch_filter_combo.addItem(batch)
+        self.earnings_batch_filter_combo.setCurrentIndex(0)
+        self._earnings_batch_filter_value = None
+        self.earnings_batch_filter_combo.blockSignals(False)
+
+    def _on_earnings_batch_filter_changed(self, idx):
+        if idx == 0:
+            self._earnings_batch_filter_value = None
+        else:
+            self._earnings_batch_filter_value = self.earnings_batch_filter_combo.currentText()
+        self.earnings_current_page = 1
+        self._update_earnings_table(self._earnings_current_username)
 
     def _earnings_search_changed(self):
         self.earnings_current_page = 1
-        self._update_earnings_table()
+        self._update_earnings_table(self._earnings_current_username)
 
     def _earnings_prev_page(self):
         if self.earnings_current_page > 1:
             self.earnings_current_page -= 1
-            self._update_earnings_table()
+            self._update_earnings_table(self._earnings_current_username)
 
     def _earnings_next_page(self):
         total_rows = len(self.earnings_records_filtered)
         total_pages = max(1, (total_rows + self.earnings_page_size - 1) // self.earnings_page_size)
         if self.earnings_current_page < total_pages:
             self.earnings_current_page += 1
-            self._update_earnings_table()
+            self._update_earnings_table(self._earnings_current_username)
 
     def _earnings_goto_page(self, value):
         total_rows = len(self.earnings_records_filtered)
         total_pages = max(1, (total_rows + self.earnings_page_size - 1) // self.earnings_page_size)
         if 1 <= value <= total_pages:
             self.earnings_current_page = value
-            self._update_earnings_table()
+            self._update_earnings_table(self._earnings_current_username)
+
+    def _on_earnings_sort_changed(self):
+        self.earnings_current_page = 1
+        self.earnings_sort_field = self.earnings_sort_combo.currentText()
+        self.earnings_sort_order = self.earnings_sort_order_combo.currentText()
+        self._update_earnings_table(self._earnings_current_username)
 
     def _update_earnings_table(self, username=None):
+        if username is None:
+            username = getattr(self, "_earnings_current_username", None)
         search_text = self.earnings_search_edit.text().strip().lower()
-        if search_text:
-            self.earnings_records_filtered = [
-                r for r in self.earnings_records_all
-                if (
+        batch_filter = self._earnings_batch_filter_value
+        if search_text or batch_filter:
+            self.earnings_records_filtered = []
+            for r in self.earnings_records_all:
+                match_search = (
+                    not search_text or
                     (r[0] and search_text in str(r[0]).lower()) or
                     (r[1] and search_text in str(r[1]).lower()) or
                     (r[2] and search_text in str(r[2]).lower()) or
                     (r[3] and search_text in str(r[3]).lower()) or
                     (r[4] and search_text in str(r[4]).lower()) or
-                    (r[5] and search_text in str(r[5]).lower())
+                    (r[5] and search_text in str(r[5]).lower()) or
+                    (r[6] and search_text in str(r[6]).lower())
                 )
-            ]
+                match_batch = (not batch_filter or r[6] == batch_filter)
+                if match_search and match_batch:
+                    self.earnings_records_filtered.append(r)
         else:
             self.earnings_records_filtered = list(self.earnings_records_all)
+        # Sorting
+        sort_field = self.earnings_sort_field
+        sort_order = self.earnings_sort_order
+        sort_map = {
+            "File Name": 0,
+            "Date": 1,
+            "Amount": 2,
+            "Status": 4,
+            "Client": 5,
+            "Batch": 6
+        }
+        key_idx = sort_map.get(sort_field, 0)
+        reverse = sort_order == "Descending"
+        try:
+            if key_idx == 2:
+                self.earnings_records_filtered.sort(
+                    key=lambda x: float(str(x[key_idx]).split(" ", 1)[-1].replace(".", "")) if x[key_idx] not in ["", None] else 0,
+                    reverse=reverse
+                )
+            else:
+                self.earnings_records_filtered.sort(
+                    key=lambda x: str(x[key_idx]).lower(),
+                    reverse=reverse
+                )
+        except Exception:
+            self.earnings_records_filtered.sort(
+                key=lambda x: str(x[key_idx]).lower(),
+                reverse=reverse
+            )
         total_rows = len(self.earnings_records_filtered)
         total_pages = max(1, (total_rows + self.earnings_page_size - 1) // self.earnings_page_size)
         self.earnings_page_input.blockSignals(True)
@@ -576,7 +682,7 @@ class TeamsProfileDialog(QDialog):
         total_paid = 0
         currency_label = ""
         for row_idx, record in enumerate(page_records):
-            file_name, file_date, amount_display, note, status, client_name = record
+            file_name, file_date, amount_display, note, status, client_name, batch = record
             formatted_date = format_date_indonesian(file_date)
             item_file_name = QTableWidgetItem(str(file_name))
             item_date = QTableWidgetItem(formatted_date)
@@ -584,18 +690,21 @@ class TeamsProfileDialog(QDialog):
             item_note = QTableWidgetItem(str(note) if note else "")
             item_status = QTableWidgetItem(str(status))
             item_client = QTableWidgetItem(str(client_name))
+            item_batch = QTableWidgetItem(str(batch))
             item_file_name.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
             item_date.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
             item_amount.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
             item_note.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
             item_status.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
             item_client.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            item_batch.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
             self.earnings_table.setItem(row_idx, 0, item_file_name)
             self.earnings_table.setItem(row_idx, 1, item_date)
             self.earnings_table.setItem(row_idx, 2, item_amount)
             self.earnings_table.setItem(row_idx, 3, item_note)
             self.earnings_table.setItem(row_idx, 4, item_status)
             self.earnings_table.setItem(row_idx, 5, item_client)
+            self.earnings_table.setItem(row_idx, 6, item_batch)
             if not currency_label and " " in str(amount_display):
                 currency_label = str(amount_display).split(" ")[0]
             try:
