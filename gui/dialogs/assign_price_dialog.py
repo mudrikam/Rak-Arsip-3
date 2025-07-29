@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QDialog, QFormLayout, QLineEdit, QComboBox, QDialogButtonBox, QLabel, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem, QPushButton, QHeaderView, QWidget, QMessageBox, QInputDialog
+from PySide6.QtWidgets import QDialog, QFormLayout, QLineEdit, QComboBox, QDialogButtonBox, QLabel, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem, QPushButton, QHeaderView, QWidget, QMessageBox, QInputDialog, QSizePolicy
 from PySide6.QtCore import Qt
 import qtawesome as qta
 
@@ -50,11 +50,28 @@ class AssignPriceDialog(QDialog):
                     break
         form_layout.addRow(QLabel("Client:"), self.client_combo)
 
-        main_layout.addLayout(form_layout)
-
+        # Batch number dropdown + input + plus button
+        batch_row = QHBoxLayout()
+        self.batch_combo = QComboBox()
+        self.batch_combo.setEditable(True)
+        self.batch_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.file_record = file_record
         self.db_manager = db_manager
         self._parent = parent
+        self._refresh_batch_combo()
+        batch_row.addWidget(self.batch_combo)
+        self.add_batch_btn = QPushButton()
+        self.add_batch_btn.setIcon(qta.icon("fa6s.plus"))
+        self.add_batch_btn.setFixedWidth(40)
+        self.add_batch_btn.setToolTip("Add new batch number")
+        batch_row.addWidget(self.add_batch_btn)
+        batch_row.addStretch()
+        form_layout.addRow(QLabel("Batch Number:"), batch_row)
+
+        # Set batch_combo to assigned batch if exists
+        self._set_assigned_batch_combo()
+
+        main_layout.addLayout(form_layout)
 
         earnings_label = QLabel("Earnings Share:")
         main_layout.addWidget(earnings_label)
@@ -108,8 +125,45 @@ class AssignPriceDialog(QDialog):
         self.currency_combo.currentTextChanged.connect(self._on_price_changed)
         self.note_edit.textChanged.connect(self._on_note_changed)
         self.client_combo.currentIndexChanged.connect(self._on_client_changed)
+        self.add_batch_btn.clicked.connect(self._on_add_batch)
+        # self.batch_combo.currentTextChanged.connect(self._on_batch_changed)  # REMOVE this line
         self._last_client_id = self.client_combo.currentData()
         self.refresh_earnings_table()
+
+    def _refresh_batch_combo(self):
+        self.batch_combo.clear()
+        batch_list = self.db_manager.get_all_batch_numbers()
+        self.batch_combo.addItem("")
+        for batch in batch_list:
+            self.batch_combo.addItem(batch)
+
+    def _set_assigned_batch_combo(self):
+        file_id = self.file_record["id"]
+        client_id = self.client_combo.currentData()
+        batch_number = self.db_manager.get_assigned_batch_number(file_id, client_id)
+        if batch_number:
+            idx = self.batch_combo.findText(batch_number)
+            if idx >= 0:
+                self.batch_combo.setCurrentIndex(idx)
+            else:
+                self.batch_combo.addItem(batch_number)
+                self.batch_combo.setCurrentText(batch_number)
+        else:
+            self.batch_combo.setCurrentIndex(0)
+
+    def _on_add_batch(self):
+        batch_number = self.batch_combo.currentText().strip()
+        if not batch_number:
+            QMessageBox.warning(self, "Input Error", "Batch number cannot be empty.")
+            return
+        if batch_number in [self.batch_combo.itemText(i) for i in range(self.batch_combo.count())]:
+            QMessageBox.information(self, "Info", "Batch number already exists.")
+            return
+        self.db_manager.add_batch_number(batch_number)
+        self._refresh_batch_combo()
+        idx = self.batch_combo.findText(batch_number)
+        if idx >= 0:
+            self.batch_combo.setCurrentIndex(idx)
 
     def _get_operational_percentage(self):
         return int(self._parent.config_manager.get("operational_percentage"))
@@ -236,6 +290,8 @@ class AssignPriceDialog(QDialog):
         file_id = self.file_record["id"]
         item_price_id = self.db_manager.get_item_price_id(file_id)
         self.db_manager.update_file_client_relation(file_id, item_price_id, client_id)
+        batch_number = self.batch_combo.currentText().strip()
+        self._set_assigned_batch_combo()
 
     def _on_accept(self):
         price = self.price_edit.text().strip()
@@ -246,5 +302,9 @@ class AssignPriceDialog(QDialog):
         client_id = self.client_combo.currentData()
         item_price_id = self.db_manager.get_item_price_id(file_id)
         self.db_manager.update_file_client_relation(file_id, item_price_id, client_id)
+        batch_number = self.batch_combo.currentText().strip()
+        batch_list = [self.batch_combo.itemText(i) for i in range(self.batch_combo.count())]
+        if batch_number and client_id and batch_number in batch_list:
+            self.db_manager.assign_file_client_batch(file_id, client_id, batch_number)
         self._parent.refresh_table()
         self.accept()

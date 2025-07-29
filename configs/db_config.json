@@ -112,6 +112,25 @@
             "FOREIGN KEY (file_id)": "REFERENCES files(id)",
             "FOREIGN KEY (item_price_id)": "REFERENCES item_price(id)",
             "FOREIGN KEY (client_id)": "REFERENCES client(id)"
+        },
+        "file_client_batch": {
+            "id": "INTEGER PRIMARY KEY AUTOINCREMENT",
+            "batch_number": "TEXT NOT NULL",
+            "client_id": "INTEGER NOT NULL",
+            "file_id": "INTEGER NOT NULL",
+            "note": "TEXT",
+            "created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+            "updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+            "FOREIGN KEY (batch_number)": "REFERENCES batch_list(batch_number)",
+            "FOREIGN KEY (client_id)": "REFERENCES client(id)",
+            "FOREIGN KEY (file_id)": "REFERENCES files(id)"
+        },
+        "batch_list": {
+            "id": "INTEGER PRIMARY KEY AUTOINCREMENT",
+            "batch_number": "TEXT NOT NULL UNIQUE",
+            "note": "TEXT",
+            "created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+            "updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP"
         }
     }
 }
