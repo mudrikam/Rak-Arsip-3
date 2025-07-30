@@ -427,4 +427,5 @@ class AssignPriceDialog(QDialog):
         batch_list = [self.batch_combo.itemText(i) for i in range(self.batch_combo.count())]
         if batch_number and client_id and batch_number in batch_list and batch_number != "":
             self.db_manager.assign_file_client_batch(file_id, client_id, batch_number)
+        self._parent.refresh_table()
         self.accept()
