@@ -367,6 +367,20 @@ class DatabaseManager(QObject):
     def delete_file(self, file_id):
         self.connect()
         cursor = self.connection.cursor()
+        # Cari semua item_price_id terkait file_id ini
+        cursor.execute("SELECT id FROM item_price WHERE file_id = ?", (file_id,))
+        item_price_rows = cursor.fetchall()
+        item_price_ids = [row["id"] for row in item_price_rows] if item_price_rows else []
+        # Hapus earnings yang terkait dengan item_price_id
+        if item_price_ids:
+            cursor.executemany("DELETE FROM earnings WHERE item_price_id = ?", [(ipid,) for ipid in item_price_ids])
+        # Hapus dari item_price
+        cursor.execute("DELETE FROM item_price WHERE file_id = ?", (file_id,))
+        # Hapus dari file_client_price
+        cursor.execute("DELETE FROM file_client_price WHERE file_id = ?", (file_id,))
+        # Hapus dari file_client_batch
+        cursor.execute("DELETE FROM file_client_batch WHERE file_id = ?", (file_id,))
+        # Terakhir, hapus dari files
         cursor.execute("DELETE FROM files WHERE id = ?", (file_id,))
         self.connection.commit()
         self.close()
@@ -1486,3 +1500,51 @@ class DatabaseManager(QObject):
         if row:
             return row[0]
         return ""
+
+    def get_file_related_delete_info(self, file_id):
+        self.connect(write=False)
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT id, price, currency, note FROM item_price WHERE file_id = ?", (file_id,))
+        item_price_rows = cursor.fetchall()
+        item_price_info = []
+        item_price_ids = []
+        for ip in item_price_rows:
+            item_price_info.append({
+                "id": ip["id"],
+                "price": ip["price"],
+                "currency": ip["currency"],
+                "note": ip["note"]
+            })
+            item_price_ids.append(ip["id"])
+        earnings_info = []
+        for ipid in item_price_ids:
+            cursor.execute("SELECT id, team_id, amount, note FROM earnings WHERE item_price_id = ?", (ipid,))
+            for e in cursor.fetchall():
+                earnings_info.append({
+                    "id": e["id"],
+                    "team_id": e["team_id"],
+                    "amount": e["amount"],
+                    "note": e["note"]
+                })
+        cursor.execute("SELECT id, client_id FROM file_client_price WHERE file_id = ?", (file_id,))
+        file_client_price_info = []
+        for fcp in cursor.fetchall():
+            file_client_price_info.append({
+                "id": fcp["id"],
+                "client_id": fcp["client_id"]
+            })
+        cursor.execute("SELECT id, client_id, batch_number FROM file_client_batch WHERE file_id = ?", (file_id,))
+        file_client_batch_info = []
+        for fcb in cursor.fetchall():
+            file_client_batch_info.append({
+                "id": fcb["id"],
+                "client_id": fcb["client_id"],
+                "batch_number": fcb["batch_number"]
+            })
+        self.close()
+        return {
+            "item_price": item_price_info,
+            "earnings": earnings_info,
+            "file_client_price": file_client_price_info,
+            "file_client_batch": file_client_batch_info
+        }

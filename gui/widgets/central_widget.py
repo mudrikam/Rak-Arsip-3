@@ -737,19 +737,46 @@ class CentralWidget(QWidget):
             category = row_data.get('category', '-')
             subcategory = row_data.get('subcategory', '-')
             status = row_data.get('status', '-')
+            file_id = row_data.get('id', None)
+            related_info = self.db_manager.get_file_related_delete_info(file_id)
+            item_price_info = [
+                f"ID: {ip['id']}, Price: {ip['price']} {ip['currency']}, Note: {ip['note']}"
+                for ip in related_info["item_price"]
+            ]
+            earnings_info = [
+                f"ID: {e['id']}, TeamID: {e['team_id']}, Amount: {e['amount']}, Note: {e['note']}"
+                for e in related_info["earnings"]
+            ]
+            file_client_price_info = [
+                f"ID: {fcp['id']}, ClientID: {fcp['client_id']}"
+                for fcp in related_info["file_client_price"]
+            ]
+            file_client_batch_info = [
+                f"ID: {fcb['id']}, ClientID: {fcb['client_id']}, Batch: {fcb['batch_number']}"
+                for fcb in related_info["file_client_batch"]
+            ]
             details = (
-                f"Name: {name}\n"
-                f"Path: {path}\n"
-                f"Date: {date}\n"
-                f"Category: {category}\n"
-                f"Subcategory: {subcategory}\n"
-                f"Status: {status}\n"
+                f"• Name: {name}\n"
+                f"• Path: {path}\n"
+                f"• Date: {date}\n"
+                f"• Category: {category}\n"
+                f"• Subcategory: {subcategory}\n"
+                f"• Status: {status}\n"
+                "\nThe following related data will also be deleted:\n"
+                f"• Project Price:\n"
+                + ("\n".join(f"   - {item}" for item in item_price_info) if item_price_info else "   - None") + "\n\n"
+                f"• Team Earnings:\n"
+                + ("\n".join(f"   - {item}" for item in earnings_info) if earnings_info else "   - None") + "\n\n"
+                f"• Client Assignments:\n"
+                + ("\n".join(f"   - {item}" for item in file_client_price_info) if file_client_price_info else "   - None") + "\n\n"
+                f"• Batch Assignments:\n"
+                + ("\n".join(f"   - {item}" for item in file_client_batch_info) if file_client_batch_info else "   - None")
             )
             confirm1 = QMessageBox.warning(
                 self,
                 "Delete Record",
                 f"Delete this record?\n\n"
-                f"Details:\n{details}\n"
+                f"Details:\n{details}\n\n"
                 "This action cannot be undone.",
                 QMessageBox.Yes | QMessageBox.No
             )
@@ -779,7 +806,7 @@ class CentralWidget(QWidget):
                         show_statusbar_message(self, f"Failed to delete record: {e}")
                     finally:
                         self.db_manager.close()
-
+        # ...existing code...
         def do_edit_record():
             dialog = EditRecordDialog(
                 row_data,
