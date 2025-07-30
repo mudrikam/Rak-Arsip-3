@@ -35,8 +35,9 @@ class AssignPriceDialog(QDialog):
         form_layout.addRow(QLabel("Currency:"), self.currency_combo)
         form_layout.addRow(QLabel("Note:"), self.note_edit)
 
-        # Dropdown klien (urut A-Z)
+        # Dropdown klien (urut A-Z), editable for quick search
         self.client_combo = QComboBox()
+        self.client_combo.setEditable(True)
         clients = db_manager.get_all_clients()
         clients_sorted = sorted(clients, key=lambda c: c["client_name"].lower())
         self.client_combo.addItem("")
