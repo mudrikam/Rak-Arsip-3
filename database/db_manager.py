@@ -620,7 +620,7 @@ class DatabaseManager(QObject):
         finally:
             self.close()
 
-    def get_files_page(self, page=1, page_size=20, search_query=None, sort_field="date", sort_order="desc", status_value=None, client_id=None, batch_number=None, root_value=None):
+    def get_files_page(self, page=1, page_size=20, search_query=None, sort_field="date", sort_order="desc", status_value=None, client_id=None, batch_number=None, root_value=None, category_value=None, subcategory_value=None):
         self.connect(write=False)
         cursor = self.connection.cursor()
         offset = (page - 1) * page_size
@@ -645,6 +645,12 @@ class DatabaseManager(QObject):
         if root_value:
             where_clauses.append("f.root = ?")
             params.append(root_value)
+        if category_value:
+            where_clauses.append("c.name = ?")
+            params.append(category_value)
+        if subcategory_value:
+            where_clauses.append("sc.name = ?")
+            params.append(subcategory_value)
         where_sql = ""
         if where_clauses:
             where_sql = "WHERE " + " AND ".join(where_clauses)
@@ -733,7 +739,7 @@ class DatabaseManager(QObject):
         self.close()
         return result
 
-    def count_files(self, search_query=None, status_value=None, client_id=None, batch_number=None, root_value=None):
+    def count_files(self, search_query=None, status_value=None, client_id=None, batch_number=None, root_value=None, category_value=None, subcategory_value=None):
         self.connect(write=False)
         cursor = self.connection.cursor()
         params = []
@@ -757,6 +763,12 @@ class DatabaseManager(QObject):
         if root_value:
             where_clauses.append("f.root = ?")
             params.append(root_value)
+        if category_value:
+            where_clauses.append("c.name = ?")
+            params.append(category_value)
+        if subcategory_value:
+            where_clauses.append("sc.name = ?")
+            params.append(subcategory_value)
         where_sql = ""
         if where_clauses:
             where_sql = "WHERE " + " AND ".join(where_clauses)
