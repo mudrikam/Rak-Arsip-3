@@ -184,7 +184,7 @@ class CentralWidget(QWidget):
 
         self.refresh_btn.clicked.connect(self.refresh_table)
         self.search_edit.returnPressed.connect(self.apply_search)
-        self.search_edit.textChanged.connect(self.apply_search)
+        self.search_edit.textChanged.connect(self._on_search_text_changed)
         self.prev_btn.clicked.connect(self.prev_page)
         self.next_btn.clicked.connect(self.next_page)
         self.page_input.valueChanged.connect(self.goto_page)
@@ -207,6 +207,13 @@ class CentralWidget(QWidget):
         self._status_filter = None
         self._sort_field = "date"
         self._sort_order = "desc"
+        self._search_timer = QTimer(self)
+        self._search_timer.setSingleShot(True)
+        self._search_timer.setInterval(500)
+        self._search_timer.timeout.connect(self._delayed_apply_search)
+        self.search_edit.returnPressed.connect(self.apply_search)
+        self.search_edit.textChanged.connect(self._on_search_text_changed)
+
         self.load_data_from_database()
 
         # Connect NameFieldWidget.project_created to refresh_table
@@ -449,6 +456,13 @@ class CentralWidget(QWidget):
                     self._selected_row_index = row
                     self.row_selected.emit(row_data)
                     break
+
+    def _on_search_text_changed(self, text):
+        self._search_timer.stop()
+        self._search_timer.start()
+
+    def _delayed_apply_search(self):
+        self.apply_search()
 
     def apply_search(self, refresh_only=False):
         self.current_page = 1
