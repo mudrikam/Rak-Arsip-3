@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QDialogButtonBox
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QDialogButtonBox, QWidget
 import qtawesome as qta
 from helpers.show_statusbar_helper import show_statusbar_message
 
@@ -12,6 +12,8 @@ class SortDialog(QDialog):
 
         # Sort field selection
         field_row = QHBoxLayout()
+        field_row.setContentsMargins(0, 0, 0, 0)
+        field_row.setSpacing(0)
         field_row.addWidget(QLabel("Sort by:"))
         self.field_combo = QComboBox()
         self.sort_fields = [
@@ -29,21 +31,28 @@ class SortDialog(QDialog):
         field_row.addWidget(self.field_combo)
         layout.addLayout(field_row)
 
-        # Status filter (only enabled if Status is selected)
-        status_row = QHBoxLayout()
-        status_row.addWidget(QLabel("Status:"))
+        # Status filter (only visible if Status is selected)
+        self.status_row = QHBoxLayout()
+        self.status_row.setContentsMargins(0, 0, 0, 0)
+        self.status_row.setSpacing(0)
+        self.status_row.addWidget(QLabel("Status:"))
         self.status_combo = QComboBox()
         self.status_combo.addItem("All")
         self.status_options = list(status_options) if status_options else []
         for status in self.status_options:
             self.status_combo.addItem(status)
         self.status_combo.setEnabled(False)
-        status_row.addWidget(self.status_combo)
-        layout.addLayout(status_row)
+        self.status_row.addWidget(self.status_combo)
+        self.status_row_widget = QWidget()
+        self.status_row_widget.setLayout(self.status_row)
+        self.status_row_widget.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.status_row_widget)
 
-        # Client filter (only enabled if Batch Number is selected)
-        client_row = QHBoxLayout()
-        client_row.addWidget(QLabel("Client:"))
+        # Client filter (only visible if Batch Number is selected)
+        self.client_row = QHBoxLayout()
+        self.client_row.setContentsMargins(0, 0, 0, 0)
+        self.client_row.setSpacing(0)
+        self.client_row.addWidget(QLabel("Client:"))
         self.client_combo = QComboBox()
         self.client_combo.setEnabled(False)
         self.client_list = []
@@ -59,19 +68,29 @@ class SortDialog(QDialog):
             for client in self.client_list:
                 self.client_combo.addItem(client["client_name"], client["id"])
                 self.client_id_map[client["id"]] = client["client_name"]
-        client_row.addWidget(self.client_combo)
-        layout.addLayout(client_row)
+        self.client_row.addWidget(self.client_combo)
+        self.client_row_widget = QWidget()
+        self.client_row_widget.setLayout(self.client_row)
+        self.client_row_widget.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.client_row_widget)
 
-        # Batch list filter (only enabled if client selected)
-        batch_row = QHBoxLayout()
-        batch_row.addWidget(QLabel("Batch:"))
+        # Batch list filter (only visible if client selected)
+        self.batch_row = QHBoxLayout()
+        self.batch_row.setContentsMargins(0, 0, 0, 0)
+        self.batch_row.setSpacing(0)
+        self.batch_row.addWidget(QLabel("Batch:"))
         self.batch_combo = QComboBox()
         self.batch_combo.setEnabled(False)
-        batch_row.addWidget(self.batch_combo)
-        layout.addLayout(batch_row)
+        self.batch_row.addWidget(self.batch_combo)
+        self.batch_row_widget = QWidget()
+        self.batch_row_widget.setLayout(self.batch_row)
+        self.batch_row_widget.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.batch_row_widget)
 
         # Order selection
         order_row = QHBoxLayout()
+        order_row.setContentsMargins(0, 0, 0, 0)
+        order_row.setSpacing(0)
         order_row.addWidget(QLabel("Order:"))
         self.order_combo = QComboBox()
         self.order_combo.addItems(["Ascending", "Descending"])
@@ -95,8 +114,11 @@ class SortDialog(QDialog):
     def _on_field_changed(self, idx):
         field = self.sort_fields[self.field_combo.currentIndex()][1]
         self.status_combo.setEnabled(field == "status")
+        self.status_row_widget.setVisible(field == "status")
         is_batch = field == "batch_number"
         self.client_combo.setEnabled(is_batch)
+        self.client_row_widget.setVisible(is_batch)
+        self.batch_row_widget.setVisible(is_batch)
         self.batch_combo.setEnabled(is_batch and self.client_combo.currentData() is not None)
         if not is_batch:
             self.client_combo.setCurrentIndex(0)
