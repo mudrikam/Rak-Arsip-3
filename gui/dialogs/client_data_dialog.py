@@ -1,13 +1,17 @@
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QTabWidget, QWidget, QTableWidget, QTableWidgetItem, QLabel,
-    QFormLayout, QLineEdit, QPushButton, QMessageBox, QHBoxLayout, QSizePolicy, QHeaderView, QComboBox, QTextEdit, QSpinBox, QSpacerItem, QApplication, QToolTip
+    QFormLayout, QLineEdit, QPushButton, QMessageBox, QHBoxLayout, QSizePolicy, QHeaderView, QComboBox, QTextEdit, QSpinBox, QSpacerItem, QApplication, QToolTip, QMenu
 )
 from PySide6.QtCore import Qt, QPoint
+from PySide6.QtGui import QCursor, QKeySequence, QShortcut, QAction
 from database.db_manager import DatabaseManager
 from manager.config_manager import ConfigManager
 from pathlib import Path
 import webbrowser
 import qtawesome as qta
+import sys
+import os
+import subprocess
 
 class ClientDataDialog(QDialog):
     def __init__(self, parent=None):
@@ -231,6 +235,15 @@ class ClientDataDialog(QDialog):
         self._selected_client_name = ""
         self._selected_client_id = None
         self._batch_filter_value = None
+
+        self.files_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.files_table.customContextMenuRequested.connect(self._show_files_context_menu)
+        self._files_shortcut_copy_name = QShortcut(QKeySequence("Ctrl+C"), self.files_table)
+        self._files_shortcut_copy_name.activated.connect(self._files_copy_name_shortcut)
+        self._files_shortcut_copy_path = QShortcut(QKeySequence("Ctrl+X"), self.files_table)
+        self._files_shortcut_copy_path.activated.connect(self._files_copy_path_shortcut)
+        self._files_shortcut_open_explorer = QShortcut(QKeySequence("Ctrl+E"), self.files_table)
+        self._files_shortcut_open_explorer.activated.connect(self._files_open_explorer_shortcut)
 
     def _load_clients_data(self):
         basedir = Path(__file__).parent.parent.parent
@@ -544,6 +557,131 @@ class ClientDataDialog(QDialog):
             status_label = QLabel(f"{status}: {count}")
             status_label.setStyleSheet("font-size:12px; margin-bottom:2px;")
             self.files_summary_layout.addWidget(status_label)
+
+    def _show_files_context_menu(self, pos):
+        index = self.files_table.indexAt(pos)
+        if not index.isValid():
+            return
+        row = index.row()
+        if row < 0 or row >= len(self.files_records_filtered):
+            return
+        record = self.files_records_filtered[row]
+        file_name = record.get("name", "")
+        file_id = record.get("file_id", None) or record.get("id", None)
+        file_path = ""
+        basedir = Path(__file__).parent.parent.parent
+        db_config_path = basedir / "configs" / "db_config.json"
+        config_manager = ConfigManager(str(db_config_path))
+        db_manager = DatabaseManager(config_manager, config_manager)
+        if file_id:
+            db_manager.connect(write=False)
+            cursor = db_manager.connection.cursor()
+            cursor.execute("SELECT path FROM files WHERE id = ?", (file_id,))
+            row_db = cursor.fetchone()
+            db_manager.close()
+            if row_db and row_db[0]:
+                file_path = row_db[0]
+        menu = QMenu(self.files_table)
+        icon_copy_name = qta.icon("fa6s.copy")
+        icon_copy_path = qta.icon("fa6s.folder-open")
+        icon_open_explorer = qta.icon("fa6s.folder-tree")
+        action_copy_name = QAction(icon_copy_name, "Copy Name\tCtrl+C", self)
+        action_copy_path = QAction(icon_copy_path, "Copy Path\tCtrl+X", self)
+        action_open_explorer = QAction(icon_open_explorer, "Open in Explorer\tCtrl+E", self)
+        def do_copy_name():
+            QApplication.clipboard().setText(str(file_name))
+            QToolTip.showText(QCursor.pos(), f"{file_name}\nCopied to clipboard")
+        def do_copy_path():
+            QApplication.clipboard().setText(str(file_path))
+            QToolTip.showText(QCursor.pos(), f"{file_path}\nCopied to clipboard")
+        def do_open_explorer():
+            path = file_path
+            if not path:
+                return
+            if sys.platform == "win32":
+                if os.path.isfile(path):
+                    subprocess.Popen(f'explorer /select,"{path}"')
+                elif os.path.isdir(path):
+                    subprocess.Popen(f'explorer "{path}"')
+                else:
+                    parent_dir = os.path.dirname(path)
+                    if os.path.exists(parent_dir):
+                        subprocess.Popen(f'explorer "{parent_dir}"')
+            else:
+                subprocess.Popen(["xdg-open", path if os.path.exists(path) else os.path.dirname(path)])
+            QToolTip.showText(QCursor.pos(), f"Opened: {path}")
+        action_copy_name.triggered.connect(do_copy_name)
+        action_copy_path.triggered.connect(do_copy_path)
+        action_open_explorer.triggered.connect(do_open_explorer)
+        menu.addAction(action_copy_name)
+        menu.addAction(action_copy_path)
+        menu.addAction(action_open_explorer)
+        menu.exec(self.files_table.viewport().mapToGlobal(pos))
+
+    def _files_copy_name_shortcut(self):
+        row = self.files_table.currentRow()
+        if row < 0 or row >= len(self.files_records_filtered):
+            return
+        record = self.files_records_filtered[row]
+        file_name = record.get("name", "")
+        QApplication.clipboard().setText(str(file_name))
+        QToolTip.showText(QCursor.pos(), f"{file_name}\nCopied to clipboard")
+
+    def _files_copy_path_shortcut(self):
+        row = self.files_table.currentRow()
+        if row < 0 or row >= len(self.files_records_filtered):
+            return
+        record = self.files_records_filtered[row]
+        file_id = record.get("file_id", None) or record.get("id", None)
+        file_path = ""
+        basedir = Path(__file__).parent.parent.parent
+        db_config_path = basedir / "configs" / "db_config.json"
+        config_manager = ConfigManager(str(db_config_path))
+        db_manager = DatabaseManager(config_manager, config_manager)
+        if file_id:
+            db_manager.connect(write=False)
+            cursor = db_manager.connection.cursor()
+            cursor.execute("SELECT path FROM files WHERE id = ?", (file_id,))
+            row_db = cursor.fetchone()
+            db_manager.close()
+            if row_db and row_db[0]:
+                file_path = row_db[0]
+        QApplication.clipboard().setText(str(file_path))
+        QToolTip.showText(QCursor.pos(), f"{file_path}\nCopied to clipboard")
+
+    def _files_open_explorer_shortcut(self):
+        row = self.files_table.currentRow()
+        if row < 0 or row >= len(self.files_records_filtered):
+            return
+        record = self.files_records_filtered[row]
+        file_id = record.get("file_id", None) or record.get("id", None)
+        file_path = ""
+        basedir = Path(__file__).parent.parent.parent
+        db_config_path = basedir / "configs" / "db_config.json"
+        config_manager = ConfigManager(str(db_config_path))
+        db_manager = DatabaseManager(config_manager, config_manager)
+        if file_id:
+            db_manager.connect(write=False)
+            cursor = db_manager.connection.cursor()
+            cursor.execute("SELECT path FROM files WHERE id = ?", (file_id,))
+            row_db = cursor.fetchone()
+            db_manager.close()
+            if row_db and row_db[0]:
+                file_path = row_db[0]
+        if not file_path:
+            return
+        if sys.platform == "win32":
+            if os.path.isfile(file_path):
+                subprocess.Popen(f'explorer /select,"{file_path}"')
+            elif os.path.isdir(file_path):
+                subprocess.Popen(f'explorer "{file_path}"')
+            else:
+                parent_dir = os.path.dirname(file_path)
+                if os.path.exists(parent_dir):
+                    subprocess.Popen(f'explorer "{parent_dir}"')
+        else:
+            subprocess.Popen(["xdg-open", file_path if os.path.exists(file_path) else os.path.dirname(file_path)])
+        QToolTip.showText(QCursor.pos(), f"Opened: {file_path}")
 
     def _on_client_row_clicked(self, row, col):
         self._fill_details_form(row)
