@@ -1000,10 +1000,15 @@ class TeamsProfileDialog(QDialog):
         records_label.setStyleSheet("color:#666; font-size:11px; margin-top:2px;")
         self.earnings_summary_layout.addWidget(records_label)
 
-    def _on_earnings_row_double_clicked(self, row, col):
-        if row < 0 or row >= len(self.earnings_records_filtered):
+    def _get_global_earnings_index(self, row_in_page):
+        start_idx = (self.earnings_current_page - 1) * self.earnings_page_size
+        return start_idx + row_in_page
+
+    def _on_earnings_row_double_clicked(self, row_in_page, col):
+        global_idx = self._get_global_earnings_index(row_in_page)
+        if global_idx < 0 or global_idx >= len(self.earnings_records_filtered):
             return
-        record = self.earnings_records_filtered[row]
+        record = self.earnings_records_filtered[global_idx]
         file_name = record[0]
         QApplication.clipboard().setText(str(file_name))
         main_window = find_main_window(self)
@@ -1016,10 +1021,11 @@ class TeamsProfileDialog(QDialog):
         index = self.earnings_table.indexAt(pos)
         if not index.isValid():
             return
-        row = index.row()
-        if row < 0 or row >= len(self.earnings_records_filtered):
+        row_in_page = index.row()
+        global_idx = self._get_global_earnings_index(row_in_page)
+        if global_idx < 0 or global_idx >= len(self.earnings_records_filtered):
             return
-        record = self.earnings_records_filtered[row]
+        record = self.earnings_records_filtered[global_idx]
         file_name = record[0]
         file_path = record[7] if len(record) > 7 else ""
         menu = QMenu(self.earnings_table)
@@ -1034,7 +1040,7 @@ class TeamsProfileDialog(QDialog):
             QToolTip.showText(QCursor.pos(), f"{file_name}\nCopied to clipboard")
         def do_copy_path():
             QApplication.clipboard().setText(str(file_path))
-            QToolTip.showText(QCursor.pos(), f"C{file_path}\nCopied to clipboard")
+            QToolTip.showText(QCursor.pos(), f"{file_path}\nCopied to clipboard")
         def do_open_explorer():
             path = file_path
             if not path:
@@ -1060,28 +1066,37 @@ class TeamsProfileDialog(QDialog):
         menu.exec(self.earnings_table.viewport().mapToGlobal(pos))
 
     def _earnings_copy_name_shortcut(self):
-        row = self.earnings_table.currentRow()
-        if row < 0 or row >= len(self.earnings_records_filtered):
+        row_in_page = self.earnings_table.currentRow()
+        if row_in_page < 0:
             return
-        record = self.earnings_records_filtered[row]
+        global_idx = self._get_global_earnings_index(row_in_page)
+        if global_idx < 0 or global_idx >= len(self.earnings_records_filtered):
+            return
+        record = self.earnings_records_filtered[global_idx]
         file_name = record[0]
         QApplication.clipboard().setText(str(file_name))
         QToolTip.showText(QCursor.pos(), f"{file_name}\nCopied to clipboard")
 
     def _earnings_copy_path_shortcut(self):
-        row = self.earnings_table.currentRow()
-        if row < 0 or row >= len(self.earnings_records_filtered):
+        row_in_page = self.earnings_table.currentRow()
+        if row_in_page < 0:
             return
-        record = self.earnings_records_filtered[row]
+        global_idx = self._get_global_earnings_index(row_in_page)
+        if global_idx < 0 or global_idx >= len(self.earnings_records_filtered):
+            return
+        record = self.earnings_records_filtered[global_idx]
         file_path = record[7] if len(record) > 7 else ""
         QApplication.clipboard().setText(str(file_path))
         QToolTip.showText(QCursor.pos(), f"{file_path}\nCopied to clipboard")
 
     def _earnings_open_explorer_shortcut(self):
-        row = self.earnings_table.currentRow()
-        if row < 0 or row >= len(self.earnings_records_filtered):
+        row_in_page = self.earnings_table.currentRow()
+        if row_in_page < 0:
             return
-        record = self.earnings_records_filtered[row]
+        global_idx = self._get_global_earnings_index(row_in_page)
+        if global_idx < 0 or global_idx >= len(self.earnings_records_filtered):
+            return
+        record = self.earnings_records_filtered[global_idx]
         file_path = record[7] if len(record) > 7 else ""
         if not file_path:
             return
