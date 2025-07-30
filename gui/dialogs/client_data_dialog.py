@@ -301,6 +301,12 @@ class ClientDataDialog(QDialog):
         tab = QWidget()
         tab_layout = QVBoxLayout(tab)
         batch_btn_row = QHBoxLayout()
+        # Tambahkan search field di kiri tombol Add Batch
+        self.batch_search_edit = QLineEdit()
+        self.batch_search_edit.setPlaceholderText("Search batch number or note...")
+        self.batch_search_edit.setMinimumHeight(32)
+        self.batch_search_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        batch_btn_row.addWidget(self.batch_search_edit)
         self.batch_add_btn = QPushButton(qta.icon("fa6s.plus"), "Add Batch")
         self.batch_edit_btn = QPushButton(qta.icon("fa6s.pen-to-square"), "Edit Batch")
         self.batch_delete_btn = QPushButton(qta.icon("fa6s.trash"), "Delete Batch")
@@ -328,6 +334,10 @@ class ClientDataDialog(QDialog):
         self.batch_table.cellDoubleClicked.connect(self._on_batch_edit)
         self.batch_table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.batch_table.customContextMenuRequested.connect(self._show_batch_context_menu)
+        # Connect search field
+        self.batch_search_edit.textChanged.connect(self._on_batch_search_changed)
+        self._batch_data_all = []
+        self._batch_data_filtered = []
 
     def _show_batch_context_menu(self, pos):
         index = self.batch_table.indexAt(pos)
@@ -362,8 +372,24 @@ class ClientDataDialog(QDialog):
             note, _ = db_manager.get_batch_list_note_and_client(batch_number)
             file_count = db_manager.count_file_client_batch_by_batch_number(batch_number)
             batch_data.append((batch_number, note, file_count))
-        self.batch_table.setRowCount(len(batch_data))
-        for row_idx, (batch_number, note, file_count) in enumerate(batch_data):
+        self._batch_data_all = batch_data
+        self._update_batch_table()
+
+    def _on_batch_search_changed(self):
+        self._update_batch_table()
+
+    def _update_batch_table(self):
+        search_text = self.batch_search_edit.text().strip().lower() if hasattr(self, "batch_search_edit") else ""
+        if search_text:
+            self._batch_data_filtered = [
+                (batch_number, note, file_count)
+                for batch_number, note, file_count in self._batch_data_all
+                if search_text in str(batch_number).lower() or search_text in str(note).lower()
+            ]
+        else:
+            self._batch_data_filtered = list(self._batch_data_all)
+        self.batch_table.setRowCount(len(self._batch_data_filtered))
+        for row_idx, (batch_number, note, file_count) in enumerate(self._batch_data_filtered):
             self.batch_table.setItem(row_idx, 0, QTableWidgetItem(str(batch_number)))
             self.batch_table.setItem(row_idx, 1, QTableWidgetItem(str(note)))
             self.batch_table.setItem(row_idx, 2, QTableWidgetItem(str(file_count)))
@@ -395,6 +421,7 @@ class ClientDataDialog(QDialog):
         if row < 0:
             QMessageBox.warning(self, "No Batch Selected", "Please select a batch to edit.")
             return
+        # Ambil data dari filtered list agar sesuai dengan tampilan search
         batch_number = self.batch_table.item(row, 0).text()
         note = self.batch_table.item(row, 1).text()
         basedir = Path(__file__).parent.parent.parent
