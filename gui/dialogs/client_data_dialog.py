@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QTabWidget, QWidget, QTableWidget, QTableWidgetItem, QLabel,
-    QFormLayout, QLineEdit, QPushButton, QMessageBox, QHBoxLayout, QSizePolicy, QHeaderView, QComboBox, QTextEdit, QSpinBox, QSpacerItem, QApplication, QToolTip, QMenu, QMainWindow
+    QFormLayout, QLineEdit, QPushButton, QMessageBox, QHBoxLayout, QSizePolicy, QHeaderView, QComboBox, QTextEdit, QSpinBox, QSpacerItem, QApplication, QToolTip, QMenu, QMainWindow, QInputDialog
 )
 from PySide6.QtCore import Qt, QPoint
 from PySide6.QtGui import QCursor, QKeySequence, QShortcut, QAction
@@ -13,6 +13,30 @@ import sys
 import os
 import subprocess
 from helpers.show_statusbar_helper import show_statusbar_message
+
+class BatchEditDialog(QDialog):
+    def __init__(self, batch_number="", note="", parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Edit Batch")
+        self.setMinimumWidth(350)
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
+        self.batch_number_edit = QLineEdit(batch_number)
+        self.note_edit = QLineEdit(note)
+        form.addRow("Batch Number:", self.batch_number_edit)
+        form.addRow("Note:", self.note_edit)
+        layout.addLayout(form)
+        btn_row = QHBoxLayout()
+        self.save_btn = QPushButton("Save")
+        self.cancel_btn = QPushButton("Cancel")
+        btn_row.addWidget(self.save_btn)
+        btn_row.addWidget(self.cancel_btn)
+        layout.addLayout(btn_row)
+        self.save_btn.clicked.connect(self.accept)
+        self.cancel_btn.clicked.connect(self.reject)
+
+    def get_values(self):
+        return self.batch_number_edit.text().strip(), self.note_edit.text().strip()
 
 def find_main_window(widget):
     parent = widget
@@ -33,6 +57,7 @@ class ClientDataDialog(QDialog):
         self._init_clients_tab()
         self._init_details_tab()
         self._init_files_tab()
+        self._init_batch_list_tab()
 
     def _init_clients_tab(self):
         tab = QWidget()
@@ -255,25 +280,143 @@ class ClientDataDialog(QDialog):
         self._files_shortcut_open_explorer.activated.connect(self._files_open_explorer_shortcut)
         self.files_table.cellDoubleClicked.connect(self._on_files_row_double_clicked)
 
-    def _load_clients_data(self):
+    def _init_batch_list_tab(self):
+        tab = QWidget()
+        tab_layout = QVBoxLayout(tab)
+        self.batch_table = QTableWidget(tab)
+        self.batch_table.setColumnCount(3)
+        self.batch_table.setHorizontalHeaderLabels([
+            "Batch Number", "Note", "File Count"
+        ])
+        self.batch_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.batch_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.batch_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.batch_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        tab_layout.addWidget(self.batch_table)
+
+        batch_btn_row = QHBoxLayout()
+        self.batch_add_btn = QPushButton(qta.icon("fa6s.plus"), "Add Batch")
+        self.batch_edit_btn = QPushButton(qta.icon("fa6s.pen-to-square"), "Edit Batch")
+        self.batch_delete_btn = QPushButton(qta.icon("fa6s.trash"), "Delete Batch")
+        batch_btn_row.addWidget(self.batch_add_btn)
+        batch_btn_row.addWidget(self.batch_edit_btn)
+        batch_btn_row.addWidget(self.batch_delete_btn)
+        batch_btn_row.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
+        tab_layout.addLayout(batch_btn_row)
+        self.tab_widget.addTab(tab, qta.icon("fa6s.layer-group"), "Batch List")
+
+        self.batch_add_btn.clicked.connect(self._on_batch_add)
+        self.batch_edit_btn.clicked.connect(self._on_batch_edit)
+        self.batch_delete_btn.clicked.connect(self._on_batch_delete)
+        self.batch_table.cellDoubleClicked.connect(self._on_batch_edit)
+        self.batch_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.batch_table.customContextMenuRequested.connect(self._show_batch_context_menu)
+
+    def _show_batch_context_menu(self, pos):
+        index = self.batch_table.indexAt(pos)
+        if not index.isValid():
+            return
+        row = index.row()
+        menu = QMenu(self.batch_table)
+        icon_edit = qta.icon("fa6s.pen-to-square")
+        icon_delete = qta.icon("fa6s.trash")
+        action_edit = QAction(icon_edit, "Edit Batch", self)
+        action_delete = QAction(icon_delete, "Delete Batch", self)
+        def do_edit():
+            self.batch_table.selectRow(row)
+            self._on_batch_edit()
+        def do_delete():
+            self.batch_table.selectRow(row)
+            self._on_batch_delete()
+        action_edit.triggered.connect(do_edit)
+        action_delete.triggered.connect(do_delete)
+        menu.addAction(action_edit)
+        menu.addAction(action_delete)
+        menu.exec(self.batch_table.viewport().mapToGlobal(pos))
+
+    def _load_batch_list_for_client(self, client_id):
         basedir = Path(__file__).parent.parent.parent
         db_config_path = basedir / "configs" / "db_config.json"
         config_manager = ConfigManager(str(db_config_path))
         db_manager = DatabaseManager(config_manager, config_manager)
-        clients = db_manager.get_all_clients()
-        self.clients_table.setRowCount(len(clients))
-        self._clients_data = []
-        for row_idx, client in enumerate(clients):
-            self._clients_data.append(client)
-            for col_idx, key in enumerate(["client_name", "contact", "links", "status", "note"]):
-                value = client.get(key, "")
-                item = QTableWidgetItem(str(value) if value is not None else "")
-                item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-                self.clients_table.setItem(row_idx, col_idx, item)
-            file_count = db_manager.get_file_count_by_client_id(client["id"])
-            item = QTableWidgetItem(str(file_count))
-            item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-            self.clients_table.setItem(row_idx, 5, item)
+        batch_numbers = db_manager.get_batch_numbers_by_client(client_id)
+        batch_data = []
+        for batch_number in batch_numbers:
+            note, _ = db_manager.get_batch_list_note_and_client(batch_number)
+            file_count = db_manager.count_file_client_batch_by_batch_number(batch_number)
+            batch_data.append((batch_number, note, file_count))
+        self.batch_table.setRowCount(len(batch_data))
+        for row_idx, (batch_number, note, file_count) in enumerate(batch_data):
+            self.batch_table.setItem(row_idx, 0, QTableWidgetItem(str(batch_number)))
+            self.batch_table.setItem(row_idx, 1, QTableWidgetItem(str(note)))
+            self.batch_table.setItem(row_idx, 2, QTableWidgetItem(str(file_count)))
+
+    def _on_batch_add(self):
+        client_id = self._selected_client_id
+        if not client_id:
+            QMessageBox.warning(self, "No Client Selected", "Please select a client first.")
+            return
+        dialog = BatchEditDialog(parent=self)
+        if dialog.exec() == QDialog.Accepted:
+            batch_number, note = dialog.get_values()
+            if not batch_number:
+                QMessageBox.warning(self, "Validation Error", "Batch Number cannot be empty.")
+                return
+            basedir = Path(__file__).parent.parent.parent
+            db_config_path = basedir / "configs" / "db_config.json"
+            config_manager = ConfigManager(str(db_config_path))
+            db_manager = DatabaseManager(config_manager, config_manager)
+            try:
+                db_manager.add_batch_number(batch_number, note, client_id)
+                self._load_batch_list_for_client(client_id)
+                QMessageBox.information(self, "Success", "Batch added successfully.")
+            except Exception as e:
+                QMessageBox.warning(self, "Error", str(e))
+
+    def _on_batch_edit(self, *args):
+        row = self.batch_table.currentRow()
+        if row < 0:
+            QMessageBox.warning(self, "No Batch Selected", "Please select a batch to edit.")
+            return
+        batch_number = self.batch_table.item(row, 0).text()
+        note = self.batch_table.item(row, 1).text()
+        dialog = BatchEditDialog(batch_number, note, parent=self)
+        if dialog.exec() == QDialog.Accepted:
+            new_batch_number, new_note = dialog.get_values()
+            if not new_batch_number:
+                QMessageBox.warning(self, "Validation Error", "Batch Number cannot be empty.")
+                return
+            client_id = self._selected_client_id
+            basedir = Path(__file__).parent.parent.parent
+            db_config_path = basedir / "configs" / "db_config.json"
+            config_manager = ConfigManager(str(db_config_path))
+            db_manager = DatabaseManager(config_manager, config_manager)
+            try:
+                db_manager.update_batch_number_and_note_and_client(batch_number, new_batch_number, new_note, client_id)
+                self._load_batch_list_for_client(client_id)
+                QMessageBox.information(self, "Success", "Batch updated successfully.")
+            except Exception as e:
+                QMessageBox.warning(self, "Error", str(e))
+
+    def _on_batch_delete(self):
+        row = self.batch_table.currentRow()
+        if row < 0:
+            QMessageBox.warning(self, "No Batch Selected", "Please select a batch to delete.")
+            return
+        batch_number = self.batch_table.item(row, 0).text()
+        reply = QMessageBox.question(self, "Delete Batch", f"Are you sure you want to delete batch '{batch_number}'?", QMessageBox.Yes | QMessageBox.No)
+        if reply != QMessageBox.Yes:
+            return
+        basedir = Path(__file__).parent.parent.parent
+        db_config_path = basedir / "configs" / "db_config.json"
+        config_manager = ConfigManager(str(db_config_path))
+        db_manager = DatabaseManager(config_manager, config_manager)
+        try:
+            db_manager.delete_batch_and_file_client_batch(batch_number)
+            self._load_batch_list_for_client(self._selected_client_id)
+            QMessageBox.information(self, "Success", "Batch deleted successfully.")
+        except Exception as e:
+            QMessageBox.warning(self, "Error", str(e))
 
     def _fill_details_form(self, row):
         if 0 <= row < len(self._clients_data):
@@ -298,6 +441,7 @@ class ClientDataDialog(QDialog):
             self._selected_client_name = client.get("client_name", "")
             self._selected_client_id = client.get("id", None)
             self._load_files_for_client(client["id"])
+            self._load_batch_list_for_client(client["id"])
 
     def _populate_links_table(self, links_str):
         self.links_table.setRowCount(0)
@@ -463,6 +607,10 @@ class ClientDataDialog(QDialog):
             self.files_current_page = value
             self._update_files_table()
 
+    def _get_global_file_index(self, row_in_page):
+        start_idx = (self.files_current_page - 1) * self.files_page_size
+        return start_idx + row_in_page
+
     def _update_files_table(self):
         search_text = self.files_search_edit.text().strip().lower()
         batch_filter = self._batch_filter_value
@@ -572,10 +720,11 @@ class ClientDataDialog(QDialog):
         index = self.files_table.indexAt(pos)
         if not index.isValid():
             return
-        row = index.row()
-        if row < 0 or row >= len(self.files_records_filtered):
+        row_in_page = index.row()
+        global_idx = self._get_global_file_index(row_in_page)
+        if global_idx < 0 or global_idx >= len(self.files_records_filtered):
             return
-        record = self.files_records_filtered[row]
+        record = self.files_records_filtered[global_idx]
         file_name = record.get("name", "")
         file_id = record.get("file_id", None) or record.get("id", None)
         file_path = ""
@@ -629,19 +778,25 @@ class ClientDataDialog(QDialog):
         menu.exec(self.files_table.viewport().mapToGlobal(pos))
 
     def _files_copy_name_shortcut(self):
-        row = self.files_table.currentRow()
-        if row < 0 or row >= len(self.files_records_filtered):
+        row_in_page = self.files_table.currentRow()
+        if row_in_page < 0:
             return
-        record = self.files_records_filtered[row]
+        global_idx = self._get_global_file_index(row_in_page)
+        if global_idx < 0 or global_idx >= len(self.files_records_filtered):
+            return
+        record = self.files_records_filtered[global_idx]
         file_name = record.get("name", "")
         QApplication.clipboard().setText(str(file_name))
         QToolTip.showText(QCursor.pos(), f"{file_name}\nCopied to clipboard")
 
     def _files_copy_path_shortcut(self):
-        row = self.files_table.currentRow()
-        if row < 0 or row >= len(self.files_records_filtered):
+        row_in_page = self.files_table.currentRow()
+        if row_in_page < 0:
             return
-        record = self.files_records_filtered[row]
+        global_idx = self._get_global_file_index(row_in_page)
+        if global_idx < 0 or global_idx >= len(self.files_records_filtered):
+            return
+        record = self.files_records_filtered[global_idx]
         file_id = record.get("file_id", None) or record.get("id", None)
         file_path = ""
         basedir = Path(__file__).parent.parent.parent
@@ -660,10 +815,13 @@ class ClientDataDialog(QDialog):
         QToolTip.showText(QCursor.pos(), f"{file_path}\nCopied to clipboard")
 
     def _files_open_explorer_shortcut(self):
-        row = self.files_table.currentRow()
-        if row < 0 or row >= len(self.files_records_filtered):
+        row_in_page = self.files_table.currentRow()
+        if row_in_page < 0:
             return
-        record = self.files_records_filtered[row]
+        global_idx = self._get_global_file_index(row_in_page)
+        if global_idx < 0 or global_idx >= len(self.files_records_filtered):
+            return
+        record = self.files_records_filtered[global_idx]
         file_id = record.get("file_id", None) or record.get("id", None)
         file_path = ""
         basedir = Path(__file__).parent.parent.parent
@@ -693,6 +851,20 @@ class ClientDataDialog(QDialog):
             subprocess.Popen(["xdg-open", file_path if os.path.exists(file_path) else os.path.dirname(file_path)])
         QToolTip.showText(QCursor.pos(), f"Opened: {file_path}")
 
+    def _on_files_row_double_clicked(self, row_in_page, col):
+        global_idx = self._get_global_file_index(row_in_page)
+        if global_idx < 0 or global_idx >= len(self.files_records_filtered):
+            return
+        record = self.files_records_filtered[global_idx]
+        file_name = record.get("name", "")
+        QApplication.clipboard().setText(str(file_name))
+        show_statusbar_message(self, f"Copied: {file_name}")
+        main_window = find_main_window(self)
+        central_widget = getattr(main_window, "central_widget", None)
+        if central_widget and hasattr(central_widget, "paste_to_search"):
+            central_widget.paste_to_search()
+        self.accept()
+
     def _on_client_row_clicked(self, row, col):
         self._fill_details_form(row)
 
@@ -701,6 +873,7 @@ class ClientDataDialog(QDialog):
         self.tab_widget.setCurrentIndex(1)
         client = self._clients_data[row]
         self._load_files_for_client(client["id"])
+        self._load_batch_list_for_client(client["id"])
         self.tab_widget.setCurrentIndex(2)
 
     def _add_client_mode(self):
@@ -729,6 +902,7 @@ class ClientDataDialog(QDialog):
         self.files_records_all = []
         self.files_current_page = 1
         self._update_files_table()
+        self.batch_table.setRowCount(0)
 
     def _save_client_details(self):
         basedir = Path(__file__).parent.parent.parent
@@ -839,15 +1013,3 @@ class ClientDataDialog(QDialog):
             self._update_files_table()
             QMessageBox.information(self, "Success", "Client data updated successfully.")
 
-    def _on_files_row_double_clicked(self, row, col):
-        if row < 0 or row >= len(self.files_records_filtered):
-            return
-        record = self.files_records_filtered[row]
-        file_name = record.get("name", "")
-        QApplication.clipboard().setText(str(file_name))
-        show_statusbar_message(self, f"Copied: {file_name}")
-        main_window = find_main_window(self)
-        central_widget = getattr(main_window, "central_widget", None)
-        if central_widget and hasattr(central_widget, "paste_to_search"):
-            central_widget.paste_to_search()
-        self.accept()
