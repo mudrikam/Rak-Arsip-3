@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QHeaderView,
     QHBoxLayout, QLineEdit, QPushButton, QLabel, QSpacerItem, QSizePolicy, QComboBox,
-    QMenu, QApplication, QMessageBox, QDialog, QVBoxLayout as QVBoxLayout2, QRadioButton, QButtonGroup, QDialogButtonBox, QStyledItemDelegate, QStyle, QSpinBox, QFormLayout
+    QMenu, QApplication, QMessageBox, QDialog, QVBoxLayout as QVBoxLayout2, QRadioButton, QButtonGroup, QDialogButtonBox, QStyledItemDelegate, QStyle, QSpinBox, QFormLayout, QToolTip
 )
 from PySide6.QtGui import QColor, QAction, QFontMetrics, QCursor, QKeySequence, QShortcut
 from PySide6.QtCore import Signal, Qt, QTimer
@@ -184,6 +184,7 @@ class CentralWidget(QWidget):
 
         self.refresh_btn.clicked.connect(self.refresh_table)
         self.search_edit.returnPressed.connect(self.apply_search)
+        self.search_edit.textChanged.connect(self.apply_search)
         self.prev_btn.clicked.connect(self.prev_page)
         self.next_btn.clicked.connect(self.next_page)
         self.page_input.valueChanged.connect(self.goto_page)
@@ -192,9 +193,9 @@ class CentralWidget(QWidget):
         self.table.customContextMenuRequested.connect(self.show_context_menu)
 
         copy_name_shortcut = QShortcut(QKeySequence("Ctrl+C"), self)
-        copy_name_shortcut.activated.connect(self.copy_name)
+        copy_name_shortcut.activated.connect(self.copy_name_with_tooltip)
         copy_path_shortcut = QShortcut(QKeySequence("Ctrl+X"), self)
-        copy_path_shortcut.activated.connect(self.copy_path)
+        copy_path_shortcut.activated.connect(self.copy_path_with_tooltip)
         open_explorer_shortcut = QShortcut(QKeySequence("Ctrl+E"), self)
         open_explorer_shortcut.activated.connect(self.open_explorer)
         assign_price_shortcut = QShortcut(QKeySequence("Shift+A"), self)
@@ -255,6 +256,18 @@ class CentralWidget(QWidget):
             path = str(self.selected_row_data['path'])
             QApplication.clipboard().setText(path)
             show_statusbar_message(self, f"Path copied: {path}")
+
+    def copy_name_with_tooltip(self):
+        if self.selected_row_data:
+            name = str(self.selected_row_data['name'])
+            QApplication.clipboard().setText(name)
+            QToolTip.showText(QCursor.pos(), f"{name}\nCopied to clipboard")
+
+    def copy_path_with_tooltip(self):
+        if self.selected_row_data:
+            path = str(self.selected_row_data['path'])
+            QApplication.clipboard().setText(path)
+            QToolTip.showText(QCursor.pos(), f"{path}\nCopied to clipboard")
 
     def open_explorer(self):
         if self.selected_row_data:
