@@ -9,6 +9,7 @@ from PySide6.QtCore import QObject, Signal, QTimer
 
 class DatabaseManager(QObject):
     data_changed = Signal()
+    status_message = Signal(str, int)
     
     def __init__(self, config_manager, window_config_manager):
         super().__init__()
@@ -43,7 +44,7 @@ class DatabaseManager(QObject):
         cursor.execute("PRAGMA cache_size=10000")
         cursor.execute("PRAGMA temp_store=MEMORY")
         cursor.execute("PRAGMA mmap_size=268435456")
-        cursor.execute("PRAGMA busy_timeout=3000")
+        cursor.execute("PRAGMA busy_timeout=60000")
         self.connection.commit()
 
     def cleanup_wal_shm_files(self):
@@ -95,16 +96,26 @@ class DatabaseManager(QObject):
             print(f"Error creating temp file: {e}")
 
     def connect(self, write=True):
-        if self.connection is None:
-            if write:
-                self.connection = sqlite3.connect(self.db_path)
-                self.connection.row_factory = sqlite3.Row
-                self.enable_wal_mode()
-            else:
-                uri = f'file:{self.db_path}?mode=ro'
-                self.connection = sqlite3.connect(uri, uri=True)
-                self.connection.row_factory = sqlite3.Row
-        return self.connection
+        retry = 0
+        while True:
+            try:
+                if self.connection is None:
+                    if write:
+                        self.connection = sqlite3.connect(self.db_path)
+                        self.connection.row_factory = sqlite3.Row
+                        self.enable_wal_mode()
+                    else:
+                        uri = f'file:{self.db_path}?mode=ro'
+                        self.connection = sqlite3.connect(uri, uri=True)
+                        self.connection.row_factory = sqlite3.Row
+                return self.connection
+            except sqlite3.OperationalError as e:
+                if "database is locked" in str(e).lower():
+                    self.status_message.emit("Database is locked, waiting for access...", 3000)
+                    time.sleep(1)
+                    retry += 1
+                else:
+                    raise
 
     def close(self):
         if self.connection:

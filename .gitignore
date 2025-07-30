@@ -215,3 +215,4 @@ db_backups/
 *_old.db
 archieve_database.db-shm
 archieve_database.db-wal
+Thumbs.db
