@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QTabWidget, QWidget, QTableWidget, QTableWidgetItem, QLabel,
-    QFormLayout, QLineEdit, QPushButton, QMessageBox, QHBoxLayout, QSizePolicy, QHeaderView, QComboBox, QTextEdit, QSpinBox, QSpacerItem, QApplication, QToolTip, QMenu, QMainWindow, QInputDialog
+    QFormLayout, QLineEdit, QPushButton, QMessageBox, QHBoxLayout, QSizePolicy, QHeaderView, QComboBox, QTextEdit, QSpinBox, QSpacerItem, QApplication, QToolTip, QMenu, QMainWindow, QInputDialog, QDialogButtonBox
 )
 from PySide6.QtCore import Qt, QPoint
 from PySide6.QtGui import QCursor, QKeySequence, QShortcut, QAction
@@ -15,28 +15,45 @@ import subprocess
 from helpers.show_statusbar_helper import show_statusbar_message
 
 class BatchEditDialog(QDialog):
-    def __init__(self, batch_number="", note="", parent=None):
+    def __init__(self, batch_number="", note="", client_id=None, clients=None, parent=None, show_client_combo=False):
         super().__init__(parent)
-        self.setWindowTitle("Edit Batch")
+        self.setWindowTitle("Edit Batch List" if not show_client_combo else "Add Batch List")
         self.setMinimumWidth(350)
-        layout = QVBoxLayout(self)
-        form = QFormLayout()
+        layout = QFormLayout(self)
         self.batch_number_edit = QLineEdit(batch_number)
         self.note_edit = QLineEdit(note)
-        form.addRow("Batch Number:", self.batch_number_edit)
-        form.addRow("Note:", self.note_edit)
-        layout.addLayout(form)
-        btn_row = QHBoxLayout()
-        self.save_btn = QPushButton("Save")
-        self.cancel_btn = QPushButton("Cancel")
-        btn_row.addWidget(self.save_btn)
-        btn_row.addWidget(self.cancel_btn)
-        layout.addLayout(btn_row)
-        self.save_btn.clicked.connect(self.accept)
-        self.cancel_btn.clicked.connect(self.reject)
+        layout.addRow("Batch Number:", self.batch_number_edit)
+        layout.addRow("Note:", self.note_edit)
+        self.client_combo = None
+        self._client_id = client_id
+        self._show_client_combo = show_client_combo
+        if show_client_combo and clients:
+            self.client_combo = QComboBox(self)
+            for c in clients:
+                self.client_combo.addItem(c["client_name"], c["id"])
+            if client_id:
+                idx = self.client_combo.findData(client_id)
+                if idx >= 0:
+                    self.client_combo.setCurrentIndex(idx)
+            layout.addRow("Assign Batch to Client:", self.client_combo)
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        layout.addWidget(self.button_box)
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
 
     def get_values(self):
-        return self.batch_number_edit.text().strip(), self.note_edit.text().strip()
+        if self._show_client_combo and self.client_combo:
+            return (
+                self.batch_number_edit.text().strip(),
+                self.note_edit.text().strip(),
+                self.client_combo.currentData()
+            )
+        else:
+            return (
+                self.batch_number_edit.text().strip(),
+                self.note_edit.text().strip(),
+                self._client_id
+            )
 
 def find_main_window(widget):
     parent = widget
@@ -283,6 +300,15 @@ class ClientDataDialog(QDialog):
     def _init_batch_list_tab(self):
         tab = QWidget()
         tab_layout = QVBoxLayout(tab)
+        batch_btn_row = QHBoxLayout()
+        self.batch_add_btn = QPushButton(qta.icon("fa6s.plus"), "Add Batch")
+        self.batch_edit_btn = QPushButton(qta.icon("fa6s.pen-to-square"), "Edit Batch")
+        self.batch_delete_btn = QPushButton(qta.icon("fa6s.trash"), "Delete Batch")
+        batch_btn_row.addWidget(self.batch_add_btn)
+        batch_btn_row.addWidget(self.batch_edit_btn)
+        batch_btn_row.addWidget(self.batch_delete_btn)
+        batch_btn_row.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
+        tab_layout.addLayout(batch_btn_row)
         self.batch_table = QTableWidget(tab)
         self.batch_table.setColumnCount(3)
         self.batch_table.setHorizontalHeaderLabels([
@@ -294,15 +320,6 @@ class ClientDataDialog(QDialog):
         self.batch_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         tab_layout.addWidget(self.batch_table)
 
-        batch_btn_row = QHBoxLayout()
-        self.batch_add_btn = QPushButton(qta.icon("fa6s.plus"), "Add Batch")
-        self.batch_edit_btn = QPushButton(qta.icon("fa6s.pen-to-square"), "Edit Batch")
-        self.batch_delete_btn = QPushButton(qta.icon("fa6s.trash"), "Delete Batch")
-        batch_btn_row.addWidget(self.batch_add_btn)
-        batch_btn_row.addWidget(self.batch_edit_btn)
-        batch_btn_row.addWidget(self.batch_delete_btn)
-        batch_btn_row.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
-        tab_layout.addLayout(batch_btn_row)
         self.tab_widget.addTab(tab, qta.icon("fa6s.layer-group"), "Batch List")
 
         self.batch_add_btn.clicked.connect(self._on_batch_add)
@@ -356,9 +373,9 @@ class ClientDataDialog(QDialog):
         if not client_id:
             QMessageBox.warning(self, "No Client Selected", "Please select a client first.")
             return
-        dialog = BatchEditDialog(parent=self)
+        dialog = BatchEditDialog(parent=self, client_id=client_id, show_client_combo=False)
         if dialog.exec() == QDialog.Accepted:
-            batch_number, note = dialog.get_values()
+            batch_number, note, _ = dialog.get_values()
             if not batch_number:
                 QMessageBox.warning(self, "Validation Error", "Batch Number cannot be empty.")
                 return
@@ -380,20 +397,23 @@ class ClientDataDialog(QDialog):
             return
         batch_number = self.batch_table.item(row, 0).text()
         note = self.batch_table.item(row, 1).text()
-        dialog = BatchEditDialog(batch_number, note, parent=self)
+        basedir = Path(__file__).parent.parent.parent
+        db_config_path = basedir / "configs" / "db_config.json"
+        config_manager = ConfigManager(str(db_config_path))
+        db_manager = DatabaseManager(config_manager, config_manager)
+        # Only allow editing batch_number and note, not client
+        dialog = BatchEditDialog(batch_number, note, self._selected_client_id, None, parent=self, show_client_combo=False)
         if dialog.exec() == QDialog.Accepted:
-            new_batch_number, new_note = dialog.get_values()
+            new_batch_number, new_note, client_id = dialog.get_values()
             if not new_batch_number:
-                QMessageBox.warning(self, "Validation Error", "Batch Number cannot be empty.")
+                QMessageBox.warning(self, "Input Error", "Batch number cannot be empty.")
                 return
-            client_id = self._selected_client_id
-            basedir = Path(__file__).parent.parent.parent
-            db_config_path = basedir / "configs" / "db_config.json"
-            config_manager = ConfigManager(str(db_config_path))
-            db_manager = DatabaseManager(config_manager, config_manager)
             try:
-                db_manager.update_batch_number_and_note_and_client(batch_number, new_batch_number, new_note, client_id)
-                self._load_batch_list_for_client(client_id)
+                if new_batch_number != batch_number:
+                    db_manager.update_batch_number_and_note_and_client(batch_number, new_batch_number, new_note, client_id)
+                else:
+                    db_manager.update_batch_list_note_and_client(batch_number, new_note, client_id)
+                self._load_batch_list_for_client(self._selected_client_id)
                 QMessageBox.information(self, "Success", "Batch updated successfully.")
             except Exception as e:
                 QMessageBox.warning(self, "Error", str(e))
@@ -404,13 +424,26 @@ class ClientDataDialog(QDialog):
             QMessageBox.warning(self, "No Batch Selected", "Please select a batch to delete.")
             return
         batch_number = self.batch_table.item(row, 0).text()
-        reply = QMessageBox.question(self, "Delete Batch", f"Are you sure you want to delete batch '{batch_number}'?", QMessageBox.Yes | QMessageBox.No)
-        if reply != QMessageBox.Yes:
-            return
         basedir = Path(__file__).parent.parent.parent
         db_config_path = basedir / "configs" / "db_config.json"
         config_manager = ConfigManager(str(db_config_path))
         db_manager = DatabaseManager(config_manager, config_manager)
+        affected_count = db_manager.count_file_client_batch_by_batch_number(batch_number)
+        msg1 = (
+            f"Deleting batch number '{batch_number}' will also delete {affected_count} related record(s) in File Client Batch records.\n"
+            "This will affect all files/projects using this batch number.\n\n"
+            "Do you want to continue?"
+        )
+        reply1 = QMessageBox.warning(self, "Delete Batch", msg1, QMessageBox.Yes | QMessageBox.No)
+        if reply1 != QMessageBox.Yes:
+            return
+        msg2 = (
+            f"Are you sure you want to permanently delete batch number '{batch_number}'?\n"
+            "This action cannot be undone."
+        )
+        reply2 = QMessageBox.warning(self, "Are you sure?", msg2, QMessageBox.Yes | QMessageBox.No)
+        if reply2 != QMessageBox.Yes:
+            return
         try:
             db_manager.delete_batch_and_file_client_batch(batch_number)
             self._load_batch_list_for_client(self._selected_client_id)
@@ -1008,6 +1041,10 @@ class ClientDataDialog(QDialog):
                 widget = item.widget()
                 if widget:
                     widget.deleteLater()
+            self.files_records_all = []
+            self.files_current_page = 1
+            self._update_files_table()
+            QMessageBox.information(self, "Success", "Client data updated successfully.")
             self.files_records_all = []
             self.files_current_page = 1
             self._update_files_table()
