@@ -1,11 +1,14 @@
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QTabWidget, QWidget, QTableWidget, QTableWidgetItem, QLabel, QFormLayout, QLineEdit, QPushButton, QMessageBox, QDateEdit, QHBoxLayout, QInputDialog, QSizePolicy, QHeaderView, QSpinBox, QSpacerItem, QApplication, QToolTip, QComboBox
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QTabWidget, QWidget, QTableWidget, QTableWidgetItem, QLabel, QFormLayout, QLineEdit, QPushButton, QMessageBox, QDateEdit, QHBoxLayout, QInputDialog, QSizePolicy, QHeaderView, QSpinBox, QSpacerItem, QApplication, QToolTip, QComboBox, QMenu
 from PySide6.QtCore import Qt, QDate, QPoint
-from PySide6.QtGui import QColor, QIcon, QClipboard
+from PySide6.QtGui import QColor, QIcon, QClipboard, QAction, QCursor, QKeySequence, QShortcut
 import qtawesome as qta
 from database.db_manager import DatabaseManager
 from manager.config_manager import ConfigManager
 from pathlib import Path
 from datetime import datetime
+import sys
+import os
+import subprocess
 
 def format_date_indonesian(date_str, with_time=False):
     hari_map = {
@@ -581,6 +584,18 @@ class TeamsProfileDialog(QDialog):
         self.earnings_batch_filter_combo.currentIndexChanged.connect(self._on_earnings_batch_filter_changed)
         self.earnings_sort_combo.currentIndexChanged.connect(self._on_earnings_sort_changed)
         self.earnings_sort_order_combo.currentIndexChanged.connect(self._on_earnings_sort_changed)
+        self.earnings_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.earnings_table.customContextMenuRequested.connect(self._show_earnings_context_menu)
+        self.earnings_table.cellDoubleClicked.connect(self._on_earnings_row_double_clicked)
+
+        # SHORTCUTS for earnings table
+        self._earnings_shortcut_copy_name = QShortcut(QKeySequence("Ctrl+C"), self.earnings_table)
+        self._earnings_shortcut_copy_name.activated.connect(self._earnings_copy_name_shortcut)
+        self._earnings_shortcut_copy_path = QShortcut(QKeySequence("Ctrl+X"), self.earnings_table)
+        self._earnings_shortcut_copy_path.activated.connect(self._earnings_copy_path_shortcut)
+        self._earnings_shortcut_open_explorer = QShortcut(QKeySequence("Ctrl+E"), self.earnings_table)
+        self._earnings_shortcut_open_explorer.activated.connect(self._earnings_open_explorer_shortcut)
+
         self.earnings_records_all = []
         self.earnings_records_filtered = []
         self.earnings_page_size = 20
@@ -588,6 +603,9 @@ class TeamsProfileDialog(QDialog):
         self._earnings_batch_filter_value = None
         self.earnings_sort_field = "File Name"
         self.earnings_sort_order = "Descending"
+        self.earnings_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.earnings_table.customContextMenuRequested.connect(self._show_earnings_context_menu)
+        self.earnings_table.cellDoubleClicked.connect(self._on_earnings_row_double_clicked)
 
     def _fetch_team_data(self):
         basedir = Path(__file__).parent.parent.parent
@@ -713,7 +731,6 @@ class TeamsProfileDialog(QDialog):
                         client_id = c["id"]
                         break
             if not client_id:
-                # fallback: try to get from file_client_price
                 client_id = db_manager.get_assigned_client_id_for_file(file_id)
             batch = ""
             if file_id and client_id:
@@ -725,6 +742,16 @@ class TeamsProfileDialog(QDialog):
             except Exception:
                 amount_str = str(amount)
             amount_display = f"{currency} {amount_str}" if currency else str(amount_str)
+            # Ambil path file dari tabel files
+            file_path = ""
+            if file_id:
+                db_manager.connect(write=False)
+                cursor = db_manager.connection.cursor()
+                cursor.execute("SELECT path FROM files WHERE id = ?", (file_id,))
+                row = cursor.fetchone()
+                db_manager.close()
+                if row and row[0]:
+                    file_path = row[0]
             earnings_records.append((
                 file_name,
                 file_date,
@@ -732,7 +759,8 @@ class TeamsProfileDialog(QDialog):
                 earning["note"],
                 earning["status"],
                 client_name,
-                batch
+                batch,
+                file_path  # path file
             ))
         self.earnings_records_all = earnings_records
         self.earnings_current_page = 1
@@ -851,7 +879,7 @@ class TeamsProfileDialog(QDialog):
         page_records = self.earnings_records_filtered[start_idx:end_idx]
         self.earnings_table.setRowCount(len(page_records))
         for row_idx, record in enumerate(page_records):
-            file_name, file_date, amount_display, note, status, client_name, batch = record
+            file_name, file_date, amount_display, note, status, client_name, batch, file_path = record
             formatted_date = format_date_indonesian(file_date)
             item_file_name = QTableWidgetItem(str(file_name))
             item_date = QTableWidgetItem(formatted_date)
@@ -962,6 +990,112 @@ class TeamsProfileDialog(QDialog):
         records_label = QLabel(f"Total Earnings Records: {len(self.earnings_records_filtered)}")
         records_label.setStyleSheet("color:#666; font-size:11px; margin-top:2px;")
         self.earnings_summary_layout.addWidget(records_label)
+
+    def _on_earnings_row_double_clicked(self, row, col):
+        if row < 0 or row >= len(self.earnings_records_filtered):
+            return
+        record = self.earnings_records_filtered[row]
+        file_path = record[7] if len(record) > 7 else ""
+        if not file_path:
+            return
+        if sys.platform == "win32":
+            if os.path.isfile(file_path):
+                subprocess.Popen(f'explorer /select,"{file_path}"')
+            elif os.path.isdir(file_path):
+                subprocess.Popen(f'explorer "{file_path}"')
+            else:
+                parent_dir = os.path.dirname(file_path)
+                if os.path.exists(parent_dir):
+                    subprocess.Popen(f'explorer "{parent_dir}"')
+        else:
+            subprocess.Popen(["xdg-open", file_path if os.path.exists(file_path) else os.path.dirname(file_path)])
+        QToolTip.showText(QCursor.pos(), f"Opened: {file_path}")
+
+    def _show_earnings_context_menu(self, pos):
+        index = self.earnings_table.indexAt(pos)
+        if not index.isValid():
+            return
+        row = index.row()
+        if row < 0 or row >= len(self.earnings_records_filtered):
+            return
+        record = self.earnings_records_filtered[row]
+        file_name = record[0]
+        file_path = record[7] if len(record) > 7 else ""
+        menu = QMenu(self.earnings_table)
+        icon_copy_name = qta.icon("fa6s.copy")
+        icon_copy_path = qta.icon("fa6s.folder-open")
+        icon_open_explorer = qta.icon("fa6s.folder-tree")
+        action_copy_name = QAction(icon_copy_name, "Copy Name\tCtrl+C", self)
+        action_copy_path = QAction(icon_copy_path, "Copy Path\tCtrl+X", self)
+        action_open_explorer = QAction(icon_open_explorer, "Open in Explorer\tCtrl+E", self)
+        def do_copy_name():
+            QApplication.clipboard().setText(str(file_name))
+            QToolTip.showText(QCursor.pos(), f"{file_name}\nCopied to clipboard")
+        def do_copy_path():
+            QApplication.clipboard().setText(str(file_path))
+            QToolTip.showText(QCursor.pos(), f"C{file_path}\nCopied to clipboard")
+        def do_open_explorer():
+            path = file_path
+            if not path:
+                return
+            if sys.platform == "win32":
+                if os.path.isfile(path):
+                    subprocess.Popen(f'explorer /select,"{path}"')
+                elif os.path.isdir(path):
+                    subprocess.Popen(f'explorer "{path}"')
+                else:
+                    parent_dir = os.path.dirname(path)
+                    if os.path.exists(parent_dir):
+                        subprocess.Popen(f'explorer "{parent_dir}"')
+            else:
+                subprocess.Popen(["xdg-open", path if os.path.exists(path) else os.path.dirname(path)])
+            QToolTip.showText(QCursor.pos(), f"Opened: {path}")
+        action_copy_name.triggered.connect(do_copy_name)
+        action_copy_path.triggered.connect(do_copy_path)
+        action_open_explorer.triggered.connect(do_open_explorer)
+        menu.addAction(action_copy_name)
+        menu.addAction(action_copy_path)
+        menu.addAction(action_open_explorer)
+        menu.exec(self.earnings_table.viewport().mapToGlobal(pos))
+
+    def _earnings_copy_name_shortcut(self):
+        row = self.earnings_table.currentRow()
+        if row < 0 or row >= len(self.earnings_records_filtered):
+            return
+        record = self.earnings_records_filtered[row]
+        file_name = record[0]
+        QApplication.clipboard().setText(str(file_name))
+        QToolTip.showText(QCursor.pos(), f"{file_name}\nCopied to clipboard")
+
+    def _earnings_copy_path_shortcut(self):
+        row = self.earnings_table.currentRow()
+        if row < 0 or row >= len(self.earnings_records_filtered):
+            return
+        record = self.earnings_records_filtered[row]
+        file_path = record[7] if len(record) > 7 else ""
+        QApplication.clipboard().setText(str(file_path))
+        QToolTip.showText(QCursor.pos(), f"{file_path}\nCopied to clipboard")
+
+    def _earnings_open_explorer_shortcut(self):
+        row = self.earnings_table.currentRow()
+        if row < 0 or row >= len(self.earnings_records_filtered):
+            return
+        record = self.earnings_records_filtered[row]
+        file_path = record[7] if len(record) > 7 else ""
+        if not file_path:
+            return
+        if sys.platform == "win32":
+            if os.path.isfile(file_path):
+                subprocess.Popen(f'explorer /select,"{file_path}"')
+            elif os.path.isdir(file_path):
+                subprocess.Popen(f'explorer "{file_path}"')
+            else:
+                parent_dir = os.path.dirname(file_path)
+                if os.path.exists(parent_dir):
+                    subprocess.Popen(f'explorer "{parent_dir}"')
+        else:
+            subprocess.Popen(["xdg-open", file_path if os.path.exists(file_path) else os.path.dirname(file_path)])
+        QToolTip.showText(QCursor.pos(), f"Opened: {file_path}")
 
     def _on_team_row_clicked(self, row, col):
         self._fill_details_form(row)

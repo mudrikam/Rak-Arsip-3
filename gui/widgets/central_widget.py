@@ -677,10 +677,16 @@ class CentralWidget(QWidget):
         def do_copy_name():
             QApplication.clipboard().setText(str(row_data['name']))
             show_statusbar_message(self, f"Name copied: {row_data['name']}")
+            from PySide6.QtGui import QCursor
+            from PySide6.QtWidgets import QToolTip
+            QToolTip.showText(QCursor.pos(), f"{row_data['name']}\nCopied to clipboard")
 
         def do_copy_path():
             QApplication.clipboard().setText(str(row_data['path']))
             show_statusbar_message(self, f"Path copied: {row_data['path']}")
+            from PySide6.QtGui import QCursor
+            from PySide6.QtWidgets import QToolTip
+            QToolTip.showText(QCursor.pos(), f"{row_data['path']}\nCopied to clipboard")
 
         def do_open_explorer():
             path = str(row_data['path'])
