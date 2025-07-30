@@ -691,9 +691,23 @@ class ClientDataDialog(QDialog):
         end_idx = start_idx + self.files_page_size
         page_records = self.files_records_filtered[start_idx:end_idx]
         self.files_table.setRowCount(len(page_records))
+
+        # Calculate total_price and status_counts globally for all filtered records
         total_price = 0
         status_counts = {}
         currency = ""
+        for file in self.files_records_filtered:
+            price = file.get("price", "")
+            if not currency:
+                currency = file.get("currency", "")
+            try:
+                total_price += float(price)
+            except Exception:
+                pass
+            status = file.get("status", "")
+            if status:
+                status_counts[status] = status_counts.get(status, 0) + 1
+
         for row_idx, file in enumerate(page_records):
             file_name = file.get("name", "")
             file_date = file.get("date", "")
@@ -717,12 +731,7 @@ class ClientDataDialog(QDialog):
             self.files_table.setItem(row_idx, 3, QTableWidgetItem(str(status)))
             self.files_table.setItem(row_idx, 4, QTableWidgetItem(str(note)))
             self.files_table.setItem(row_idx, 5, QTableWidgetItem(str(batch)))
-            try:
-                total_price += float(price)
-            except Exception:
-                pass
-            if status:
-                status_counts[status] = status_counts.get(status, 0) + 1
+
         while self.files_summary_layout.count():
             item = self.files_summary_layout.takeAt(0)
             widget = item.widget()
