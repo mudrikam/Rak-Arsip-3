@@ -209,7 +209,7 @@ class CentralWidget(QWidget):
         self._sort_order = "desc"
         self._search_timer = QTimer(self)
         self._search_timer.setSingleShot(True)
-        self._search_timer.setInterval(500)
+        self._search_timer.setInterval(400)
         self._search_timer.timeout.connect(self._delayed_apply_search)
         self.search_edit.returnPressed.connect(self.apply_search)
         self.search_edit.textChanged.connect(self._on_search_text_changed)
