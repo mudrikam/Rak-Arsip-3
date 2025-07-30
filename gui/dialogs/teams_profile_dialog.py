@@ -166,6 +166,33 @@ class TeamsProfileDialog(QDialog):
         self.attendance_search_edit.setMinimumHeight(32)
         self.attendance_search_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         search_row.addWidget(self.attendance_search_edit)
+        self.attendance_sort_combo = QComboBox()
+        self.attendance_sort_combo.addItems([
+            "Date", "Check In", "Check Out", "Note", "Hari", "Bulan", "Tahun"
+        ])
+        self.attendance_sort_order_combo = QComboBox()
+        self.attendance_sort_order_combo.addItems(["Ascending", "Descending"])
+        search_row.addWidget(QLabel("Sort by:"))
+        search_row.addWidget(self.attendance_sort_combo)
+        search_row.addWidget(self.attendance_sort_order_combo)
+        # Hari filter
+        self.attendance_day_filter_combo = QComboBox()
+        self.attendance_day_filter_combo.addItem("All Days")
+        self.attendance_day_filter_combo.addItems(["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"])
+        search_row.addWidget(QLabel("Day:"))
+        search_row.addWidget(self.attendance_day_filter_combo)
+        # Bulan filter
+        self.attendance_month_filter_combo = QComboBox()
+        self.attendance_month_filter_combo.addItem("All Months")
+        for i in range(1, 13):
+            self.attendance_month_filter_combo.addItem(format_date_indonesian(f"2023-{i:02d}-01").split(",")[1].split()[1])
+        search_row.addWidget(QLabel("Month:"))
+        search_row.addWidget(self.attendance_month_filter_combo)
+        # Tahun filter
+        self.attendance_year_filter_combo = QComboBox()
+        self.attendance_year_filter_combo.addItem("All Years")
+        search_row.addWidget(QLabel("Year:"))
+        search_row.addWidget(self.attendance_year_filter_combo)
         tab_layout.addLayout(search_row)
         self.attendance_table = QTableWidget(tab)
         self.attendance_table.setColumnCount(4)
@@ -198,10 +225,298 @@ class TeamsProfileDialog(QDialog):
         self.attendance_prev_btn.clicked.connect(self._attendance_prev_page)
         self.attendance_next_btn.clicked.connect(self._attendance_next_page)
         self.attendance_page_input.valueChanged.connect(self._attendance_goto_page)
+        self.attendance_sort_combo.currentIndexChanged.connect(self._attendance_sort_changed)
+        self.attendance_sort_order_combo.currentIndexChanged.connect(self._attendance_sort_changed)
+        self.attendance_day_filter_combo.currentIndexChanged.connect(self._attendance_filter_changed)
+        self.attendance_month_filter_combo.currentIndexChanged.connect(self._attendance_filter_changed)
+        self.attendance_year_filter_combo.currentIndexChanged.connect(self._attendance_filter_changed)
         self.attendance_records_all = []
         self.attendance_records_filtered = []
         self.attendance_page_size = 20
         self.attendance_current_page = 1
+        self.attendance_sort_field = "Date"
+        self.attendance_sort_order = "Descending"
+        self.attendance_day_filter = "All Days"
+        self.attendance_month_filter = "All Months"
+        self.attendance_year_filter = "All Years"
+
+    def _attendance_filter_changed(self):
+        self.attendance_day_filter = self.attendance_day_filter_combo.currentText()
+        self.attendance_month_filter = self.attendance_month_filter_combo.currentText()
+        self.attendance_year_filter = self.attendance_year_filter_combo.currentText()
+        self.attendance_current_page = 1
+        self._update_attendance_table()
+
+    def _load_attendance_records(self, team):
+        tid = team["id"]
+        full_name = team.get("full_name", "")
+        records = self._attendance_map.get(tid, [])
+        self.attendance_records_all = [r[:4] for r in records]
+        self.attendance_current_page = 1
+        self._refresh_attendance_year_filter()
+        self._update_attendance_table(full_name)
+
+    def _refresh_attendance_year_filter(self):
+        years = set()
+        for r in self.attendance_records_all:
+            date_str = r[0]
+            try:
+                dt = datetime.strptime(date_str, "%Y-%m-%d")
+                years.add(str(dt.year))
+            except Exception:
+                continue
+        current = self.attendance_year_filter_combo.currentText() if hasattr(self, "attendance_year_filter_combo") else "All Years"
+        self.attendance_year_filter_combo.blockSignals(True)
+        self.attendance_year_filter_combo.clear()
+        self.attendance_year_filter_combo.addItem("All Years")
+        for y in sorted(years):
+            self.attendance_year_filter_combo.addItem(y)
+        idx = self.attendance_year_filter_combo.findText(current)
+        if idx >= 0:
+            self.attendance_year_filter_combo.setCurrentIndex(idx)
+        self.attendance_year_filter_combo.blockSignals(False)
+
+    def _attendance_search_changed(self):
+        self.attendance_current_page = 1
+        self._update_attendance_table()
+
+    def _attendance_prev_page(self):
+        if self.attendance_current_page > 1:
+            self.attendance_current_page -= 1
+            self._update_attendance_table()
+
+    def _attendance_next_page(self):
+        total_rows = len(self.attendance_records_filtered)
+        total_pages = max(1, (total_rows + self.attendance_page_size - 1) // self.attendance_page_size)
+        if self.attendance_current_page < total_pages:
+            self.attendance_current_page += 1
+            self._update_attendance_table()
+
+    def _attendance_goto_page(self, value):
+        total_rows = len(self.attendance_records_filtered)
+        total_pages = max(1, (total_rows + self.attendance_page_size - 1) // self.attendance_page_size)
+        if 1 <= value <= total_pages:
+            self.attendance_current_page = value
+            self._update_attendance_table()
+
+    def _attendance_sort_changed(self):
+        self.attendance_current_page = 1
+        self.attendance_sort_field = self.attendance_sort_combo.currentText()
+        self.attendance_sort_order = self.attendance_sort_order_combo.currentText()
+        self._update_attendance_table()
+
+    def _update_attendance_table(self, full_name=None):
+        search_text = self.attendance_search_edit.text().strip().lower()
+        day_filter = self.attendance_day_filter_combo.currentText() if hasattr(self, "attendance_day_filter_combo") else "All Days"
+        month_filter = self.attendance_month_filter_combo.currentText() if hasattr(self, "attendance_month_filter_combo") else "All Months"
+        year_filter = self.attendance_year_filter_combo.currentText() if hasattr(self, "attendance_year_filter_combo") else "All Years"
+        hari_map = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]
+        bulan_map = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
+        def filter_func(r):
+            date_str = r[0]
+            if not date_str:
+                return False
+            try:
+                dt = datetime.strptime(date_str, "%Y-%m-%d")
+                hari = hari_map[dt.weekday()]
+                bulan = bulan_map[dt.month - 1]
+                tahun = str(dt.year)
+            except Exception:
+                hari = bulan = tahun = ""
+            if day_filter != "All Days" and hari != day_filter:
+                return False
+            if month_filter != "All Months" and bulan != month_filter:
+                return False
+            if year_filter != "All Years" and tahun != year_filter:
+                return False
+            if search_text:
+                return (
+                    (r[0] and search_text in str(r[0]).lower()) or
+                    (r[1] and search_text in str(r[1]).lower()) or
+                    (r[2] and search_text in str(r[2]).lower()) or
+                    (r[3] and search_text in str(r[3]).lower())
+                )
+            return True
+        self.attendance_records_filtered = [r for r in self.attendance_records_all if filter_func(r)]
+        sort_field = self.attendance_sort_field
+        sort_order = self.attendance_sort_order
+        sort_map = {
+            "Date": 0,
+            "Check In": 1,
+            "Check Out": 2,
+            "Note": 3
+        }
+        reverse = sort_order == "Descending"
+        if sort_field in sort_map:
+            key_idx = sort_map[sort_field]
+            try:
+                self.attendance_records_filtered.sort(
+                    key=lambda x: (x[key_idx] or "").lower() if x[key_idx] else "",
+                    reverse=reverse
+                )
+            except Exception:
+                pass
+        elif sort_field == "Hari":
+            def get_hari_idx(date_str):
+                try:
+                    dt = datetime.strptime(date_str, "%Y-%m-%d")
+                    return dt.weekday()
+                except Exception:
+                    return -1
+            self.attendance_records_filtered.sort(
+                key=lambda x: get_hari_idx(x[0]) if x[0] else -1,
+                reverse=reverse
+            )
+        elif sort_field == "Bulan":
+            def get_bulan_idx(date_str):
+                try:
+                    dt = datetime.strptime(date_str, "%Y-%m-%d")
+                    return dt.month
+                except Exception:
+                    return -1
+            self.attendance_records_filtered.sort(
+                key=lambda x: get_bulan_idx(x[0]) if x[0] else -1,
+                reverse=reverse
+            )
+        elif sort_field == "Tahun":
+            def get_tahun_idx(date_str):
+                try:
+                    dt = datetime.strptime(date_str, "%Y-%m-%d")
+                    return dt.year
+                except Exception:
+                    return -1
+            self.attendance_records_filtered.sort(
+                key=lambda x: get_tahun_idx(x[0]) if x[0] else -1,
+                reverse=reverse
+            )
+        total_rows = len(self.attendance_records_filtered)
+        total_pages = max(1, (total_rows + self.attendance_page_size - 1) // self.attendance_page_size)
+        self.attendance_page_input.blockSignals(True)
+        self.attendance_page_input.setMaximum(total_pages)
+        self.attendance_page_input.setValue(self.attendance_current_page)
+        self.attendance_page_input.blockSignals(False)
+        self.attendance_page_label.setText(f"Page {self.attendance_current_page} / {total_pages}")
+        start_idx = (self.attendance_current_page - 1) * self.attendance_page_size
+        end_idx = start_idx + self.attendance_page_size
+        page_records = self.attendance_records_filtered[start_idx:end_idx]
+        self.attendance_table.setRowCount(len(page_records))
+        for row_idx, record in enumerate(page_records):
+            date, check_in, check_out, note = record
+            formatted_date = format_date_indonesian(date)
+            formatted_checkin = format_date_indonesian(check_in, with_time=True) if check_in else ""
+            formatted_checkout = format_date_indonesian(check_out, with_time=True) if check_out else ""
+            item_date = QTableWidgetItem(formatted_date)
+            item_checkin = QTableWidgetItem(formatted_checkin)
+            item_checkout = QTableWidgetItem(formatted_checkout)
+            item_note = QTableWidgetItem(str(note) if note else "")
+            item_date.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            item_checkin.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            item_checkout.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            item_note.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            self.attendance_table.setItem(row_idx, 0, item_date)
+            self.attendance_table.setItem(row_idx, 1, item_checkin)
+            self.attendance_table.setItem(row_idx, 2, item_checkout)
+            self.attendance_table.setItem(row_idx, 3, item_note)
+        all_records = self.attendance_records_all
+        total_days = set()
+        total_records = len(all_records)
+        total_seconds = 0
+        last_checkout = "-"
+        for record in all_records:
+            date, check_in, check_out, note = record
+            if date:
+                total_days.add(date)
+            if check_in and check_out:
+                try:
+                    dt_in = datetime.strptime(check_in, "%Y-%m-%d %H:%M:%S")
+                    dt_out = datetime.strptime(check_out, "%Y-%m-%d %H:%M:%S")
+                    total_seconds += int((dt_out - dt_in).total_seconds())
+                    last_checkout = format_date_indonesian(check_out, with_time=True)
+                except Exception:
+                    pass
+            elif check_out:
+                last_checkout = format_date_indonesian(check_out, with_time=True)
+        total_hours = round(total_seconds / 3600, 2)
+        if full_name is None and self._selected_team_index is not None and 0 <= self._selected_team_index < len(self._teams_data):
+            full_name = self._teams_data[self._selected_team_index].get("full_name", "")
+        # Attendance summary styling (follow earnings style)
+        def format_thousands(val):
+            try:
+                val = float(val)
+                return f"{int(val):,}".replace(",", ".")
+            except Exception:
+                return str(val)
+        while self.attendance_summary_layout.count():
+            item = self.attendance_summary_layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+        full_name_label = QLabel(f"Name: {full_name or ''}")
+        full_name_label.setStyleSheet("font-size:12px; font-weight:bold; margin-bottom:2px;")
+        self.attendance_summary_layout.addWidget(full_name_label)
+        days_row = QHBoxLayout()
+        days_icon = QLabel()
+        days_icon.setPixmap(qta.icon("fa6s.calendar-days", color="#1976d2").pixmap(16, 16))
+        days_label = QLabel("Total Days:")
+        days_label.setStyleSheet("color:#1976d2; font-size:12px; font-weight:bold;")
+        days_count = QLabel(str(len(total_days)))
+        days_count.setStyleSheet("font-size:12px; font-weight:bold;")
+        days_row.setSpacing(4)
+        days_row.addWidget(days_icon)
+        days_row.addWidget(days_label)
+        days_row.addWidget(days_count)
+        days_row.addStretch()
+        days_widget = QWidget()
+        days_widget.setLayout(days_row)
+        self.attendance_summary_layout.addWidget(days_widget)
+        records_row = QHBoxLayout()
+        records_icon = QLabel()
+        records_icon.setPixmap(qta.icon("fa6s.clipboard-list", color="#009688").pixmap(16, 16))
+        records_label = QLabel("Total Records:")
+        records_label.setStyleSheet("color:#009688; font-size:12px; font-weight:bold;")
+        records_count = QLabel(str(total_records))
+        records_count.setStyleSheet("font-size:12px; font-weight:bold;")
+        records_row.setSpacing(4)
+        records_row.addWidget(records_icon)
+        records_row.addWidget(records_label)
+        records_row.addWidget(records_count)
+        records_row.addStretch()
+        records_widget = QWidget()
+        records_widget.setLayout(records_row)
+        self.attendance_summary_layout.addWidget(records_widget)
+        hours_row = QHBoxLayout()
+        hours_icon = QLabel()
+        hours_icon.setPixmap(qta.icon("fa6s.clock", color="#ffb300").pixmap(16, 16))
+        hours_label = QLabel("Total Work Hours:")
+        hours_label.setStyleSheet("color:#ffb300; font-size:12px; font-weight:bold;")
+        hours_count = QLabel(str(total_hours))
+        hours_count.setStyleSheet("font-size:12px; font-weight:bold;")
+        hours_row.setSpacing(4)
+        hours_row.addWidget(hours_icon)
+        hours_row.addWidget(hours_label)
+        hours_row.addWidget(hours_count)
+        hours_row.addStretch()
+        hours_widget = QWidget()
+        hours_widget.setLayout(hours_row)
+        self.attendance_summary_layout.addWidget(hours_widget)
+        last_row = QHBoxLayout()
+        last_icon = QLabel()
+        last_icon.setPixmap(qta.icon("fa6s.arrow-right-to-city", color="#666").pixmap(16, 16))
+        last_label = QLabel("Last Checkout:")
+        last_label.setStyleSheet("color:#666; font-size:12px; font-weight:bold;")
+        last_checkout_label = QLabel(str(last_checkout))
+        last_checkout_label.setStyleSheet("font-size:12px; font-weight:bold;")
+        last_row.setSpacing(4)
+        last_row.addWidget(last_icon)
+        last_row.addWidget(last_label)
+        last_row.addWidget(last_checkout_label)
+        last_row.addStretch()
+        last_widget = QWidget()
+        last_widget.setLayout(last_row)
+        self.attendance_summary_layout.addWidget(last_widget)
+        filtered_label = QLabel(f"Filtered Attendance Records: {len(self.attendance_records_filtered)}")
+        filtered_label.setStyleSheet("color:#666; font-size:11px; margin-top:2px;")
+        self.attendance_summary_layout.addWidget(filtered_label)
 
     def _init_earnings_tab(self):
         tab = QWidget()
@@ -348,170 +663,28 @@ class TeamsProfileDialog(QDialog):
         # Remove the last element (ID) from each record tuple for display
         self.attendance_records_all = [r[:4] for r in records]
         self.attendance_current_page = 1
+        self._refresh_attendance_year_filter()
         self._update_attendance_table(full_name)
 
-    def _attendance_search_changed(self):
-        self.attendance_current_page = 1
-        self._update_attendance_table()
-
-    def _attendance_prev_page(self):
-        if self.attendance_current_page > 1:
-            self.attendance_current_page -= 1
-            self._update_attendance_table()
-
-    def _attendance_next_page(self):
-        total_rows = len(self.attendance_records_filtered)
-        total_pages = max(1, (total_rows + self.attendance_page_size - 1) // self.attendance_page_size)
-        if self.attendance_current_page < total_pages:
-            self.attendance_current_page += 1
-            self._update_attendance_table()
-
-    def _attendance_goto_page(self, value):
-        total_rows = len(self.attendance_records_filtered)
-        total_pages = max(1, (total_rows + self.attendance_page_size - 1) // self.attendance_page_size)
-        if 1 <= value <= total_pages:
-            self.attendance_current_page = value
-            self._update_attendance_table()
-
-    def _update_attendance_table(self, full_name=None):
-        search_text = self.attendance_search_edit.text().strip().lower()
-        if search_text:
-            self.attendance_records_filtered = [
-                r for r in self.attendance_records_all
-                if (
-                    (r[0] and search_text in str(r[0]).lower()) or  # date
-                    (r[1] and search_text in str(r[1]).lower()) or  # check_in
-                    (r[2] and search_text in str(r[2]).lower()) or  # check_out
-                    (r[3] and search_text in str(r[3]).lower())     # note
-                )
-            ]
-        else:
-            self.attendance_records_filtered = list(self.attendance_records_all)
-        total_rows = len(self.attendance_records_filtered)
-        total_pages = max(1, (total_rows + self.attendance_page_size - 1) // self.attendance_page_size)
-        self.attendance_page_input.blockSignals(True)
-        self.attendance_page_input.setMaximum(total_pages)
-        self.attendance_page_input.setValue(self.attendance_current_page)
-        self.attendance_page_input.blockSignals(False)
-        self.attendance_page_label.setText(f"Page {self.attendance_current_page} / {total_pages}")
-        start_idx = (self.attendance_current_page - 1) * self.attendance_page_size
-        end_idx = start_idx + self.attendance_page_size
-        page_records = self.attendance_records_filtered[start_idx:end_idx]
-        self.attendance_table.setRowCount(len(page_records))
-        total_days = set()
-        total_records = len(self.attendance_records_filtered)
-        total_seconds = 0
-        last_checkout = "-"
-        for row_idx, record in enumerate(page_records):
-            date, check_in, check_out, note = record
-            formatted_date = format_date_indonesian(date)
-            formatted_checkin = format_date_indonesian(check_in, with_time=True) if check_in else ""
-            formatted_checkout = format_date_indonesian(check_out, with_time=True) if check_out else ""
-            item_date = QTableWidgetItem(formatted_date)
-            item_checkin = QTableWidgetItem(formatted_checkin)
-            item_checkout = QTableWidgetItem(formatted_checkout)
-            item_note = QTableWidgetItem(str(note) if note else "")
-            item_date.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-            item_checkin.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-            item_checkout.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-            item_note.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-            self.attendance_table.setItem(row_idx, 0, item_date)
-            self.attendance_table.setItem(row_idx, 1, item_checkin)
-            self.attendance_table.setItem(row_idx, 2, item_checkout)
-            self.attendance_table.setItem(row_idx, 3, item_note)
-            if date:
-                total_days.add(date)
-            if check_in and check_out:
-                try:
-                    dt_in = datetime.strptime(check_in, "%Y-%m-%d %H:%M:%S")
-                    dt_out = datetime.strptime(check_out, "%Y-%m-%d %H:%M:%S")
-                    total_seconds += int((dt_out - dt_in).total_seconds())
-                    last_checkout = formatted_checkout
-                except Exception:
-                    pass
-            elif check_out:
-                last_checkout = formatted_checkout
-        total_hours = round(total_seconds / 3600, 2)
-        if full_name is None and self._selected_team_index is not None and 0 <= self._selected_team_index < len(self._teams_data):
-            full_name = self._teams_data[self._selected_team_index].get("full_name", "")
-        # Attendance summary styling (follow earnings style)
-        def format_thousands(val):
+    def _refresh_attendance_year_filter(self):
+        years = set()
+        for r in self.attendance_records_all:
+            date_str = r[0]
             try:
-                val = float(val)
-                return f"{int(val):,}".replace(",", ".")
+                dt = datetime.strptime(date_str, "%Y-%m-%d")
+                years.add(str(dt.year))
             except Exception:
-                return str(val)
-        while self.attendance_summary_layout.count():
-            item = self.attendance_summary_layout.takeAt(0)
-            widget = item.widget()
-            if widget:
-                widget.deleteLater()
-        full_name_label = QLabel(f"Name: {full_name or ''}")
-        full_name_label.setStyleSheet("font-size:12px; font-weight:bold; margin-bottom:2px;")
-        self.attendance_summary_layout.addWidget(full_name_label)
-        days_row = QHBoxLayout()
-        days_icon = QLabel()
-        days_icon.setPixmap(qta.icon("fa6s.calendar-days", color="#1976d2").pixmap(16, 16))
-        days_label = QLabel("Total Days:")
-        days_label.setStyleSheet("color:#1976d2; font-size:12px; font-weight:bold;")
-        days_count = QLabel(str(len(total_days)))
-        days_count.setStyleSheet("font-size:12px; font-weight:bold;")
-        days_row.setSpacing(4)
-        days_row.addWidget(days_icon)
-        days_row.addWidget(days_label)
-        days_row.addWidget(days_count)
-        days_row.addStretch()
-        days_widget = QWidget()
-        days_widget.setLayout(days_row)
-        self.attendance_summary_layout.addWidget(days_widget)
-        records_row = QHBoxLayout()
-        records_icon = QLabel()
-        records_icon.setPixmap(qta.icon("fa6s.clipboard-list", color="#009688").pixmap(16, 16))
-        records_label = QLabel("Total Records:")
-        records_label.setStyleSheet("color:#009688; font-size:12px; font-weight:bold;")
-        records_count = QLabel(str(total_records))
-        records_count.setStyleSheet("font-size:12px; font-weight:bold;")
-        records_row.setSpacing(4)
-        records_row.addWidget(records_icon)
-        records_row.addWidget(records_label)
-        records_row.addWidget(records_count)
-        records_row.addStretch()
-        records_widget = QWidget()
-        records_widget.setLayout(records_row)
-        self.attendance_summary_layout.addWidget(records_widget)
-        hours_row = QHBoxLayout()
-        hours_icon = QLabel()
-        hours_icon.setPixmap(qta.icon("fa6s.clock", color="#ffb300").pixmap(16, 16))
-        hours_label = QLabel("Total Work Hours:")
-        hours_label.setStyleSheet("color:#ffb300; font-size:12px; font-weight:bold;")
-        hours_count = QLabel(str(total_hours))
-        hours_count.setStyleSheet("font-size:12px; font-weight:bold;")
-        hours_row.setSpacing(4)
-        hours_row.addWidget(hours_icon)
-        hours_row.addWidget(hours_label)
-        hours_row.addWidget(hours_count)
-        hours_row.addStretch()
-        hours_widget = QWidget()
-        hours_widget.setLayout(hours_row)
-        self.attendance_summary_layout.addWidget(hours_widget)
-        last_row = QHBoxLayout()
-        last_icon = QLabel()
-        last_icon.setPixmap(qta.icon("fa6s.arrow-right-to-city", color="#666").pixmap(16, 16))
-        last_label = QLabel("Last Checkout:")
-        last_label.setStyleSheet("color:#666; font-size:12px; font-weight:bold;")
-        last_checkout_label = QLabel(str(last_checkout))
-        last_checkout_label.setStyleSheet("font-size:12px; font-weight:bold;")
-        last_row.setSpacing(4)
-        last_row.addWidget(last_icon)
-        last_row.addWidget(last_label)
-        last_row.addWidget(last_checkout_label)
-        last_row.addStretch()
-        last_widget = QWidget()
-        last_widget.setLayout(last_row)
-        self.attendance_summary_layout.addWidget(last_widget)
-        filtered_label = QLabel(f"Filtered Attendance Records: {len(self.attendance_records_filtered)}")
-        filtered_label.setStyleSheet("color:#666; font-size:11px; margin-top:2px;")
-        self.attendance_summary_layout.addWidget(filtered_label)
+                continue
+        current = self.attendance_year_filter_combo.currentText() if hasattr(self, "attendance_year_filter_combo") else "All Years"
+        self.attendance_year_filter_combo.blockSignals(True)
+        self.attendance_year_filter_combo.clear()
+        self.attendance_year_filter_combo.addItem("All Years")
+        for y in sorted(years):
+            self.attendance_year_filter_combo.addItem(y)
+        idx = self.attendance_year_filter_combo.findText(current)
+        if idx >= 0:
+            self.attendance_year_filter_combo.setCurrentIndex(idx)
+        self.attendance_year_filter_combo.blockSignals(False)
 
     def _load_earnings_records(self, team):
         tid = team["id"]
@@ -677,10 +850,6 @@ class TeamsProfileDialog(QDialog):
         end_idx = start_idx + self.earnings_page_size
         page_records = self.earnings_records_filtered[start_idx:end_idx]
         self.earnings_table.setRowCount(len(page_records))
-        total_amount = 0
-        total_pending = 0
-        total_paid = 0
-        currency_label = ""
         for row_idx, record in enumerate(page_records):
             file_name, file_date, amount_display, note, status, client_name, batch = record
             formatted_date = format_date_indonesian(file_date)
@@ -705,6 +874,14 @@ class TeamsProfileDialog(QDialog):
             self.earnings_table.setItem(row_idx, 4, item_status)
             self.earnings_table.setItem(row_idx, 5, item_client)
             self.earnings_table.setItem(row_idx, 6, item_batch)
+        # Summary calculation for ALL records, not just current page
+        total_amount = 0
+        total_pending = 0
+        total_paid = 0
+        currency_label = ""
+        for record in self.earnings_records_all:
+            amount_display = record[2]
+            status = record[4]
             if not currency_label and " " in str(amount_display):
                 currency_label = str(amount_display).split(" ")[0]
             try:
