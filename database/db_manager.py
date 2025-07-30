@@ -620,12 +620,13 @@ class DatabaseManager(QObject):
         finally:
             self.close()
 
-    def get_files_page(self, page=1, page_size=20, search_query=None, sort_field="date", sort_order="desc", status_value=None):
+    def get_files_page(self, page=1, page_size=20, search_query=None, sort_field="date", sort_order="desc", status_value=None, client_id=None, batch_number=None):
         self.connect(write=False)
         cursor = self.connection.cursor()
         offset = (page - 1) * page_size
         params = []
         where_clauses = []
+        join_clauses = []
         if search_query:
             search_pattern = f"%{search_query}%"
             where_clauses.append(
@@ -635,9 +636,18 @@ class DatabaseManager(QObject):
         if status_value:
             where_clauses.append("s.name = ?")
             params.append(status_value)
+        if batch_number and client_id:
+            join_clauses.append("JOIN file_client_batch fcb ON fcb.file_id = f.id")
+            where_clauses.append("fcb.batch_number = ?")
+            params.append(batch_number)
+            where_clauses.append("fcb.client_id = ?")
+            params.append(client_id)
         where_sql = ""
         if where_clauses:
             where_sql = "WHERE " + " AND ".join(where_clauses)
+        join_sql = ""
+        if join_clauses:
+            join_sql = " ".join(join_clauses)
         sort_map = {
             "date": "parsed_date",
             "name": "f.name",
@@ -645,7 +655,8 @@ class DatabaseManager(QObject):
             "path": "f.path",
             "status": "s.name",
             "category": "c.name",
-            "subcategory": "sc.name"
+            "subcategory": "sc.name",
+            "batch_number": "fcb.batch_number"
         }
         sort_sql = sort_map.get(sort_field, "parsed_date")
         order_sql = "DESC" if sort_order == "desc" else "ASC"
@@ -690,6 +701,7 @@ class DatabaseManager(QObject):
             LEFT JOIN categories c ON f.category_id = c.id
             LEFT JOIN subcategories sc ON f.subcategory_id = sc.id
             LEFT JOIN templates t ON f.template_id = t.id
+            {join_sql}
             {where_sql}
             ORDER BY {sort_sql} {order_sql}, f.id DESC
             LIMIT ? OFFSET ?
@@ -1540,6 +1552,14 @@ class DatabaseManager(QObject):
             "file_client_price": file_client_price_info,
             "file_client_batch": file_client_batch_info
         }
+
+    def get_all_clients_simple(self):
+        self.connect(write=False)
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT id, client_name FROM client ORDER BY client_name ASC")
+        result = [{"id": row[0], "client_name": row[1]} for row in cursor.fetchall()]
+        self.close()
+        return result
 
     def get_batch_numbers_by_client(self, client_id):
         self.connect(write=False)

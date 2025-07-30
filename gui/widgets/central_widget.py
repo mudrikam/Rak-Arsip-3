@@ -13,7 +13,7 @@ import subprocess
 import sys
 import os
 import shutil
-from gui.dialogs.short_dialog import SortDialog
+from gui.dialogs.sort_dialog import SortDialog
 from helpers.show_statusbar_helper import show_statusbar_message
 from helpers.markdown_generator import MarkdownGenerator
 from gui.dialogs.edit_record_dialog import EditRecordDialog
@@ -367,6 +367,9 @@ class CentralWidget(QWidget):
             self._status_filter = self.sort_status_value
             self._sort_field = self.sort_field
             self._sort_order = self.sort_order
+            # Ambil filter client_id dan batch_number jika ada
+            client_id = getattr(self, "sort_client_id", None)
+            batch_number = getattr(self, "sort_batch_number", None)
             self.total_records = self.db_manager.count_files()
             self.total_draft = self.db_manager.count_files(status_value="Draft")
             if self._search_query or self._status_filter:
@@ -382,7 +385,9 @@ class CentralWidget(QWidget):
                 search_query=self._search_query,
                 sort_field=self._sort_field,
                 sort_order=self._sort_order,
-                status_value=self._status_filter
+                status_value=self._status_filter,
+                client_id=client_id,
+                batch_number=batch_number
             )
             self.update_table()
             show_statusbar_message(self, "Loaded data from database")
@@ -613,10 +618,30 @@ class CentralWidget(QWidget):
         last_date = "-"
         if self.filtered_data:
             last_date = self.filtered_data[0]['date']
-        if self.search_edit.text().strip() or self.sort_status_value:
-            self.stats_label.setText(f"Total: {self.total_records} | Draft: {self.total_draft} | Last: {last_date} | Found: {self.found_records} Records")
+        client_id = getattr(self, "sort_client_id", None)
+        batch_number = getattr(self, "sort_batch_number", None)
+        client_name = ""
+        if client_id:
+            try:
+                clients = self.db_manager.get_all_clients_simple()
+                for c in clients:
+                    if c["id"] == client_id:
+                        client_name = c["client_name"]
+                        break
+            except Exception:
+                client_name = str(client_id)
+        if (self.search_edit.text().strip() or self.sort_status_value) and not (client_id and batch_number):
+            self.stats_label.setText(
+                f"Total: {self.total_records} | Draft: {self.total_draft} | Last: {last_date} | Found: {self.found_records} Records"
+            )
+        elif client_id and batch_number:
+            self.stats_label.setText(
+                f"Batch: {batch_number} | Client: {client_name} | Found: {len(self.filtered_data)} Records"
+            )
         else:
-            self.stats_label.setText(f"Total: {self.total_records} | Draft: {self.total_draft} | Last: {last_date}")
+            self.stats_label.setText(
+                f"Total: {self.total_records} | Draft: {self.total_draft} | Last: {last_date}"
+            )
 
     def on_row_selected(self):
         current_row = self.table.currentRow()
@@ -806,7 +831,6 @@ class CentralWidget(QWidget):
                         show_statusbar_message(self, f"Failed to delete record: {e}")
                     finally:
                         self.db_manager.close()
-        # ...existing code...
         def do_edit_record():
             dialog = EditRecordDialog(
                 row_data,
@@ -864,13 +888,15 @@ class CentralWidget(QWidget):
     def show_sort_dialog(self):
         dlg = SortDialog(self.status_options, self)
         if dlg.exec() == QDialog.Accepted:
-            field, order, status_value = dlg.get_sort_option(self.status_options)
+            field, order, status_value, client_id, batch_number = dlg.get_sort_option(self.status_options)
             self.sort_field = field
             self.sort_order = order
             self.sort_status_value = status_value
+            self.sort_client_id = client_id
+            self.sort_batch_number = batch_number
             self.current_page = 1
             self.load_data_from_database(keep_search=True)
-            show_statusbar_message(self, f"Sort applied: {field} {order} {status_value if status_value else ''}")
+            show_statusbar_message(self, f"Sort applied: {field} {order} {status_value if status_value else ''} {client_id if client_id else ''} {batch_number if batch_number else ''}")
 
     def do_edit_record(self):
         if not self.selected_row_data:
