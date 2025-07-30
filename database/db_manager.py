@@ -1357,14 +1357,6 @@ class DatabaseManager(QObject):
             "earnings_map": earnings_map
         }
 
-    def get_all_batch_numbers(self):
-        self.connect(write=False)
-        cursor = self.connection.cursor()
-        cursor.execute("SELECT batch_number FROM batch_list ORDER BY batch_number ASC")
-        batch_numbers = [row[0] for row in cursor.fetchall()]
-        self.close()
-        return batch_numbers
-
     def add_batch_number(self, batch_number, note="", client_id=None):
         self.connect(write=False)
         cursor = self.connection.cursor()
@@ -1548,3 +1540,11 @@ class DatabaseManager(QObject):
             "file_client_price": file_client_price_info,
             "file_client_batch": file_client_batch_info
         }
+
+    def get_batch_numbers_by_client(self, client_id):
+        self.connect(write=False)
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT batch_number FROM batch_list WHERE client_id = ? ORDER BY batch_number ASC", (client_id,))
+        batch_numbers = [row[0] for row in cursor.fetchall()]
+        self.close()
+        return batch_numbers

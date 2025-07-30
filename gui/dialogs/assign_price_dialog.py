@@ -60,6 +60,7 @@ class AssignPriceDialog(QDialog):
         self.db_manager = db_manager
         self._parent = parent
         self._refresh_batch_combo()
+        self._set_assigned_batch_combo()
         batch_row.addWidget(self.batch_combo)
         self.add_batch_btn = QPushButton()
         self.add_batch_btn.setIcon(qta.icon("fa6s.plus"))
@@ -79,8 +80,17 @@ class AssignPriceDialog(QDialog):
         batch_row.addStretch()
         form_layout.addRow(QLabel("Batch Number:"), batch_row)
 
-        # Set batch_combo to assigned batch if exists
-        self._set_assigned_batch_combo()
+        # Disable batch combo and related buttons if no client selected
+        if not self.client_combo.currentData():
+            self.batch_combo.setEnabled(False)
+            self.add_batch_btn.setEnabled(False)
+            self.edit_batch_btn.setEnabled(False)
+            self.delete_batch_btn.setEnabled(False)
+        else:
+            self.batch_combo.setEnabled(True)
+            self.add_batch_btn.setEnabled(True)
+            self.edit_batch_btn.setEnabled(True)
+            self.delete_batch_btn.setEnabled(True)
 
         main_layout.addLayout(form_layout)
 
@@ -150,10 +160,17 @@ class AssignPriceDialog(QDialog):
 
     def _refresh_batch_combo(self):
         self.batch_combo.clear()
-        batch_list = self.db_manager.get_all_batch_numbers()
-        self.batch_combo.addItem("")
-        for batch in batch_list:
-            self.batch_combo.addItem(batch)
+        client_id = self.client_combo.currentData()
+        batch_list = []
+        if client_id:
+            batch_list = self.db_manager.get_batch_numbers_by_client(client_id)
+        if batch_list:
+            self.batch_combo.addItem("")
+            for batch in batch_list:
+                self.batch_combo.addItem(batch)
+        else:
+            self.batch_combo.addItem("")
+            self.batch_combo.setCurrentIndex(0)
 
     def _set_assigned_batch_combo(self):
         file_id = self.file_record["id"]
@@ -177,30 +194,16 @@ class AssignPriceDialog(QDialog):
         if batch_number in [self.batch_combo.itemText(i) for i in range(self.batch_combo.count())]:
             QMessageBox.information(self, "Info", "Batch number already exists.")
             return
-        clients = self.db_manager.get_all_clients()
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Select Client for Batch")
-        layout = QFormLayout(dialog)
-        client_combo = QComboBox(dialog)
-        for client in clients:
-            client_combo.addItem(client["client_name"], client["id"])
-        layout.addRow("Assign Batch to Client:", client_combo)
-        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        layout.addWidget(button_box)
-        def on_accept():
-            client_id = client_combo.currentData()
-            if not client_id:
-                QMessageBox.warning(dialog, "Input Error", "Please select a client.")
-                return
-            self.db_manager.add_batch_number(batch_number, client_id=client_id)
-            self._refresh_batch_combo()
-            idx = self.batch_combo.findText(batch_number)
-            if idx >= 0:
-                self.batch_combo.setCurrentIndex(idx)
-            dialog.accept()
-        button_box.accepted.connect(on_accept)
-        button_box.rejected.connect(dialog.reject)
-        dialog.exec()
+        client_id = self.client_combo.currentData()
+        if not client_id:
+            QMessageBox.warning(self, "Input Error", "Please select a client before adding a batch number.")
+            return
+        self.db_manager.add_batch_number(batch_number, client_id=client_id)
+        self._refresh_batch_combo()
+        idx = self.batch_combo.findText(batch_number)
+        if idx >= 0:
+            self.batch_combo.setCurrentIndex(idx)
+        QMessageBox.information(self, "Success", "Batch successfully added.")
 
     def _on_edit_batch(self):
         batch_number = self.batch_combo.currentText().strip()
@@ -388,15 +391,24 @@ class AssignPriceDialog(QDialog):
         client_id = self.client_combo.currentData()
         file_id = self.file_record["id"]
         item_price_id = self.db_manager.get_item_price_id(file_id)
-        # update file_client_price relation
         self.db_manager.update_file_client_relation(file_id, item_price_id, client_id)
-        # update file_client_batch client_id if batch exists for old client
         old_client_id = self._last_client_id
         if old_client_id and client_id and old_client_id != client_id:
             self.db_manager.update_file_client_batch_client(file_id, old_client_id, client_id)
         self._last_client_id = client_id
-        batch_number = self.batch_combo.currentText().strip()
-        self._set_assigned_batch_combo()
+        # Enable/disable batch combo and buttons based on client selection
+        enable_batch = bool(client_id)
+        self.batch_combo.setEnabled(enable_batch)
+        self.add_batch_btn.setEnabled(enable_batch)
+        self.edit_batch_btn.setEnabled(enable_batch)
+        self.delete_batch_btn.setEnabled(enable_batch)
+        if enable_batch:
+            self._refresh_batch_combo()
+            self.batch_combo.setCurrentIndex(0)
+        else:
+            self.batch_combo.clear()
+            self.batch_combo.addItem("")
+            self.batch_combo.setCurrentIndex(0)
 
     def _on_accept(self):
         price = self.price_edit.text().strip()
@@ -408,12 +420,11 @@ class AssignPriceDialog(QDialog):
         item_price_id = self.db_manager.get_item_price_id(file_id)
         old_client_id = self._last_client_id
         self.db_manager.update_file_client_relation(file_id, item_price_id, client_id)
-        # update file_client_batch client_id if batch exists for old client
         if old_client_id and client_id and old_client_id != client_id:
             self.db_manager.update_file_client_batch_client(file_id, old_client_id, client_id)
         self._last_client_id = client_id
         batch_number = self.batch_combo.currentText().strip()
         batch_list = [self.batch_combo.itemText(i) for i in range(self.batch_combo.count())]
-        if batch_number and client_id and batch_number in batch_list:
+        if batch_number and client_id and batch_number in batch_list and batch_number != "":
             self.db_manager.assign_file_client_batch(file_id, client_id, batch_number)
         self.accept()
