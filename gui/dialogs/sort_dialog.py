@@ -48,6 +48,19 @@ class SortDialog(QDialog):
         self.status_row_widget.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.status_row_widget)
 
+        # Root filter (only visible if Root is selected)
+        self.root_row = QHBoxLayout()
+        self.root_row.setContentsMargins(0, 0, 0, 0)
+        self.root_row.setSpacing(0)
+        self.root_row.addWidget(QLabel("Root:"))
+        self.root_combo = QComboBox()
+        self.root_combo.setEnabled(False)
+        self.root_row.addWidget(self.root_combo)
+        self.root_row_widget = QWidget()
+        self.root_row_widget.setLayout(self.root_row)
+        self.root_row_widget.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.root_row_widget)
+
         # Client filter (only visible if Batch Number is selected)
         self.client_row = QHBoxLayout()
         self.client_row.setContentsMargins(0, 0, 0, 0)
@@ -108,6 +121,7 @@ class SortDialog(QDialog):
         self.field_combo.currentIndexChanged.connect(self._on_field_changed)
         self.client_combo.currentIndexChanged.connect(self._on_client_changed)
         self.batch_combo.currentIndexChanged.connect(self._on_batch_changed)
+        self.root_combo.currentIndexChanged.connect(self._on_root_changed)
         self._on_field_changed(0)
         self._update_ok_button_state()
 
@@ -120,6 +134,15 @@ class SortDialog(QDialog):
         self.client_row_widget.setVisible(is_batch)
         self.batch_row_widget.setVisible(is_batch)
         self.batch_combo.setEnabled(is_batch and self.client_combo.currentData() is not None)
+        is_root = field == "root"
+        self.root_combo.setEnabled(is_root)
+        self.root_row_widget.setVisible(is_root)
+        if is_root and self.db_manager:
+            self.root_combo.clear()
+            roots = self.db_manager.get_all_roots()
+            self.root_combo.addItem("All")
+            for root in roots:
+                self.root_combo.addItem(root)
         if not is_batch:
             self.client_combo.setCurrentIndex(0)
             self.batch_combo.clear()
@@ -145,6 +168,9 @@ class SortDialog(QDialog):
     def _on_batch_changed(self, idx):
         self._update_ok_button_state()
 
+    def _on_root_changed(self, idx):
+        self._update_ok_button_state()
+
     def _update_ok_button_state(self):
         from PySide6.QtWidgets import QDialogButtonBox
         field = self.sort_fields[self.field_combo.currentIndex()][1]
@@ -162,14 +188,17 @@ class SortDialog(QDialog):
         status_value = None
         client_id = None
         batch_number = None
+        root_value = None
         if field == "status" and self.status_combo.currentIndex() > 0:
             status_value = self.status_options[self.status_combo.currentIndex() - 1]
         if field == "batch_number":
             client_id = self.client_combo.currentData()
             batch_number = self.batch_combo.currentText().strip() if self.batch_combo.currentText().strip() else None
+        if field == "root" and self.root_combo.currentIndex() > 0:
+            root_value = self.root_combo.currentText()
         show_statusbar_message(
             self,
-            f"Sort dialog accepted: field={field}, order={order}, status={status_value if status_value else 'All'}, client_id={client_id if client_id else '-'}, batch={batch_number if batch_number else '-'}"
+            f"Sort dialog accepted: field={field}, order={order}, status={status_value if status_value else 'All'}, client_id={client_id if client_id else '-'}, batch={batch_number if batch_number else '-'}, root={root_value if root_value else 'All'}"
         )
         self.accept()
 
@@ -180,15 +209,18 @@ class SortDialog(QDialog):
         status_value = None
         client_id = None
         batch_number = None
+        root_value = None
         if field == "status" and self.status_combo.currentIndex() > 0:
             status_value = self.status_options[self.status_combo.currentIndex() - 1]
         if field == "batch_number":
             client_id = self.client_combo.currentData()
             batch_number = self.batch_combo.currentText().strip() if self.batch_combo.currentText().strip() else None
-        return field, order, status_value, client_id, batch_number
+        if field == "root" and self.root_combo.currentIndex() > 0:
+            root_value = self.root_combo.currentText()
+        return field, order, status_value, client_id, batch_number, root_value
 
     @staticmethod
-    def sort_data(data, field, order, status_value=None, client_id=None, batch_number=None):
+    def sort_data(data, field, order, status_value=None, client_id=None, batch_number=None, root_value=None):
         reverse = order == "desc"
         if field == "status" and status_value:
             def status_sort(row):
@@ -198,6 +230,10 @@ class SortDialog(QDialog):
             def batch_sort(row):
                 return 0 if (row.get("client_id") == client_id and row.get("batch_number") == batch_number) else 1
             return sorted(data, key=batch_sort, reverse=reverse)
+        elif field == "root" and root_value:
+            def root_sort(row):
+                return 0 if row.get("root") == root_value else 1
+            return sorted(data, key=root_sort, reverse=reverse)
         else:
             def get_val(row):
                 val = row.get(field)
