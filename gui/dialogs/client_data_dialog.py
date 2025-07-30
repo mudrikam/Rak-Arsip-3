@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QTabWidget, QWidget, QTableWidget, QTableWidgetItem, QLabel,
-    QFormLayout, QLineEdit, QPushButton, QMessageBox, QHBoxLayout, QSizePolicy, QHeaderView, QComboBox, QTextEdit, QSpinBox, QSpacerItem, QApplication, QToolTip, QMenu
+    QFormLayout, QLineEdit, QPushButton, QMessageBox, QHBoxLayout, QSizePolicy, QHeaderView, QComboBox, QTextEdit, QSpinBox, QSpacerItem, QApplication, QToolTip, QMenu, QMainWindow
 )
 from PySide6.QtCore import Qt, QPoint
 from PySide6.QtGui import QCursor, QKeySequence, QShortcut, QAction
@@ -12,6 +12,15 @@ import qtawesome as qta
 import sys
 import os
 import subprocess
+from helpers.show_statusbar_helper import show_statusbar_message
+
+def find_main_window(widget):
+    parent = widget
+    while parent is not None:
+        if isinstance(parent, QMainWindow):
+            return parent
+        parent = parent.parent()
+    return widget.window()
 
 class ClientDataDialog(QDialog):
     def __init__(self, parent=None):
@@ -244,6 +253,7 @@ class ClientDataDialog(QDialog):
         self._files_shortcut_copy_path.activated.connect(self._files_copy_path_shortcut)
         self._files_shortcut_open_explorer = QShortcut(QKeySequence("Ctrl+E"), self.files_table)
         self._files_shortcut_open_explorer.activated.connect(self._files_open_explorer_shortcut)
+        self.files_table.cellDoubleClicked.connect(self._on_files_row_double_clicked)
 
     def _load_clients_data(self):
         basedir = Path(__file__).parent.parent.parent
@@ -828,3 +838,16 @@ class ClientDataDialog(QDialog):
             self.files_current_page = 1
             self._update_files_table()
             QMessageBox.information(self, "Success", "Client data updated successfully.")
+
+    def _on_files_row_double_clicked(self, row, col):
+        if row < 0 or row >= len(self.files_records_filtered):
+            return
+        record = self.files_records_filtered[row]
+        file_name = record.get("name", "")
+        QApplication.clipboard().setText(str(file_name))
+        show_statusbar_message(self, f"Copied: {file_name}")
+        main_window = find_main_window(self)
+        central_widget = getattr(main_window, "central_widget", None)
+        if central_widget and hasattr(central_widget, "paste_to_search"):
+            central_widget.paste_to_search()
+        self.accept()

@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QTabWidget, QWidget, QTableWidget, QTableWidgetItem, QLabel, QFormLayout, QLineEdit, QPushButton, QMessageBox, QDateEdit, QHBoxLayout, QInputDialog, QSizePolicy, QHeaderView, QSpinBox, QSpacerItem, QApplication, QToolTip, QComboBox, QMenu
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QTabWidget, QWidget, QTableWidget, QTableWidgetItem, QLabel, QFormLayout, QLineEdit, QPushButton, QMessageBox, QDateEdit, QHBoxLayout, QInputDialog, QSizePolicy, QHeaderView, QSpinBox, QSpacerItem, QApplication, QToolTip, QComboBox, QMenu, QMainWindow
 from PySide6.QtCore import Qt, QDate, QPoint
 from PySide6.QtGui import QColor, QIcon, QClipboard, QAction, QCursor, QKeySequence, QShortcut
 import qtawesome as qta
@@ -9,6 +9,7 @@ from datetime import datetime
 import sys
 import os
 import subprocess
+from helpers.show_statusbar_helper import show_statusbar_message
 
 def format_date_indonesian(date_str, with_time=False):
     hari_map = {
@@ -33,6 +34,14 @@ def format_date_indonesian(date_str, with_time=False):
             return f"{hari}, {dt.day} {bulan} {dt.year}"
     except Exception:
         return date_str
+
+def find_main_window(widget):
+    parent = widget
+    while parent is not None:
+        if isinstance(parent, QMainWindow):
+            return parent
+        parent = parent.parent()
+    return widget.window()
 
 class TeamsProfileDialog(QDialog):
     def __init__(self, parent=None):
@@ -995,21 +1004,13 @@ class TeamsProfileDialog(QDialog):
         if row < 0 or row >= len(self.earnings_records_filtered):
             return
         record = self.earnings_records_filtered[row]
-        file_path = record[7] if len(record) > 7 else ""
-        if not file_path:
-            return
-        if sys.platform == "win32":
-            if os.path.isfile(file_path):
-                subprocess.Popen(f'explorer /select,"{file_path}"')
-            elif os.path.isdir(file_path):
-                subprocess.Popen(f'explorer "{file_path}"')
-            else:
-                parent_dir = os.path.dirname(file_path)
-                if os.path.exists(parent_dir):
-                    subprocess.Popen(f'explorer "{parent_dir}"')
-        else:
-            subprocess.Popen(["xdg-open", file_path if os.path.exists(file_path) else os.path.dirname(file_path)])
-        QToolTip.showText(QCursor.pos(), f"Opened: {file_path}")
+        file_name = record[0]
+        QApplication.clipboard().setText(str(file_name))
+        main_window = find_main_window(self)
+        central_widget = getattr(main_window, "central_widget", None)
+        if central_widget and hasattr(central_widget, "paste_to_search"):
+            central_widget.paste_to_search()
+        self.accept()
 
     def _show_earnings_context_menu(self, pos):
         index = self.earnings_table.indexAt(pos)
