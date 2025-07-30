@@ -612,9 +612,6 @@ class TeamsProfileDialog(QDialog):
         self._earnings_batch_filter_value = None
         self.earnings_sort_field = "File Name"
         self.earnings_sort_order = "Descending"
-        self.earnings_table.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.earnings_table.customContextMenuRequested.connect(self._show_earnings_context_menu)
-        self.earnings_table.cellDoubleClicked.connect(self._on_earnings_row_double_clicked)
 
     def _fetch_team_data(self):
         basedir = Path(__file__).parent.parent.parent
@@ -1011,6 +1008,7 @@ class TeamsProfileDialog(QDialog):
         record = self.earnings_records_filtered[global_idx]
         file_name = record[0]
         QApplication.clipboard().setText(str(file_name))
+        show_statusbar_message(self, f"Copied: {file_name}")
         main_window = find_main_window(self)
         central_widget = getattr(main_window, "central_widget", None)
         if central_widget and hasattr(central_widget, "paste_to_search"):
