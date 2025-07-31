@@ -180,7 +180,7 @@ class TeamsProfileDialog(QDialog):
         search_row.addWidget(self.attendance_search_edit)
         self.attendance_sort_combo = QComboBox()
         self.attendance_sort_combo.addItems([
-            "Date", "Check In", "Check Out", "Note", "Hari", "Bulan", "Tahun"
+            "Date", "Check In", "Check Out", "Hours", "Note", "Hari", "Bulan", "Tahun"
         ])
         self.attendance_sort_order_combo = QComboBox()
         self.attendance_sort_order_combo.addItems(["Ascending", "Descending"])
@@ -207,9 +207,9 @@ class TeamsProfileDialog(QDialog):
         search_row.addWidget(self.attendance_year_filter_combo)
         tab_layout.addLayout(search_row)
         self.attendance_table = QTableWidget(tab)
-        self.attendance_table.setColumnCount(4)
+        self.attendance_table.setColumnCount(5)
         self.attendance_table.setHorizontalHeaderLabels([
-            "Date", "Check In", "Check Out", "Note"
+            "Date", "Check In", "Check Out", "Hours", "Note"
         ])
         self.attendance_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.attendance_table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -356,16 +356,37 @@ class TeamsProfileDialog(QDialog):
             "Date": 0,
             "Check In": 1,
             "Check Out": 2,
+            "Hours": 4,
             "Note": 3
         }
         reverse = sort_order == "Descending"
+        attendance_with_hours = []
+        for r in self.attendance_records_filtered:
+            date, check_in, check_out, note = r
+            hours = ""
+            if check_in and check_out:
+                try:
+                    dt_in = datetime.strptime(check_in, "%Y-%m-%d %H:%M:%S")
+                    dt_out = datetime.strptime(check_out, "%Y-%m-%d %H:%M:%S")
+                    delta = dt_out - dt_in
+                    hours = round(delta.total_seconds() / 3600, 2)
+                except Exception:
+                    hours = ""
+            attendance_with_hours.append((date, check_in, check_out, note, hours))
+        self.attendance_records_filtered = attendance_with_hours
         if sort_field in sort_map:
             key_idx = sort_map[sort_field]
             try:
-                self.attendance_records_filtered.sort(
-                    key=lambda x: (x[key_idx] or "").lower() if x[key_idx] else "",
-                    reverse=reverse
-                )
+                if sort_field == "Hours":
+                    self.attendance_records_filtered.sort(
+                        key=lambda x: (x[key_idx] if isinstance(x[key_idx], (int, float)) else float(x[key_idx]) if str(x[key_idx]).replace('.', '', 1).isdigit() else 0),
+                        reverse=reverse
+                    )
+                else:
+                    self.attendance_records_filtered.sort(
+                        key=lambda x: (x[key_idx] or "").lower() if isinstance(x[key_idx], str) else str(x[key_idx]).lower(),
+                        reverse=reverse
+                    )
             except Exception:
                 pass
         elif sort_field == "Hari":
@@ -413,22 +434,25 @@ class TeamsProfileDialog(QDialog):
         page_records = self.attendance_records_filtered[start_idx:end_idx]
         self.attendance_table.setRowCount(len(page_records))
         for row_idx, record in enumerate(page_records):
-            date, check_in, check_out, note = record
+            date, check_in, check_out, note, hours = record
             formatted_date = format_date_indonesian(date)
             formatted_checkin = format_date_indonesian(check_in, with_time=True) if check_in else ""
             formatted_checkout = format_date_indonesian(check_out, with_time=True) if check_out else ""
             item_date = QTableWidgetItem(formatted_date)
             item_checkin = QTableWidgetItem(formatted_checkin)
             item_checkout = QTableWidgetItem(formatted_checkout)
+            item_hours = QTableWidgetItem(str(hours) if hours != "" else "")
             item_note = QTableWidgetItem(str(note) if note else "")
             item_date.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
             item_checkin.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
             item_checkout.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            item_hours.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
             item_note.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
             self.attendance_table.setItem(row_idx, 0, item_date)
             self.attendance_table.setItem(row_idx, 1, item_checkin)
             self.attendance_table.setItem(row_idx, 2, item_checkout)
-            self.attendance_table.setItem(row_idx, 3, item_note)
+            self.attendance_table.setItem(row_idx, 3, item_hours)
+            self.attendance_table.setItem(row_idx, 4, item_note)
         all_records = self.attendance_records_all
         total_days = set()
         total_records = len(all_records)
