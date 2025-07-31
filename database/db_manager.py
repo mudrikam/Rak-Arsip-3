@@ -51,15 +51,23 @@ class DatabaseManager(QObject):
         cursor.execute("PRAGMA busy_timeout=60000")
         self.connection.commit()
 
-    def cleanup_wal_shm_files(self):
+    def cleanup_wal_shm_files(self, max_retry=3, retry_delay=0.5):
         wal_path = self.db_path + "-wal"
         shm_path = self.db_path + "-shm"
         for f in [wal_path, shm_path]:
-            try:
-                if os.path.exists(f):
+            retry = 0
+            while os.path.exists(f) and retry < max_retry:
+                try:
                     os.remove(f)
-            except Exception as e:
-                print(f"Error removing {f}: {e}")
+                    if not os.path.exists(f):
+                        print(f"Successfully removed {f}")
+                        break
+                except Exception as e:
+                    print(f"Error removing {f} (attempt {retry+1}): {e}")
+                    time.sleep(retry_delay)
+                retry += 1
+            if os.path.exists(f):
+                print(f"WARNING: {f} still exists after {max_retry} attempts. May be locked or on NAS.")
 
     def setup_file_watcher(self):
         self.file_watcher_timer = QTimer()
