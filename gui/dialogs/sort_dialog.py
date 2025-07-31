@@ -312,4 +312,3 @@ class SortDialog(QDialog):
                     return ""
                 return val
             return sorted(data, key=get_val, reverse=reverse)
-            return sorted(data, key=get_val, reverse=reverse)

@@ -1167,13 +1167,4 @@ class ClientDataDialog(QDialog):
             self.files_current_page = 1
             self._update_files_table()
             QMessageBox.information(self, "Success", "Client data updated successfully.")
-            self.files_records_all = []
-            self.files_current_page = 1
-            self._update_files_table()
-            QMessageBox.information(self, "Success", "Client data updated successfully.")
-            self._update_files_table()
-            QMessageBox.information(self, "Success", "Client data updated successfully.")
-            QMessageBox.information(self, "Success", "Client data updated successfully.")
-            self._update_files_table()
-            QMessageBox.information(self, "Success", "Client data updated successfully.")
 

@@ -154,9 +154,3 @@ class MainMenu(QMenuBar):
 
     def open_repo(self):
         webbrowser.open("https://github.com/mudrikam/Rak-Arsip-3")
-        about_config = self.config_manager.get("about")
-        dialog = AboutDialog(about_config, self)
-        dialog.exec()
-
-    def open_repo(self):
-        webbrowser.open("https://github.com/mudrikam/Rak-Arsip-3")
