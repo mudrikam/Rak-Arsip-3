@@ -404,9 +404,67 @@ class DatabaseManager(QObject):
                 f.write(self.session_id)
             self.close()
             src = self.db_path
+
+            old_time = None
+            old_size = None
+            old_total_records = None
+            if os.path.exists(backup_path):
+                old_time = os.path.getmtime(backup_path)
+                old_size = os.path.getsize(backup_path)
+                try:
+                    old_conn = sqlite3.connect(backup_path)
+                    old_cursor = old_conn.cursor()
+                    old_total_records = 0
+                    old_cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+                    for (table_name,) in old_cursor.fetchall():
+                        try:
+                            old_cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+                            old_total_records += old_cursor.fetchone()[0]
+                        except Exception:
+                            pass
+                    old_conn.close()
+                except Exception:
+                    old_total_records = None
+
             if os.path.exists(src):
                 import shutil
-                shutil.copy2(src, backup_path)
+                shutil.copyfile(src, backup_path)
+                os.utime(backup_path, None)
+                new_time = os.path.getmtime(backup_path)
+                new_size = os.path.getsize(backup_path)
+                try:
+                    new_conn = sqlite3.connect(backup_path)
+                    new_cursor = new_conn.cursor()
+                    new_total_records = 0
+                    new_cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+                    for (table_name,) in new_cursor.fetchall():
+                        try:
+                            new_cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+                            new_total_records += new_cursor.fetchone()[0]
+                        except Exception:
+                            pass
+                    new_conn.close()
+                except Exception:
+                    new_total_records = None
+
+                if old_time is not None:
+                    old_dt = datetime.fromtimestamp(old_time).strftime("%Y-%m-%d %H:%M:%S")
+                    new_dt = datetime.fromtimestamp(new_time).strftime("%Y-%m-%d %H:%M:%S")
+                    msg = (
+                        f"Backup created on launch: {backup_filename}\n"
+                        f"  Modified: {old_dt} → {new_dt}\n"
+                        f"  Size: {old_size} bytes → {new_size} bytes\n"
+                        f"  Total records: {old_total_records} → {new_total_records}"
+                    )
+                else:
+                    new_dt = datetime.fromtimestamp(new_time).strftime("%Y-%m-%d %H:%M:%S")
+                    msg = (
+                        f"Backup created on launch: {backup_filename}\n"
+                        f"  Created at: {new_dt}\n"
+                        f"  Size: {new_size} bytes\n"
+                        f"  Total records: {new_total_records}"
+                    )
+                print(msg)
         except Exception as e:
             print(f"Error creating daily backup: {e}")
         finally:
