@@ -79,6 +79,21 @@ class ClientDataDialog(QDialog):
     def _init_clients_tab(self):
         tab = QWidget()
         tab_layout = QVBoxLayout(tab)
+        row = QHBoxLayout()
+        self.clients_search_edit = QLineEdit()
+        self.clients_search_edit.setPlaceholderText("Search by name, contact, status, note, files...")
+        self.clients_search_edit.setMinimumHeight(32)
+        self.clients_search_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        row.addWidget(self.clients_search_edit, 1)
+        row.addStretch()
+        self.clients_sort_combo = QComboBox()
+        self.clients_sort_combo.addItems(["Name", "Contact", "Status", "Note", "Files"])
+        self.clients_sort_order_combo = QComboBox()
+        self.clients_sort_order_combo.addItems(["Ascending", "Descending"])
+        row.addWidget(QLabel("Sort by:"))
+        row.addWidget(self.clients_sort_combo)
+        row.addWidget(self.clients_sort_order_combo)
+        tab_layout.addLayout(row)
         self.clients_table = QTableWidget(tab)
         self.clients_table.setColumnCount(6)
         self.clients_table.setHorizontalHeaderLabels([
@@ -92,7 +107,25 @@ class ClientDataDialog(QDialog):
         self.clients_table.cellDoubleClicked.connect(self._on_client_row_double_clicked)
         tab_layout.addWidget(self.clients_table)
         self.tab_widget.addTab(tab, qta.icon("fa6s.users"), "Clients")
+        self.clients_sort_combo.currentIndexChanged.connect(self._on_clients_sort_changed)
+        self.clients_sort_order_combo.currentIndexChanged.connect(self._on_clients_sort_changed)
+        self.clients_search_edit.textChanged.connect(self._on_clients_search_changed)
+        self._clients_data_all = []
+        self._clients_data_sorted = []
+        self._clients_data_filtered = []
+        self.clients_sort_field = "Name"
+        self.clients_sort_order = "Ascending"
+        self.clients_search_text = ""
         self._load_clients_data()
+
+    def _on_clients_sort_changed(self):
+        self.clients_sort_field = self.clients_sort_combo.currentText()
+        self.clients_sort_order = self.clients_sort_order_combo.currentText()
+        self._update_clients_table()
+
+    def _on_clients_search_changed(self):
+        self.clients_search_text = self.clients_search_edit.text().strip().lower()
+        self._update_clients_table()
 
     def _load_clients_data(self):
         basedir = Path(__file__).parent.parent.parent
@@ -100,16 +133,56 @@ class ClientDataDialog(QDialog):
         config_manager = ConfigManager(str(db_config_path))
         db_manager = DatabaseManager(config_manager, config_manager)
         clients = db_manager.get_all_clients()
-        self.clients_table.setRowCount(len(clients))
+        self._clients_data_all = []
+        for client in clients:
+            file_count = db_manager.get_file_count_by_client_id(client["id"])
+            client["_file_count"] = file_count
+            self._clients_data_all.append(client)
+        self._update_clients_table()
+
+    def _update_clients_table(self):
+        sort_field = self.clients_sort_field
+        sort_order = self.clients_sort_order
+        search_text = self.clients_search_edit.text().strip().lower()
+        sort_map = {
+            "Name": "client_name",
+            "Contact": "contact",
+            "Status": "status",
+            "Note": "note",
+            "Files": "_file_count"
+        }
+        key = sort_map.get(sort_field, "client_name")
+        reverse = sort_order == "Descending"
+        if search_text:
+            self._clients_data_filtered = []
+            for client in self._clients_data_all:
+                if (
+                    search_text in str(client.get("client_name", "")).lower()
+                    or search_text in str(client.get("contact", "")).lower()
+                    or search_text in str(client.get("status", "")).lower()
+                    or search_text in str(client.get("note", "")).lower()
+                    or search_text in str(client.get("_file_count", "")).lower()
+                ):
+                    self._clients_data_filtered.append(client)
+        else:
+            self._clients_data_filtered = list(self._clients_data_all)
+        try:
+            if key == "_file_count":
+                self._clients_data_sorted = sorted(self._clients_data_filtered, key=lambda x: int(x.get("_file_count", 0)), reverse=reverse)
+            else:
+                self._clients_data_sorted = sorted(self._clients_data_filtered, key=lambda x: str(x.get(key, "")).lower(), reverse=reverse)
+        except Exception:
+            self._clients_data_sorted = list(self._clients_data_filtered)
+        self.clients_table.setRowCount(len(self._clients_data_sorted))
         self._clients_data = []
-        for row_idx, client in enumerate(clients):
+        for row_idx, client in enumerate(self._clients_data_sorted):
             self._clients_data.append(client)
-            for col_idx, key in enumerate(["client_name", "contact", "links", "status", "note"]):
-                value = client.get(key, "")
+            for col_idx, key_col in enumerate(["client_name", "contact", "links", "status", "note"]):
+                value = client.get(key_col, "")
                 item = QTableWidgetItem(str(value) if value is not None else "")
                 item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
                 self.clients_table.setItem(row_idx, col_idx, item)
-            file_count = db_manager.get_file_count_by_client_id(client["id"])
+            file_count = client.get("_file_count", 0)
             item = QTableWidgetItem(str(file_count))
             item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
             self.clients_table.setItem(row_idx, 5, item)
@@ -230,7 +303,7 @@ class ClientDataDialog(QDialog):
         self.files_search_edit.setPlaceholderText("Search by status, name, date, price, note...")
         self.files_search_edit.setMinimumHeight(32)
         self.files_search_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.files_search_row.addWidget(self.files_search_edit)
+        self.files_search_row.addWidget(self.files_search_edit, 1)
         self.files_sort_combo = QComboBox()
         self.files_sort_combo.addItems(["File Name", "Date", "Price", "Status", "Note", "Batch"])
         self.files_sort_order_combo = QComboBox()
@@ -300,21 +373,20 @@ class ClientDataDialog(QDialog):
     def _init_batch_list_tab(self):
         tab = QWidget()
         tab_layout = QVBoxLayout(tab)
-        batch_btn_row = QHBoxLayout()
-        # Tambahkan search field di kiri tombol Add Batch
+        row = QHBoxLayout()
         self.batch_search_edit = QLineEdit()
         self.batch_search_edit.setPlaceholderText("Search batch number or note...")
         self.batch_search_edit.setMinimumHeight(32)
         self.batch_search_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        batch_btn_row.addWidget(self.batch_search_edit)
+        row.addWidget(self.batch_search_edit, 1)
+        row.addStretch()
         self.batch_add_btn = QPushButton(qta.icon("fa6s.plus"), "Add Batch")
         self.batch_edit_btn = QPushButton(qta.icon("fa6s.pen-to-square"), "Edit Batch")
         self.batch_delete_btn = QPushButton(qta.icon("fa6s.trash"), "Delete Batch")
-        batch_btn_row.addWidget(self.batch_add_btn)
-        batch_btn_row.addWidget(self.batch_edit_btn)
-        batch_btn_row.addWidget(self.batch_delete_btn)
-        batch_btn_row.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
-        tab_layout.addLayout(batch_btn_row)
+        row.addWidget(self.batch_add_btn)
+        row.addWidget(self.batch_edit_btn)
+        row.addWidget(self.batch_delete_btn)
+        tab_layout.addLayout(row)
         self.batch_table = QTableWidget(tab)
         self.batch_table.setColumnCount(3)
         self.batch_table.setHorizontalHeaderLabels([
@@ -334,7 +406,6 @@ class ClientDataDialog(QDialog):
         self.batch_table.cellDoubleClicked.connect(self._on_batch_edit)
         self.batch_table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.batch_table.customContextMenuRequested.connect(self._show_batch_context_menu)
-        # Connect search field
         self.batch_search_edit.textChanged.connect(self._on_batch_search_changed)
         self._batch_data_all = []
         self._batch_data_filtered = []
@@ -1083,6 +1154,11 @@ class ClientDataDialog(QDialog):
             QMessageBox.information(self, "Success", "Client data updated successfully.")
             self.files_records_all = []
             self.files_current_page = 1
+            self._update_files_table()
+            QMessageBox.information(self, "Success", "Client data updated successfully.")
+            self._update_files_table()
+            QMessageBox.information(self, "Success", "Client data updated successfully.")
+            QMessageBox.information(self, "Success", "Client data updated successfully.")
             self._update_files_table()
             QMessageBox.information(self, "Success", "Client data updated successfully.")
 
