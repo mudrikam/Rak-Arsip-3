@@ -363,16 +363,16 @@ class TeamsProfileDialog(QDialog):
         def format_hours_human_readable(hours):
             try:
                 total_minutes = int(round(float(hours) * 60))
-                jam = total_minutes // 60
-                menit = total_minutes % 60
-                if jam > 0 and menit > 0:
-                    return f"{jam} jam {menit} menit"
-                elif jam > 0:
-                    return f"{jam} jam"
-                elif menit > 0:
-                    return f"{menit} menit"
+                h = total_minutes // 60
+                m = total_minutes % 60
+                if h > 0 and m > 0:
+                    return f"{h} hours {m} minutes"
+                elif h > 0:
+                    return f"{h} hours"
+                elif m > 0:
+                    return f"{m} minutes"
                 else:
-                    return "0 menit"
+                    return "0 minutes"
             except Exception:
                 return ""
         attendance_with_hours = []
@@ -507,16 +507,16 @@ class TeamsProfileDialog(QDialog):
             elif check_out:
                 last_checkout = format_date_indonesian(check_out, with_time=True)
         def format_total_hours_human_readable(total_seconds):
-            jam = total_seconds // 3600
-            menit = (total_seconds % 3600) // 60
-            if jam > 0 and menit > 0:
-                return f"{jam} jam {menit} menit"
-            elif jam > 0:
-                return f"{jam} jam"
-            elif menit > 0:
-                return f"{menit} menit"
+            h = total_seconds // 3600
+            m = (total_seconds % 3600) // 60
+            if h > 0 and m > 0:
+                return f"{h} hours {m} minutes"
+            elif h > 0:
+                return f"{h} hours"
+            elif m > 0:
+                return f"{m} minutes"
             else:
-                return "0 menit"
+                return "0 minutes"
         total_hours = format_total_hours_human_readable(total_seconds)
         if full_name is None and self._selected_team_index is not None and 0 <= self._selected_team_index < len(self._teams_data):
             full_name = self._teams_data[self._selected_team_index].get("full_name", "")
