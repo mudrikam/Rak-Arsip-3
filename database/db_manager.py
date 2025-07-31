@@ -1783,3 +1783,266 @@ class DatabaseManager(QObject):
         roots = [row[0] for row in cursor.fetchall() if row[0]]
         self.close()
         return roots
+
+    def get_attendance_by_team_id_paged(self, team_id, search_text=None, day_filter=None, month_filter=None, year_filter=None, sort_field="date", sort_order="desc", offset=0, limit=20):
+        self.connect(write=False)
+        cursor = self.connection.cursor()
+        where_clauses = ["team_id = ?"]
+        params = [team_id]
+        hari_map = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]
+        bulan_map = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
+        if search_text:
+            search_pattern = f"%{search_text}%"
+            where_clauses.append("(note LIKE ? OR date LIKE ? OR check_in LIKE ? OR check_out LIKE ?)")
+            params.extend([search_pattern] * 4)
+        if day_filter and day_filter != "All Days":
+            where_clauses.append("strftime('%w', date) = ?")
+            idx = hari_map.index(day_filter) if day_filter in hari_map else None
+            if idx is not None:
+                params.append(str((idx + 1) % 7))  # SQLite: Sunday=0, Python: Monday=0
+        if month_filter and month_filter != "All Months":
+            idx = bulan_map.index(month_filter) + 1 if month_filter in bulan_map else None
+            if idx:
+                where_clauses.append("CAST(strftime('%m', date) AS INTEGER) = ?")
+                params.append(idx)
+        if year_filter and year_filter != "All Years":
+            where_clauses.append("strftime('%Y', date) = ?")
+            params.append(year_filter)
+        where_sql = "WHERE " + " AND ".join(where_clauses)
+        sort_map = {
+            "Date": "date",
+            "Check In": "check_in",
+            "Check Out": "check_out",
+            "Note": "note"
+        }
+        sort_sql = sort_map.get(sort_field, "date")
+        order_sql = "DESC" if sort_order.lower() in ("desc", "descending") else "ASC"
+        sql = f"""
+            SELECT date, check_in, check_out, note, id
+            FROM attendance
+            {where_sql}
+            ORDER BY {sort_sql} {order_sql}, id DESC
+            LIMIT ? OFFSET ?
+        """
+        params.extend([limit, offset])
+        cursor.execute(sql, params)
+        rows = cursor.fetchall()
+        self.close()
+        return [tuple(row) for row in rows]
+
+    def count_attendance_by_team_id_filtered(self, team_id, search_text=None, day_filter=None, month_filter=None, year_filter=None):
+        self.connect(write=False)
+        cursor = self.connection.cursor()
+        where_clauses = ["team_id = ?"]
+        params = [team_id]
+        hari_map = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]
+        bulan_map = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
+        if search_text:
+            search_pattern = f"%{search_text}%"
+            where_clauses.append("(note LIKE ? OR date LIKE ? OR check_in LIKE ? OR check_out LIKE ?)")
+            params.extend([search_pattern] * 4)
+        if day_filter and day_filter != "All Days":
+            idx = hari_map.index(day_filter) if day_filter in hari_map else None
+            if idx is not None:
+                where_clauses.append("strftime('%w', date) = ?")
+                params.append(str((idx + 1) % 7))
+        if month_filter and month_filter != "All Months":
+            idx = bulan_map.index(month_filter) + 1 if month_filter in bulan_map else None
+            if idx:
+                where_clauses.append("CAST(strftime('%m', date) AS INTEGER) = ?")
+                params.append(idx)
+        if year_filter and year_filter != "All Years":
+            where_clauses.append("strftime('%Y', date) = ?")
+            params.append(year_filter)
+        where_sql = "WHERE " + " AND ".join(where_clauses)
+        sql = f"SELECT COUNT(*) FROM attendance {where_sql}"
+        cursor.execute(sql, params)
+        count = cursor.fetchone()[0]
+        self.close()
+        return count
+
+    def attendance_summary_by_team_id_filtered(self, team_id, search_text=None, day_filter=None, month_filter=None, year_filter=None):
+        self.connect(write=False)
+        cursor = self.connection.cursor()
+        where_clauses = ["team_id = ?"]
+        params = [team_id]
+        hari_map = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]
+        bulan_map = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
+        if search_text:
+            search_pattern = f"%{search_text}%"
+            where_clauses.append("(note LIKE ? OR date LIKE ? OR check_in LIKE ? OR check_out LIKE ?)")
+            params.extend([search_pattern] * 4)
+        if day_filter and day_filter != "All Days":
+            idx = hari_map.index(day_filter) if day_filter in hari_map else None
+            if idx is not None:
+                where_clauses.append("strftime('%w', date) = ?")
+                params.append(str((idx + 1) % 7))
+        if month_filter and month_filter != "All Months":
+            idx = bulan_map.index(month_filter) + 1 if month_filter in bulan_map else None
+            if idx:
+                where_clauses.append("CAST(strftime('%m', date) AS INTEGER) = ?")
+                params.append(idx)
+        if year_filter and year_filter != "All Years":
+            where_clauses.append("strftime('%Y', date) = ?")
+            params.append(year_filter)
+        where_sql = "WHERE " + " AND ".join(where_clauses)
+        sql = f"""
+            SELECT date, check_in, check_out, note
+            FROM attendance
+            {where_sql}
+        """
+        cursor.execute(sql, params)
+        rows = cursor.fetchall()
+        total_days = set()
+        total_records = 0
+        total_seconds = 0
+        last_checkout = "-"
+        for row in rows:
+            date, check_in, check_out, note = row
+            if date:
+                total_days.add(date)
+            if check_in and check_out:
+                try:
+                    dt_in = datetime.strptime(check_in, "%Y-%m-%d %H:%M:%S")
+                    dt_out = datetime.strptime(check_out, "%Y-%m-%d %H:%M:%S")
+                    total_seconds += int((dt_out - dt_in).total_seconds())
+                    last_checkout = check_out
+                except Exception:
+                    pass
+            elif check_out:
+                last_checkout = check_out
+            total_records += 1
+        self.close()
+        return {
+            "total_days": len(total_days),
+            "total_records": total_records,
+            "total_seconds": total_seconds,
+            "last_checkout": last_checkout
+        }
+
+    def get_earnings_by_team_id_paged(self, team_id, search_text=None, batch_filter=None, sort_field="File Name", sort_order="desc", offset=0, limit=20):
+        self.connect(write=False)
+        cursor = self.connection.cursor()
+        where_clauses = ["t.id = ?"]
+        params = [team_id]
+        if search_text:
+            search_pattern = f"%{search_text}%"
+            where_clauses.append(
+                "(f.name LIKE ? OR f.date LIKE ? OR e.amount LIKE ? OR e.note LIKE ? OR s.name LIKE ? OR c.client_name LIKE ? OR fcb.batch_number LIKE ?)"
+            )
+            params.extend([search_pattern] * 7)
+        if batch_filter and batch_filter != "All Batches":
+            where_clauses.append("fcb.batch_number = ?")
+            params.append(batch_filter)
+        where_sql = "WHERE " + " AND ".join(where_clauses)
+        sort_map = {
+            "File Name": "f.name",
+            "Date": "f.date",
+            "Amount": "e.amount",
+            "Status": "s.name",
+            "Client": "c.client_name",
+            "Batch": "fcb.batch_number"
+        }
+        sort_sql = sort_map.get(sort_field, "f.name")
+        order_sql = "DESC" if sort_order.lower() in ("desc", "descending") else "ASC"
+        sql = f"""
+            SELECT
+                f.name, f.date, e.amount, e.note, s.name as status, c.client_name, fcb.batch_number, f.path
+            FROM teams t
+            LEFT JOIN earnings e ON e.team_id = t.id
+            LEFT JOIN item_price ip ON e.item_price_id = ip.id
+            LEFT JOIN files f ON ip.file_id = f.id
+            LEFT JOIN statuses s ON f.status_id = s.id
+            LEFT JOIN file_client_price fcp ON f.id = fcp.file_id
+            LEFT JOIN client c ON fcp.client_id = c.id
+            LEFT JOIN file_client_batch fcb ON f.id = fcb.file_id AND c.id = fcb.client_id
+            {where_sql}
+            ORDER BY {sort_sql} {order_sql}, f.date DESC
+            LIMIT ? OFFSET ?
+        """
+        params.extend([limit, offset])
+        cursor.execute(sql, params)
+        rows = cursor.fetchall()
+        self.close()
+        return [tuple(row) for row in rows]
+
+    def count_earnings_by_team_id_filtered(self, team_id, search_text=None, batch_filter=None):
+        self.connect(write=False)
+        cursor = self.connection.cursor()
+        where_clauses = ["t.id = ?"]
+        params = [team_id]
+        if search_text:
+            search_pattern = f"%{search_text}%"
+            where_clauses.append(
+                "(f.name LIKE ? OR f.date LIKE ? OR e.amount LIKE ? OR e.note LIKE ? OR s.name LIKE ? OR c.client_name LIKE ? OR fcb.batch_number LIKE ?)"
+            )
+            params.extend([search_pattern] * 7)
+        if batch_filter and batch_filter != "All Batches":
+            where_clauses.append("fcb.batch_number = ?")
+            params.append(batch_filter)
+        where_sql = "WHERE " + " AND ".join(where_clauses)
+        sql = f"""
+            SELECT COUNT(*)
+            FROM teams t
+            LEFT JOIN earnings e ON e.team_id = t.id
+            LEFT JOIN item_price ip ON e.item_price_id = ip.id
+            LEFT JOIN files f ON ip.file_id = f.id
+            LEFT JOIN statuses s ON f.status_id = s.id
+            LEFT JOIN file_client_price fcp ON f.id = fcp.file_id
+            LEFT JOIN client c ON fcp.client_id = c.id
+            LEFT JOIN file_client_batch fcb ON f.id = fcb.file_id AND c.id = fcb.client_id
+            {where_sql}
+        """
+        cursor.execute(sql, params)
+        count = cursor.fetchone()[0]
+        self.close()
+        return count
+
+    def earnings_summary_by_team_id_filtered(self, team_id, search_text=None, batch_filter=None):
+        self.connect(write=False)
+        cursor = self.connection.cursor()
+        where_clauses = ["t.id = ?"]
+        params = [team_id]
+        if search_text:
+            search_pattern = f"%{search_text}%"
+            where_clauses.append(
+                "(f.name LIKE ? OR f.date LIKE ? OR e.amount LIKE ? OR e.note LIKE ? OR s.name LIKE ? OR c.client_name LIKE ? OR fcb.batch_number LIKE ?)"
+            )
+            params.extend([search_pattern] * 7)
+        if batch_filter and batch_filter != "All Batches":
+            where_clauses.append("fcb.batch_number = ?")
+            params.append(batch_filter)
+        where_sql = "WHERE " + " AND ".join(where_clauses)
+        sql = f"""
+            SELECT e.amount, s.name as status
+            FROM teams t
+            LEFT JOIN earnings e ON e.team_id = t.id
+            LEFT JOIN item_price ip ON e.item_price_id = ip.id
+            LEFT JOIN files f ON ip.file_id = f.id
+            LEFT JOIN statuses s ON f.status_id = s.id
+            LEFT JOIN file_client_price fcp ON f.id = fcp.file_id
+            LEFT JOIN client c ON fcp.client_id = c.id
+            LEFT JOIN file_client_batch fcb ON f.id = fcb.file_id AND c.id = fcb.client_id
+            {where_sql}
+        """
+        cursor.execute(sql, params)
+        total_amount = 0
+        total_pending = 0
+        total_paid = 0
+        for row in cursor.fetchall():
+            amount, status = row
+            try:
+                amt = int(float(amount)) if amount is not None else 0
+            except Exception:
+                amt = 0
+            total_amount += amt
+            if str(status).lower() == "pending":
+                total_pending += amt
+            elif str(status).lower() == "paid":
+                total_paid += amt
+        self.close()
+        return {
+            "total_amount": total_amount,
+            "total_pending": total_pending,
+            "total_paid": total_paid
+        }

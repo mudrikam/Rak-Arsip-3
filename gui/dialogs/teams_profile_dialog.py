@@ -260,13 +260,21 @@ class TeamsProfileDialog(QDialog):
         self._update_attendance_table()
 
     def _load_attendance_records(self, team):
-        tid = team["id"]
-        full_name = team.get("full_name", "")
-        records = self._attendance_map.get(tid, [])
-        self.attendance_records_all = [r[:4] for r in records]
+        self._attendance_team_id = team["id"]
+        self._attendance_full_name = team.get("full_name", "")
         self.attendance_current_page = 1
+        basedir = Path(__file__).parent.parent.parent
+        db_config_path = basedir / "configs" / "db_config.json"
+        config_manager = ConfigManager(str(db_config_path))
+        db_manager = DatabaseManager(config_manager, config_manager)
+        team_id = self._attendance_team_id
+        # Ambil semua attendance untuk team ini (tanpa filter)
+        all_records = db_manager.get_attendance_by_team_id_paged(
+            team_id, None, None, None, None, "Date", "Descending", 0, 10000
+        )
+        self.attendance_records_all = all_records
         self._refresh_attendance_year_filter()
-        self._update_attendance_table(full_name)
+        self._update_attendance_table(self._attendance_full_name)
 
     def _refresh_attendance_year_filter(self):
         years = set()
@@ -298,16 +306,12 @@ class TeamsProfileDialog(QDialog):
             self._update_attendance_table()
 
     def _attendance_next_page(self):
-        total_rows = len(self.attendance_records_filtered)
-        total_pages = max(1, (total_rows + self.attendance_page_size - 1) // self.attendance_page_size)
-        if self.attendance_current_page < total_pages:
+        if self.attendance_current_page < self._attendance_total_pages:
             self.attendance_current_page += 1
             self._update_attendance_table()
 
     def _attendance_goto_page(self, value):
-        total_rows = len(self.attendance_records_filtered)
-        total_pages = max(1, (total_rows + self.attendance_page_size - 1) // self.attendance_page_size)
-        if 1 <= value <= total_pages:
+        if 1 <= value <= self._attendance_total_pages:
             self.attendance_current_page = value
             self._update_attendance_table()
 
@@ -318,66 +322,46 @@ class TeamsProfileDialog(QDialog):
         self._update_attendance_table()
 
     def _update_attendance_table(self, full_name=None):
-        search_text = self.attendance_search_edit.text().strip().lower()
+        if not hasattr(self, "_attendance_team_id"):
+            self.attendance_table.setRowCount(0)
+            return
+        basedir = Path(__file__).parent.parent.parent
+        db_config_path = basedir / "configs" / "db_config.json"
+        config_manager = ConfigManager(str(db_config_path))
+        db_manager = DatabaseManager(config_manager, config_manager)
+        team_id = self._attendance_team_id
+        search_text = self.attendance_search_edit.text().strip()
         day_filter = self.attendance_day_filter_combo.currentText() if hasattr(self, "attendance_day_filter_combo") else "All Days"
         month_filter = self.attendance_month_filter_combo.currentText() if hasattr(self, "attendance_month_filter_combo") else "All Months"
         year_filter = self.attendance_year_filter_combo.currentText() if hasattr(self, "attendance_year_filter_combo") else "All Years"
-        hari_map = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]
-        bulan_map = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
-        def filter_func(r):
-            date_str = r[0]
-            if not date_str:
-                return False
-            try:
-                dt = datetime.strptime(date_str, "%Y-%m-%d")
-                hari = hari_map[dt.weekday()]
-                bulan = bulan_map[dt.month - 1]
-                tahun = str(dt.year)
-            except Exception:
-                hari = bulan = tahun = ""
-            if day_filter != "All Days" and hari != day_filter:
-                return False
-            if month_filter != "All Months" and bulan != month_filter:
-                return False
-            if year_filter != "All Years" and tahun != year_filter:
-                return False
-            if search_text:
-                return (
-                    (r[0] and search_text in str(r[0]).lower()) or
-                    (r[1] and search_text in str(r[1]).lower()) or
-                    (r[2] and search_text in str(r[2]).lower()) or
-                    (r[3] and search_text in str(r[3]).lower())
-                )
-            return True
-        self.attendance_records_filtered = [r for r in self.attendance_records_all if filter_func(r)]
         sort_field = self.attendance_sort_field
         sort_order = self.attendance_sort_order
-        sort_map = {
-            "Date": 0,
-            "Check In": 1,
-            "Check Out": 2,
-            "Hours": 4,
-            "Note": 3
-        }
-        reverse = sort_order == "Descending"
-        def format_hours_human_readable(hours):
-            try:
-                total_minutes = int(round(float(hours) * 60))
-                h = total_minutes // 60
-                m = total_minutes % 60
-                if h > 0 and m > 0:
-                    return f"{h} hours {m} minutes"
-                elif h > 0:
-                    return f"{h} hours"
-                elif m > 0:
-                    return f"{m} minutes"
-                else:
-                    return "0 minutes"
-            except Exception:
-                return ""
-        attendance_with_hours = []
-        for r in self.attendance_records_filtered:
-            date, check_in, check_out, note = r
+        page_size = self.attendance_page_size
+        offset = (self.attendance_current_page - 1) * page_size
+        total_rows = db_manager.count_attendance_by_team_id_filtered(
+            team_id, search_text, day_filter, month_filter, year_filter
+        )
+        self._attendance_total_pages = max(1, (total_rows + page_size - 1) // page_size)
+        # Ambil semua records untuk filter tahun
+        all_records = db_manager.get_attendance_by_team_id_paged(
+            team_id, None, None, None, None, "Date", "Descending", 0, 10000
+        )
+        self.attendance_records_all = all_records
+        # Ambil records terfilter untuk tampilan tabel
+        records = db_manager.get_attendance_by_team_id_paged(
+            team_id, search_text, day_filter, month_filter, year_filter,
+            sort_field, sort_order, offset, page_size
+        )
+        self.attendance_records_filtered = records
+        summary = db_manager.attendance_summary_by_team_id_filtered(
+            team_id, search_text, day_filter, month_filter, year_filter
+        )
+        self.attendance_table.setRowCount(len(records))
+        for row_idx, record in enumerate(records):
+            date, check_in, check_out, note, _ = record
+            formatted_date = format_date_indonesian(date)
+            formatted_checkin = format_date_indonesian(check_in, with_time=True) if check_in else ""
+            formatted_checkout = format_date_indonesian(check_out, with_time=True) if check_out else ""
             hours = ""
             if check_in and check_out:
                 try:
@@ -385,93 +369,19 @@ class TeamsProfileDialog(QDialog):
                     dt_out = datetime.strptime(check_out, "%Y-%m-%d %H:%M:%S")
                     delta = dt_out - dt_in
                     hours_float = delta.total_seconds() / 3600
-                    hours = format_hours_human_readable(hours_float)
+                    total_minutes = int(round(hours_float * 60))
+                    h = total_minutes // 60
+                    m = total_minutes % 60
+                    if h > 0 and m > 0:
+                        hours = f"{h} hours {m} minutes"
+                    elif h > 0:
+                        hours = f"{h} hours"
+                    elif m > 0:
+                        hours = f"{m} minutes"
+                    else:
+                        hours = "0 minutes"
                 except Exception:
                     hours = ""
-            attendance_with_hours.append((date, check_in, check_out, note, hours))
-        self.attendance_records_filtered = attendance_with_hours
-        if sort_field in sort_map:
-            key_idx = sort_map[sort_field]
-            try:
-                if sort_field == "Hours":
-                    def hours_to_minutes(hstr):
-                        try:
-                            if not hstr:
-                                return 0
-                            if "jam" in hstr or "menit" in hstr:
-                                parts = hstr.split()
-                                jam = 0
-                                menit = 0
-                                if "jam" in parts:
-                                    jam_idx = parts.index("jam")
-                                    jam = int(parts[jam_idx - 1])
-                                if "menit" in parts:
-                                    menit_idx = parts.index("menit")
-                                    menit = int(parts[menit_idx - 1])
-                                return jam * 60 + menit
-                            return int(float(hstr) * 60)
-                        except Exception:
-                            return 0
-                    self.attendance_records_filtered.sort(
-                        key=lambda x: hours_to_minutes(x[key_idx]),
-                        reverse=reverse
-                    )
-                else:
-                    self.attendance_records_filtered.sort(
-                        key=lambda x: (x[key_idx] or "").lower() if isinstance(x[key_idx], str) else str(x[key_idx]).lower(),
-                        reverse=reverse
-                    )
-            except Exception:
-                pass
-        elif sort_field == "Hari":
-            def get_hari_idx(date_str):
-                try:
-                    dt = datetime.strptime(date_str, "%Y-%m-%d")
-                    return dt.weekday()
-                except Exception:
-                    return -1
-            self.attendance_records_filtered.sort(
-                key=lambda x: get_hari_idx(x[0]) if x[0] else -1,
-                reverse=reverse
-            )
-        elif sort_field == "Bulan":
-            def get_bulan_idx(date_str):
-                try:
-                    dt = datetime.strptime(date_str, "%Y-%m-%d")
-                    return dt.month
-                except Exception:
-                    return -1
-            self.attendance_records_filtered.sort(
-                key=lambda x: get_bulan_idx(x[0]) if x[0] else -1,
-                reverse=reverse
-            )
-        elif sort_field == "Tahun":
-            def get_tahun_idx(date_str):
-                try:
-                    dt = datetime.strptime(date_str, "%Y-%m-%d")
-                    return dt.year
-                except Exception:
-                    return -1
-            self.attendance_records_filtered.sort(
-                key=lambda x: get_tahun_idx(x[0]) if x[0] else -1,
-                reverse=reverse
-            )
-        total_rows = len(self.attendance_records_filtered)
-        total_pages = max(1, (total_rows + self.attendance_page_size - 1) // self.attendance_page_size)
-        self.attendance_page_input.blockSignals(True)
-        self.attendance_page_input.setMaximum(total_pages)
-        self.attendance_page_input.setValue(self.attendance_current_page)
-        self.attendance_page_input.blockSignals(False)
-        self.attendance_page_label.setText(f"Page {self.attendance_current_page} / {total_pages}")
-        start_idx = (self.attendance_current_page - 1) * self.attendance_page_size
-        end_idx = start_idx + self.attendance_page_size
-        page_records = self.attendance_records_filtered[start_idx:end_idx]
-        self.attendance_table.setRowCount(len(page_records))
-        for row_idx, record in enumerate(page_records):
-            date, check_in, check_out, note, hours = record
-            formatted_date = format_date_indonesian(date)
-            formatted_checkin = format_date_indonesian(check_in, with_time=True) if check_in else ""
-            formatted_checkout = format_date_indonesian(check_out, with_time=True) if check_out else ""
             item_date = QTableWidgetItem(formatted_date)
             item_checkin = QTableWidgetItem(formatted_checkin)
             item_checkout = QTableWidgetItem(formatted_checkout)
@@ -487,25 +397,11 @@ class TeamsProfileDialog(QDialog):
             self.attendance_table.setItem(row_idx, 2, item_checkout)
             self.attendance_table.setItem(row_idx, 3, item_hours)
             self.attendance_table.setItem(row_idx, 4, item_note)
-        all_records = self.attendance_records_all
-        total_days = set()
-        total_records = len(all_records)
-        total_seconds = 0
-        last_checkout = "-"
-        for record in all_records:
-            date, check_in, check_out, note = record
-            if date:
-                total_days.add(date)
-            if check_in and check_out:
-                try:
-                    dt_in = datetime.strptime(check_in, "%Y-%m-%d %H:%M:%S")
-                    dt_out = datetime.strptime(check_out, "%Y-%m-%d %H:%M:%S")
-                    total_seconds += int((dt_out - dt_in).total_seconds())
-                    last_checkout = format_date_indonesian(check_out, with_time=True)
-                except Exception:
-                    pass
-            elif check_out:
-                last_checkout = format_date_indonesian(check_out, with_time=True)
+        self.attendance_page_input.blockSignals(True)
+        self.attendance_page_input.setMaximum(self._attendance_total_pages)
+        self.attendance_page_input.setValue(self.attendance_current_page)
+        self.attendance_page_input.blockSignals(False)
+        self.attendance_page_label.setText(f"Page {self.attendance_current_page} / {self._attendance_total_pages}")
         def format_total_hours_human_readable(total_seconds):
             h = total_seconds // 3600
             m = (total_seconds % 3600) // 60
@@ -517,10 +413,10 @@ class TeamsProfileDialog(QDialog):
                 return f"{m} minutes"
             else:
                 return "0 minutes"
-        total_hours = format_total_hours_human_readable(total_seconds)
-        if full_name is None and self._selected_team_index is not None and 0 <= self._selected_team_index < len(self._teams_data):
-            full_name = self._teams_data[self._selected_team_index].get("full_name", "")
-        # Attendance summary styling (follow earnings style)
+        total_hours = format_total_hours_human_readable(summary["total_seconds"])
+        last_checkout = format_date_indonesian(summary["last_checkout"], with_time=True) if summary["last_checkout"] and summary["last_checkout"] != "-" else "-"
+        if full_name is None and hasattr(self, "_attendance_full_name"):
+            full_name = self._attendance_full_name
         def format_thousands(val):
             try:
                 val = float(val)
@@ -540,7 +436,7 @@ class TeamsProfileDialog(QDialog):
         days_icon.setPixmap(qta.icon("fa6s.calendar-days", color="#1976d2").pixmap(16, 16))
         days_label = QLabel("Total Days:")
         days_label.setStyleSheet("color:#1976d2; font-size:12px; font-weight:bold;")
-        days_count = QLabel(str(len(total_days)))
+        days_count = QLabel(str(summary["total_days"]))
         days_count.setStyleSheet("font-size:12px; font-weight:bold;")
         days_row.setSpacing(4)
         days_row.addWidget(days_icon)
@@ -555,7 +451,7 @@ class TeamsProfileDialog(QDialog):
         records_icon.setPixmap(qta.icon("fa6s.clipboard-list", color="#009688").pixmap(16, 16))
         records_label = QLabel("Total Records:")
         records_label.setStyleSheet("color:#009688; font-size:12px; font-weight:bold;")
-        records_count = QLabel(str(total_records))
+        records_count = QLabel(str(summary["total_records"]))
         records_count.setStyleSheet("font-size:12px; font-weight:bold;")
         records_row.setSpacing(4)
         records_row.addWidget(records_icon)
@@ -595,7 +491,7 @@ class TeamsProfileDialog(QDialog):
         last_widget = QWidget()
         last_widget.setLayout(last_row)
         self.attendance_summary_layout.addWidget(last_widget)
-        filtered_label = QLabel(f"Filtered Attendance Records: {len(self.attendance_records_filtered)}")
+        filtered_label = QLabel(f"Filtered Attendance Records: {total_rows}")
         filtered_label.setStyleSheet("color:#666; font-size:11px; margin-top:2px;")
         self.attendance_summary_layout.addWidget(filtered_label)
 
@@ -750,14 +646,21 @@ class TeamsProfileDialog(QDialog):
             self._load_earnings_records(team)
 
     def _load_attendance_records(self, team):
-        tid = team["id"]
-        full_name = team.get("full_name", "")
-        records = self._attendance_map.get(tid, [])
-        # Remove the last element (ID) from each record tuple for display
-        self.attendance_records_all = [r[:4] for r in records]
+        self._attendance_team_id = team["id"]
+        self._attendance_full_name = team.get("full_name", "")
         self.attendance_current_page = 1
+        basedir = Path(__file__).parent.parent.parent
+        db_config_path = basedir / "configs" / "db_config.json"
+        config_manager = ConfigManager(str(db_config_path))
+        db_manager = DatabaseManager(config_manager, config_manager)
+        team_id = self._attendance_team_id
+        # Ambil semua attendance untuk team ini (tanpa filter)
+        all_records = db_manager.get_attendance_by_team_id_paged(
+            team_id, None, None, None, None, "Date", "Descending", 0, 10000
+        )
+        self.attendance_records_all = all_records
         self._refresh_attendance_year_filter()
-        self._update_attendance_table(full_name)
+        self._update_attendance_table(self._attendance_full_name)
 
     def _refresh_attendance_year_filter(self):
         years = set()
@@ -780,77 +683,25 @@ class TeamsProfileDialog(QDialog):
         self.attendance_year_filter_combo.blockSignals(False)
 
     def _load_earnings_records(self, team):
-        tid = team["id"]
-        username = team["username"]
-        self._earnings_current_username = username
-        earnings = self._earnings_map.get(tid, [])
-        basedir = Path(__file__).parent.parent.parent
-        db_config_path = basedir / "configs" / "db_config.json"
-        config_manager = ConfigManager(str(db_config_path))
-        db_manager = DatabaseManager(config_manager, config_manager)
-        earnings_records = []
-        batch_set = set()
-        for earning in earnings:
-            file_name = earning["file_name"]
-            file_date = earning["file_date"]
-            amount = earning["amount"]
-            currency = earning["currency"] or "IDR"
-            file_id = earning.get("file_id")
-            client_id = None
-            client_name = earning["client_name"]
-            # Try to get client_id for this file if possible
-            if client_name:
-                clients = db_manager.get_all_clients()
-                for c in clients:
-                    if c["client_name"] == client_name:
-                        client_id = c["id"]
-                        break
-            if not client_id:
-                client_id = db_manager.get_assigned_client_id_for_file(file_id)
-            batch = ""
-            if file_id and client_id:
-                batch = db_manager.get_batch_number_for_file_client(file_id, client_id)
-            batch_set.add(batch)
-            try:
-                amount_int = int(float(amount))
-                amount_str = f"{amount_int:,}".replace(",", ".")
-            except Exception:
-                amount_str = str(amount)
-            amount_display = f"{currency} {amount_str}" if currency else str(amount_str)
-            # Ambil path file dari tabel files
-            file_path = ""
-            if file_id:
-                db_manager.connect(write=False)
-                cursor = db_manager.connection.cursor()
-                cursor.execute("SELECT path FROM files WHERE id = ?", (file_id,))
-                row = cursor.fetchone()
-                db_manager.close()
-                if row and row[0]:
-                    file_path = row[0]
-            earnings_records.append((
-                file_name,
-                file_date,
-                amount_display,
-                earning["note"],
-                earning["status"],
-                client_name,
-                batch,
-                file_path  # path file
-            ))
-        self.earnings_records_all = earnings_records
+        self._earnings_team_id = team["id"]
+        self._earnings_current_username = team["username"]
         self.earnings_current_page = 1
-        self._refresh_earnings_batch_filter_combo(batch_set)
         self._update_earnings_table(self._earnings_current_username)
 
     def _refresh_earnings_batch_filter_combo(self, batch_set):
         self.earnings_batch_filter_combo.blockSignals(True)
+        current = self.earnings_batch_filter_combo.currentText() if self.earnings_batch_filter_combo.count() > 0 else "All Batches"
         self.earnings_batch_filter_combo.clear()
         self.earnings_batch_filter_combo.addItem("All Batches")
         batch_list = sorted([b for b in batch_set if b])
         for batch in batch_list:
             self.earnings_batch_filter_combo.addItem(batch)
-        self.earnings_batch_filter_combo.setCurrentIndex(0)
-        self._earnings_batch_filter_value = None
+        idx = self.earnings_batch_filter_combo.findText(current)
+        if idx >= 0:
+            self.earnings_batch_filter_combo.setCurrentIndex(idx)
+        else:
+            self.earnings_batch_filter_combo.setCurrentIndex(0)
+        self._earnings_batch_filter_value = None if self.earnings_batch_filter_combo.currentIndex() == 0 else self.earnings_batch_filter_combo.currentText()
         self.earnings_batch_filter_combo.blockSignals(False)
 
     def _on_earnings_batch_filter_changed(self, idx):
@@ -871,16 +722,12 @@ class TeamsProfileDialog(QDialog):
             self._update_earnings_table(self._earnings_current_username)
 
     def _earnings_next_page(self):
-        total_rows = len(self.earnings_records_filtered)
-        total_pages = max(1, (total_rows + self.earnings_page_size - 1) // self.earnings_page_size)
-        if self.earnings_current_page < total_pages:
+        if self.earnings_current_page < self._earnings_total_pages:
             self.earnings_current_page += 1
             self._update_earnings_table(self._earnings_current_username)
 
     def _earnings_goto_page(self, value):
-        total_rows = len(self.earnings_records_filtered)
-        total_pages = max(1, (total_rows + self.earnings_page_size - 1) // self.earnings_page_size)
-        if 1 <= value <= total_pages:
+        if 1 <= value <= self._earnings_total_pages:
             self.earnings_current_page = value
             self._update_earnings_table(self._earnings_current_username)
 
@@ -891,78 +738,56 @@ class TeamsProfileDialog(QDialog):
         self._update_earnings_table(self._earnings_current_username)
 
     def _update_earnings_table(self, username=None):
-        if username is None:
-            username = getattr(self, "_earnings_current_username", None)
-        search_text = self.earnings_search_edit.text().strip().lower()
+        if not hasattr(self, "_earnings_team_id"):
+            self.earnings_table.setRowCount(0)
+            return
+        basedir = Path(__file__).parent.parent.parent
+        db_config_path = basedir / "configs" / "db_config.json"
+        config_manager = ConfigManager(str(db_config_path))
+        db_manager = DatabaseManager(config_manager, config_manager)
+        team_id = self._earnings_team_id
+        search_text = self.earnings_search_edit.text().strip()
         batch_filter = self._earnings_batch_filter_value
-        if search_text or batch_filter:
-            self.earnings_records_filtered = []
-            for r in self.earnings_records_all:
-                match_search = (
-                    not search_text or
-                    (r[0] and search_text in str(r[0]).lower()) or
-                    (r[1] and search_text in str(r[1]).lower()) or
-                    (r[2] and search_text in str(r[2]).lower()) or
-                    (r[3] and search_text in str(r[3]).lower()) or
-                    (r[4] and search_text in str(r[4]).lower()) or
-                    (r[5] and search_text in str(r[5]).lower()) or
-                    (r[6] and search_text in str(r[6]).lower())
-                )
-                match_batch = (not batch_filter or r[6] == batch_filter)
-                if match_search and match_batch:
-                    self.earnings_records_filtered.append(r)
-        else:
-            self.earnings_records_filtered = list(self.earnings_records_all)
-        # Sorting
         sort_field = self.earnings_sort_field
         sort_order = self.earnings_sort_order
-        sort_map = {
-            "File Name": 0,
-            "Date": 1,
-            "Amount": 2,
-            "Status": 4,
-            "Client": 5,
-            "Batch": 6
-        }
-        key_idx = sort_map.get(sort_field, 0)
-        reverse = sort_order == "Descending"
-        try:
-            if key_idx == 2:
-                self.earnings_records_filtered.sort(
-                    key=lambda x: float(str(x[key_idx]).split(" ", 1)[-1].replace(".", "")) if x[key_idx] not in ["", None] else 0,
-                    reverse=reverse
-                )
-            else:
-                self.earnings_records_filtered.sort(
-                    key=lambda x: str(x[key_idx]).lower(),
-                    reverse=reverse
-                )
-        except Exception:
-            self.earnings_records_filtered.sort(
-                key=lambda x: str(x[key_idx]).lower(),
-                reverse=reverse
-            )
-        total_rows = len(self.earnings_records_filtered)
-        total_pages = max(1, (total_rows + self.earnings_page_size - 1) // self.earnings_page_size)
-        self.earnings_page_input.blockSignals(True)
-        self.earnings_page_input.setMaximum(total_pages)
-        self.earnings_page_input.setValue(self.earnings_current_page)
-        self.earnings_page_input.blockSignals(False)
-        self.earnings_page_label.setText(f"Page {self.earnings_current_page} / {total_pages}")
-        start_idx = (self.earnings_current_page - 1) * self.earnings_page_size
-        end_idx = start_idx + self.earnings_page_size
-        page_records = self.earnings_records_filtered[start_idx:end_idx]
-        self.earnings_table.setRowCount(len(page_records))
-
-        # Pewarnaan status sesuai window_config.json hanya untuk tabel earnings
-        basedir = Path(__file__).parent.parent.parent
+        page_size = self.earnings_page_size
+        offset = (self.earnings_current_page - 1) * page_size
+        total_rows = db_manager.count_earnings_by_team_id_filtered(
+            team_id, search_text, batch_filter
+        )
+        self._earnings_total_pages = max(1, (total_rows + page_size - 1) // page_size)
+        # Ambil semua batch dari hasil filter (tanpa limit/offset)
+        all_records = db_manager.get_earnings_by_team_id_paged(
+            team_id, search_text, None, sort_field, sort_order, 0, 10000
+        )
+        batch_set = set()
+        for rec in all_records:
+            batch = rec[6]
+            if batch:
+                batch_set.add(batch)
+        self._refresh_earnings_batch_filter_combo(batch_set)
+        # Query ulang dengan batch filter aktif
+        batch_filter = self._earnings_batch_filter_value
+        records = db_manager.get_earnings_by_team_id_paged(
+            team_id, search_text, batch_filter, sort_field, sort_order, offset, page_size
+        )
+        summary = db_manager.earnings_summary_by_team_id_filtered(
+            team_id, search_text, batch_filter
+        )
+        self.earnings_table.setRowCount(len(records))
         window_config_path = basedir / "configs" / "window_config.json"
-        config_manager = ConfigManager(str(window_config_path))
-        status_options = config_manager.get("status_options")
-
-        for row_idx, record in enumerate(page_records):
-            file_name, file_date, amount_display, note, status, client_name, batch, file_path = record
+        config_manager2 = ConfigManager(str(window_config_path))
+        status_options = config_manager2.get("status_options")
+        currency_label = "IDR"
+        for row_idx, record in enumerate(records):
+            file_name, file_date, amount, note, status, client_name, batch, file_path = record
             formatted_date = format_date_indonesian(file_date)
+            try:
+                amount_int = int(float(amount)) if amount is not None else 0
+                amount_str = f"{amount_int:,}".replace(",", ".")
+            except Exception:
+                amount_str = str(amount)
+            amount_display = f"{currency_label} {amount_str}" if currency_label else str(amount_str)
             item_file_name = QTableWidgetItem(str(file_name))
             item_date = QTableWidgetItem(formatted_date)
             item_amount = QTableWidgetItem(str(amount_display))
@@ -991,26 +816,11 @@ class TeamsProfileDialog(QDialog):
             self.earnings_table.setItem(row_idx, 4, item_status)
             self.earnings_table.setItem(row_idx, 5, item_client)
             self.earnings_table.setItem(row_idx, 6, item_batch)
-        # Summary calculation for ALL filtered and sorted records (not just current page)
-        total_amount = 0
-        total_pending = 0
-        total_paid = 0
-        currency_label = ""
-        for record in self.earnings_records_filtered:
-            amount_display = record[2]
-            status = record[4]
-            if not currency_label and " " in str(amount_display):
-                currency_label = str(amount_display).split(" ")[0]
-            try:
-                amt_str = str(amount_display).split(" ", 1)[-1].replace(".", "")
-                amt = int(amt_str)
-                total_amount += amt
-                if str(status).lower() == "pending":
-                    total_pending += amt
-                elif str(status).lower() == "paid":
-                    total_paid += amt
-            except Exception:
-                pass
+        self.earnings_page_input.blockSignals(True)
+        self.earnings_page_input.setMaximum(self._earnings_total_pages)
+        self.earnings_page_input.setValue(self.earnings_current_page)
+        self.earnings_page_input.blockSignals(False)
+        self.earnings_page_label.setText(f"Page {self.earnings_current_page} / {self._earnings_total_pages}")
         def format_thousands(val):
             try:
                 val = int(val)
@@ -1024,7 +834,7 @@ class TeamsProfileDialog(QDialog):
                 widget.deleteLater()
         full_name = ""
         if username:
-            for team in self._teams_data:
+            for team in getattr(self, "_teams_data", []):
                 if team["username"] == username:
                     full_name = team.get("full_name", "")
                     break
@@ -1036,7 +846,7 @@ class TeamsProfileDialog(QDialog):
         pending_icon.setPixmap(qta.icon("fa6s.clock", color="#ffb300").pixmap(16, 16))
         pending_label = QLabel("Pending:")
         pending_label.setStyleSheet("color:#ffb300; font-size:12px; font-weight:bold;")
-        pending_amount = QLabel(f"{currency_label} {format_thousands(total_pending)}" if currency_label else format_thousands(total_pending))
+        pending_amount = QLabel(f"{currency_label} {format_thousands(summary['total_pending'])}" if currency_label else format_thousands(summary['total_pending']))
         pending_amount.setStyleSheet("font-size:12px; font-weight:bold;")
         pending_row.setSpacing(4)
         pending_row.addWidget(pending_icon)
@@ -1051,7 +861,7 @@ class TeamsProfileDialog(QDialog):
         paid_icon.setPixmap(qta.icon("fa6s.money-bill-wave", color="#009688").pixmap(16, 16))
         paid_label = QLabel("Paid:")
         paid_label.setStyleSheet("color:#009688; font-size:12px; font-weight:bold;")
-        paid_amount = QLabel(f"{currency_label} {format_thousands(total_paid)}" if currency_label else format_thousands(total_paid))
+        paid_amount = QLabel(f"{currency_label} {format_thousands(summary['total_paid'])}" if currency_label else format_thousands(summary['total_paid']))
         paid_amount.setStyleSheet("font-size:12px; font-weight:bold;")
         paid_row.setSpacing(4)
         paid_row.addWidget(paid_icon)
@@ -1066,7 +876,7 @@ class TeamsProfileDialog(QDialog):
         estimate_icon.setPixmap(qta.icon("fa6s.chart-column", color="#1976d2").pixmap(16, 16))
         estimate_label = QLabel("Total Estimate:")
         estimate_label.setStyleSheet("color:#1976d2; font-size:12px; font-weight:bold;")
-        estimate_amount = QLabel(f"{currency_label} {format_thousands(total_amount)}" if currency_label else format_thousands(total_amount))
+        estimate_amount = QLabel(f"{currency_label} {format_thousands(summary['total_amount'])}" if currency_label else format_thousands(summary['total_amount']))
         estimate_amount.setStyleSheet("font-size:12px; font-weight:bold;")
         estimate_row.setSpacing(4)
         estimate_row.addWidget(estimate_icon)
@@ -1076,7 +886,7 @@ class TeamsProfileDialog(QDialog):
         estimate_widget = QWidget()
         estimate_widget.setLayout(estimate_row)
         self.earnings_summary_layout.addWidget(estimate_widget)
-        records_label = QLabel(f"Total Earnings Records: {len(self.earnings_records_filtered)}")
+        records_label = QLabel(f"Total Earnings Records: {total_rows}")
         records_label.setStyleSheet("color:#666; font-size:11px; margin-top:2px;")
         self.earnings_summary_layout.addWidget(records_label)
 
