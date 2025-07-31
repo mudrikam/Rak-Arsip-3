@@ -215,6 +215,11 @@ class CentralWidget(QWidget):
             name_field_widget = parent.main_action_dock._name_field_widget
             name_field_widget.project_created.connect(self._on_project_created)
 
+        self._empty_table_timer = QTimer(self)
+        self._empty_table_timer.setSingleShot(True)
+        self._empty_table_timer.setInterval(1000)
+        self._empty_table_timer.timeout.connect(self._on_empty_table_timeout)
+
     def _on_project_created(self):
         # Ambil data project terakhir dari database
         self.db_manager.connect()
@@ -612,6 +617,17 @@ class CentralWidget(QWidget):
         self.update_stats_label()
         if self._selected_row_index is not None and 0 <= self._selected_row_index < self.table.rowCount():
             self.table.selectRow(self._selected_row_index)
+        # Trigger empty table timer if table is empty
+        if self.table.rowCount() == 0:
+            if not self._empty_table_timer.isActive():
+                self._empty_table_timer.start()
+        else:
+            if self._empty_table_timer.isActive():
+                self._empty_table_timer.stop()
+
+    def _on_empty_table_timeout(self):
+        if self.table.rowCount() == 0:
+            self.refresh_table()
 
     def goto_page(self, value):
         total_rows = self.found_records
