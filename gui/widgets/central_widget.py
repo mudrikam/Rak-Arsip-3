@@ -181,7 +181,12 @@ class CentralWidget(QWidget):
         self.search_edit.textChanged.connect(self._on_search_text_changed)
         self.prev_btn.clicked.connect(self.prev_page)
         self.next_btn.clicked.connect(self.next_page)
-        self.page_input.valueChanged.connect(self.goto_page)
+        self._page_input_timer = QTimer(self)
+        self._page_input_timer.setSingleShot(True)
+        self._page_input_timer.setInterval(1000)
+        self.page_input.valueChanged.connect(self._on_page_input_value_changed)
+        self._pending_page_value = self.page_input.value()
+        self._page_input_timer.timeout.connect(self._trigger_goto_page)
         self.table.itemSelectionChanged.connect(self.on_row_selected)
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self.show_context_menu)
@@ -657,6 +662,16 @@ class CentralWidget(QWidget):
         if 1 <= value <= total_pages:
             self.current_page = value
             self.load_data_from_database(keep_search=True)
+
+    def _on_page_input_value_changed(self, value):
+        self._pending_page_value = value
+        self._page_input_timer.stop()
+        self._page_input_timer.start()
+
+    def _trigger_goto_page(self):
+        value = getattr(self, "_pending_page_value", None)
+        if value is not None:
+            self.goto_page(value)
 
     def update_stats_label(self):
         last_date = "-"
