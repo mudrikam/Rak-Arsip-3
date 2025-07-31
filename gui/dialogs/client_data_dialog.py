@@ -675,27 +675,25 @@ class ClientDataDialog(QDialog):
         db_config_path = basedir / "configs" / "db_config.json"
         config_manager = ConfigManager(str(db_config_path))
         db_manager = DatabaseManager(config_manager, config_manager)
-        files = db_manager.get_files_by_client_id(client_id)
-        for f in files:
-            batch_number = db_manager.get_batch_number_for_file_client(f.get("file_id", None) or f.get("id", None), client_id)
-            f["batch"] = batch_number
-        self.files_records_all = files
-        self.files_current_page = 1
         self._selected_client_id = client_id
+        self.files_current_page = 1
+        self.files_sort_field = self.files_sort_combo.currentText()
+        self.files_sort_order = self.files_sort_order_combo.currentText()
+        self.files_search_text = self.files_search_edit.text().strip()
+        self._batch_filter_value = None
         self._refresh_batch_filter_combo()
-        self._update_files_table()
+        self._fetch_files_page_and_summary()
 
     def _refresh_batch_filter_combo(self):
+        basedir = Path(__file__).parent.parent.parent
+        db_config_path = basedir / "configs" / "db_config.json"
+        config_manager = ConfigManager(str(db_config_path))
+        db_manager = DatabaseManager(config_manager, config_manager)
+        batch_numbers = db_manager.get_batch_numbers_by_client(self._selected_client_id) if self._selected_client_id else []
         self.files_batch_filter_combo.blockSignals(True)
         self.files_batch_filter_combo.clear()
         self.files_batch_filter_combo.addItem("All Batches")
-        batch_set = set()
-        for f in self.files_records_all:
-            batch = f.get("batch", "")
-            if batch:
-                batch_set.add(batch)
-        batch_list = sorted(batch_set)
-        for batch in batch_list:
+        for batch in batch_numbers:
             self.files_batch_filter_combo.addItem(batch)
         self.files_batch_filter_combo.setCurrentIndex(0)
         self._batch_filter_value = None
@@ -707,116 +705,84 @@ class ClientDataDialog(QDialog):
         else:
             self._batch_filter_value = self.files_batch_filter_combo.currentText()
         self.files_current_page = 1
-        self._update_files_table()
+        self._fetch_files_page_and_summary()
 
     def _on_files_search_changed(self):
         self.files_current_page = 1
-        self._update_files_table()
+        self._fetch_files_page_and_summary()
 
     def _on_files_sort_changed(self):
         self.files_current_page = 1
         self.files_sort_field = self.files_sort_combo.currentText()
         self.files_sort_order = self.files_sort_order_combo.currentText()
-        self._update_files_table()
+        self._fetch_files_page_and_summary()
 
     def _files_prev_page(self):
         if self.files_current_page > 1:
             self.files_current_page -= 1
-            self._update_files_table()
+            self._fetch_files_page_and_summary()
 
     def _files_next_page(self):
-        total_rows = len(self.files_records_filtered)
-        total_pages = max(1, (total_rows + self.files_page_size - 1) // self.files_page_size)
-        if self.files_current_page < total_pages:
+        if self.files_current_page < self._files_total_pages:
             self.files_current_page += 1
-            self._update_files_table()
+            self._fetch_files_page_and_summary()
 
     def _files_goto_page(self, value):
-        total_rows = len(self.files_records_filtered)
-        total_pages = max(1, (total_rows + self.files_page_size - 1) // self.files_page_size)
-        if 1 <= value <= total_pages:
+        if 1 <= value <= self._files_total_pages:
             self.files_current_page = value
-            self._update_files_table()
+            self._fetch_files_page_and_summary()
 
     def _get_global_file_index(self, row_in_page):
-        start_idx = (self.files_current_page - 1) * self.files_page_size
-        return start_idx + row_in_page
+        return (self.files_current_page - 1) * self.files_page_size + row_in_page
+
+    def _fetch_files_page_and_summary(self):
+        basedir = Path(__file__).parent.parent.parent
+        db_config_path = basedir / "configs" / "db_config.json"
+        config_manager = ConfigManager(str(db_config_path))
+        db_manager = DatabaseManager(config_manager, config_manager)
+        client_id = self._selected_client_id
+        search_text = self.files_search_edit.text().strip()
+        batch_filter = self._batch_filter_value
+        sort_field = self.files_sort_combo.currentText()
+        sort_order = self.files_sort_order_combo.currentText()
+        offset = (self.files_current_page - 1) * self.files_page_size
+        limit = self.files_page_size
+        self.files_records_page = db_manager.get_files_by_client_id_paged(
+            client_id=client_id,
+            search_text=search_text,
+            batch_filter=batch_filter,
+            sort_field=sort_field,
+            sort_order=sort_order,
+            offset=offset,
+            limit=limit
+        )
+        self._files_total_rows = db_manager.count_files_by_client_id_filtered(
+            client_id=client_id,
+            search_text=search_text,
+            batch_filter=batch_filter
+        )
+        total_price, currency = db_manager.sum_price_by_client_id_filtered(
+            client_id=client_id,
+            search_text=search_text,
+            batch_filter=batch_filter
+        )
+        self._files_total_price = total_price
+        self._files_total_currency = currency
+        self._files_total_pages = max(1, (self._files_total_rows + self.files_page_size - 1) // self.files_page_size)
+        self._update_files_table()
 
     def _update_files_table(self):
-        search_text = self.files_search_edit.text().strip().lower()
-        batch_filter = self._batch_filter_value
-        if search_text or batch_filter:
-            self.files_records_filtered = []
-            for f in self.files_records_all:
-                match_search = (
-                    not search_text or
-                    search_text in str(f.get("name", "")).lower() or
-                    search_text in str(f.get("date", "")).lower() or
-                    search_text in str(f.get("price", "")).lower() or
-                    search_text in str(f.get("status", "")).lower() or
-                    search_text in str(f.get("note", "")).lower() or
-                    search_text in str(f.get("batch", "")).lower()
-                )
-                match_batch = (not batch_filter or f.get("batch", "") == batch_filter)
-                if match_search and match_batch:
-                    self.files_records_filtered.append(f)
-        else:
-            self.files_records_filtered = list(self.files_records_all)
-        sort_field = self.files_sort_field
-        sort_order = self.files_sort_order
-        sort_map = {
-            "File Name": "name",
-            "Date": "date",
-            "Price": "price",
-            "Status": "status",
-            "Note": "note",
-            "Batch": "batch"
-        }
-        key = sort_map.get(sort_field, "name")
-        reverse = sort_order == "Descending"
-        try:
-            self.files_records_filtered.sort(key=lambda x: (float(x[key]) if key == "price" and x[key] not in ["", None] else str(x[key]).lower()), reverse=reverse)
-        except Exception:
-            self.files_records_filtered.sort(key=lambda x: str(x[key]).lower(), reverse=reverse)
-        total_rows = len(self.files_records_filtered)
-        total_pages = max(1, (total_rows + self.files_page_size - 1) // self.files_page_size)
-        self.files_page_input.blockSignals(True)
-        self.files_page_input.setMaximum(total_pages)
-        self.files_page_input.setValue(self.files_current_page)
-        self.files_page_input.blockSignals(False)
-        self.files_page_label.setText(f"Page {self.files_current_page} / {total_pages}")
-        start_idx = (self.files_current_page - 1) * self.files_page_size
-        end_idx = start_idx + self.files_page_size
-        page_records = self.files_records_filtered[start_idx:end_idx]
-        self.files_table.setRowCount(len(page_records))
-
-        # Ambil status_options dari window_config.json untuk pewarnaan status
         basedir = Path(__file__).parent.parent.parent
         window_config_path = basedir / "configs" / "window_config.json"
         config_manager = ConfigManager(str(window_config_path))
         status_options = config_manager.get("status_options")
-
-        # Calculate total_price and status_counts globally for all filtered records
-        total_price = 0
-        status_counts = {}
-        currency = ""
-        for file in self.files_records_filtered:
-            price = file.get("price", "")
-            if not currency:
-                currency = file.get("currency", "")
-            try:
-                total_price += float(price)
-            except Exception:
-                pass
-            status = file.get("status", "")
-            if status:
-                status_counts[status] = status_counts.get(status, 0) + 1
-
+        page_records = self.files_records_page if hasattr(self, "files_records_page") else []
+        self.files_table.setRowCount(len(page_records))
+        currency = self._files_total_currency if hasattr(self, "_files_total_currency") else ""
         for row_idx, file in enumerate(page_records):
             file_name = file.get("name", "")
             file_date = file.get("date", "")
             price = file.get("price", "")
-            currency = file.get("currency", "") if not currency else currency
             note = file.get("note", "")
             status = file.get("status", "")
             batch = file.get("batch", "")
@@ -832,7 +798,6 @@ class ClientDataDialog(QDialog):
             self.files_table.setItem(row_idx, 0, QTableWidgetItem(str(file_name)))
             self.files_table.setItem(row_idx, 1, QTableWidgetItem(str(file_date)))
             self.files_table.setItem(row_idx, 2, QTableWidgetItem(price_display))
-            # Status coloring sesuai window_config.json, tanpa bold
             status_item = QTableWidgetItem(str(status))
             if status in status_options:
                 color = status_options[status].get("color", "")
@@ -844,7 +809,11 @@ class ClientDataDialog(QDialog):
             self.files_table.setItem(row_idx, 3, status_item)
             self.files_table.setItem(row_idx, 4, QTableWidgetItem(str(note)))
             self.files_table.setItem(row_idx, 5, QTableWidgetItem(str(batch)))
-
+        self.files_page_input.blockSignals(True)
+        self.files_page_input.setMaximum(self._files_total_pages)
+        self.files_page_input.setValue(self.files_current_page)
+        self.files_page_input.blockSignals(False)
+        self.files_page_label.setText(f"Page {self.files_current_page} / {self._files_total_pages}")
         while self.files_summary_layout.count():
             item = self.files_summary_layout.takeAt(0)
             widget = item.widget()
@@ -855,10 +824,11 @@ class ClientDataDialog(QDialog):
             client_label = QLabel(f"Client: {client_name}")
             client_label.setStyleSheet("font-size:13px; font-weight:bold; margin-bottom:2px;")
             self.files_summary_layout.addWidget(client_label)
-        summary_label = QLabel(f"Total Files: {total_rows}")
+        summary_label = QLabel(f"Total Files: {self._files_total_rows}")
         summary_label.setStyleSheet("font-size:12px; font-weight:bold; margin-bottom:2px;")
         self.files_summary_layout.addWidget(summary_label)
         try:
+            total_price = self._files_total_price if hasattr(self, "_files_total_price") else 0
             total_price_str = f"{int(total_price):,}".replace(",", ".") if float(total_price).is_integer() else f"{total_price:,.2f}".replace(",", ".")
         except Exception:
             total_price_str = str(total_price)
@@ -866,10 +836,7 @@ class ClientDataDialog(QDialog):
         price_label = QLabel(f"Total Price: {total_price_display}")
         price_label.setStyleSheet("font-size:12px; font-weight:bold; margin-bottom:2px;")
         self.files_summary_layout.addWidget(price_label)
-        for status, count in status_counts.items():
-            status_label = QLabel(f"{status}: {count}")
-            status_label.setStyleSheet("font-size:12px; margin-bottom:2px;")
-            self.files_summary_layout.addWidget(status_label)
+        # Status counts for all filtered (global) - need extra query if required, for now skip for performance
 
     def _show_files_context_menu(self, pos):
         index = self.files_table.indexAt(pos)
@@ -936,10 +903,9 @@ class ClientDataDialog(QDialog):
         row_in_page = self.files_table.currentRow()
         if row_in_page < 0:
             return
-        global_idx = self._get_global_file_index(row_in_page)
-        if global_idx < 0 or global_idx >= len(self.files_records_filtered):
+        record = self.files_records_page[row_in_page] if hasattr(self, "files_records_page") and row_in_page < len(self.files_records_page) else None
+        if not record:
             return
-        record = self.files_records_filtered[global_idx]
         file_name = record.get("name", "")
         QApplication.clipboard().setText(str(file_name))
         QToolTip.showText(QCursor.pos(), f"{file_name}\nCopied to clipboard")
@@ -948,10 +914,9 @@ class ClientDataDialog(QDialog):
         row_in_page = self.files_table.currentRow()
         if row_in_page < 0:
             return
-        global_idx = self._get_global_file_index(row_in_page)
-        if global_idx < 0 or global_idx >= len(self.files_records_filtered):
+        record = self.files_records_page[row_in_page] if hasattr(self, "files_records_page") and row_in_page < len(self.files_records_page) else None
+        if not record:
             return
-        record = self.files_records_filtered[global_idx]
         file_id = record.get("file_id", None) or record.get("id", None)
         file_path = ""
         basedir = Path(__file__).parent.parent.parent
@@ -973,10 +938,9 @@ class ClientDataDialog(QDialog):
         row_in_page = self.files_table.currentRow()
         if row_in_page < 0:
             return
-        global_idx = self._get_global_file_index(row_in_page)
-        if global_idx < 0 or global_idx >= len(self.files_records_filtered):
+        record = self.files_records_page[row_in_page] if hasattr(self, "files_records_page") and row_in_page < len(self.files_records_page) else None
+        if not record:
             return
-        record = self.files_records_filtered[global_idx]
         file_id = record.get("file_id", None) or record.get("id", None)
         file_path = ""
         basedir = Path(__file__).parent.parent.parent
@@ -1007,10 +971,9 @@ class ClientDataDialog(QDialog):
         QToolTip.showText(QCursor.pos(), f"Opened: {file_path}")
 
     def _on_files_row_double_clicked(self, row_in_page, col):
-        global_idx = self._get_global_file_index(row_in_page)
-        if global_idx < 0 or global_idx >= len(self.files_records_filtered):
+        record = self.files_records_page[row_in_page] if hasattr(self, "files_records_page") and row_in_page < len(self.files_records_page) else None
+        if not record:
             return
-        record = self.files_records_filtered[global_idx]
         file_name = record.get("name", "")
         QApplication.clipboard().setText(str(file_name))
         show_statusbar_message(self, f"Copied: {file_name}")
@@ -1141,19 +1104,6 @@ class ClientDataDialog(QDialog):
             except Exception as e:
                 QMessageBox.warning(self, "Error", str(e))
                 return
-            self._load_clients_data()
-            self._selected_client_index = None
-            self.save_button.setEnabled(False)
-            self.files_table.setRowCount(0)
-            while self.files_summary_layout.count():
-                item = self.files_summary_layout.takeAt(0)
-                widget = item.widget()
-                if widget:
-                    widget.deleteLater()
-            self.files_records_all = []
-            self.files_current_page = 1
-            self._update_files_table()
-            QMessageBox.information(self, "Success", "Client data updated successfully.")
             self._load_clients_data()
             self._selected_client_index = None
             self.save_button.setEnabled(False)

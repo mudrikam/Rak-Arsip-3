@@ -964,10 +964,34 @@ class DatabaseManager(QObject):
         self.create_temp_file()
         self.close()
 
-    def get_files_by_client_id(self, client_id):
+
+    def get_files_by_client_id_paged(self, client_id, search_text=None, batch_filter=None, sort_field="date", sort_order="desc", offset=0, limit=20):
         self.connect(write=False)
         cursor = self.connection.cursor()
-        cursor.execute("""
+        where_clauses = ["fcp.client_id = ?"]
+        params = [client_id]
+        if search_text:
+            search_pattern = f"%{search_text}%"
+            where_clauses.append(
+                "(f.name LIKE ? OR f.date LIKE ? OR ip.price LIKE ? OR s.name LIKE ? OR ip.note LIKE ?)"
+            )
+            params.extend([search_pattern] * 5)
+        if batch_filter:
+            where_clauses.append("fcb.batch_number = ?")
+            params.append(batch_filter)
+        join_batch = "LEFT JOIN file_client_batch fcb ON fcb.file_id = f.id AND fcb.client_id = fcp.client_id"
+        where_sql = "WHERE " + " AND ".join(where_clauses)
+        sort_map = {
+            "File Name": "f.name",
+            "Date": "f.date",
+            "Price": "ip.price",
+            "Status": "s.name",
+            "Note": "ip.note",
+            "Batch": "fcb.batch_number"
+        }
+        sort_sql = sort_map.get(sort_field, "f.date")
+        order_sql = "DESC" if sort_order.lower() == "descending" or sort_order.lower() == "desc" else "ASC"
+        sql = f"""
             SELECT
                 f.id as file_id,
                 f.name,
@@ -975,14 +999,19 @@ class DatabaseManager(QObject):
                 ip.price,
                 ip.currency,
                 ip.note,
-                s.name as status
+                s.name as status,
+                fcb.batch_number as batch
             FROM file_client_price fcp
             JOIN files f ON fcp.file_id = f.id
             JOIN item_price ip ON fcp.item_price_id = ip.id
             LEFT JOIN statuses s ON f.status_id = s.id
-            WHERE fcp.client_id = ?
-            ORDER BY f.date DESC
-        """, (client_id,))
+            {join_batch}
+            {where_sql}
+            ORDER BY {sort_sql} {order_sql}, f.date DESC
+            LIMIT ? OFFSET ?
+        """
+        params.extend([limit, offset])
+        cursor.execute(sql, params)
         files = []
         for row in cursor.fetchall():
             files.append({
@@ -992,10 +1021,74 @@ class DatabaseManager(QObject):
                 "price": row["price"],
                 "currency": row["currency"],
                 "note": row["note"],
-                "status": row["status"]
+                "status": row["status"],
+                "batch": row["batch"]
             })
         self.close()
         return files
+
+    def count_files_by_client_id_filtered(self, client_id, search_text=None, batch_filter=None):
+        self.connect(write=False)
+        cursor = self.connection.cursor()
+        where_clauses = ["fcp.client_id = ?"]
+        params = [client_id]
+        if search_text:
+            search_pattern = f"%{search_text}%"
+            where_clauses.append(
+                "(f.name LIKE ? OR f.date LIKE ? OR ip.price LIKE ? OR s.name LIKE ? OR ip.note LIKE ?)"
+            )
+            params.extend([search_pattern] * 5)
+        if batch_filter:
+            where_clauses.append("fcb.batch_number = ?")
+            params.append(batch_filter)
+        join_batch = "LEFT JOIN file_client_batch fcb ON fcb.file_id = f.id AND fcb.client_id = fcp.client_id"
+        where_sql = "WHERE " + " AND ".join(where_clauses)
+        sql = f"""
+            SELECT COUNT(*)
+            FROM file_client_price fcp
+            JOIN files f ON fcp.file_id = f.id
+            JOIN item_price ip ON fcp.item_price_id = ip.id
+            LEFT JOIN statuses s ON f.status_id = s.id
+            {join_batch}
+            {where_sql}
+        """
+        cursor.execute(sql, params)
+        count = cursor.fetchone()[0]
+        self.close()
+        return count
+
+    def sum_price_by_client_id_filtered(self, client_id, search_text=None, batch_filter=None):
+        self.connect(write=False)
+        cursor = self.connection.cursor()
+        where_clauses = ["fcp.client_id = ?"]
+        params = [client_id]
+        if search_text:
+            search_pattern = f"%{search_text}%"
+            where_clauses.append(
+                "(f.name LIKE ? OR f.date LIKE ? OR ip.price LIKE ? OR s.name LIKE ? OR ip.note LIKE ?)"
+            )
+            params.extend([search_pattern] * 5)
+        if batch_filter:
+            where_clauses.append("fcb.batch_number = ?")
+            params.append(batch_filter)
+        join_batch = "LEFT JOIN file_client_batch fcb ON fcb.file_id = f.id AND fcb.client_id = fcp.client_id"
+        where_sql = "WHERE " + " AND ".join(where_clauses)
+        sql = f"""
+            SELECT SUM(CASE WHEN ip.price IS NOT NULL AND ip.price != '' THEN CAST(ip.price AS FLOAT) ELSE 0 END) as total_price,
+                   MAX(ip.currency) as currency
+            FROM file_client_price fcp
+            JOIN files f ON fcp.file_id = f.id
+            JOIN item_price ip ON fcp.item_price_id = ip.id
+            LEFT JOIN statuses s ON f.status_id = s.id
+            {join_batch}
+            {where_sql}
+        """
+        cursor.execute(sql, params)
+        row = cursor.fetchone()
+        total_price = row["total_price"] if row and row["total_price"] is not None else 0
+        currency = row["currency"] if row and row["currency"] else ""
+        self.close()
+        return total_price, currency
 
     def get_item_price_id(self, file_id, cursor=None):
         if cursor is None:
