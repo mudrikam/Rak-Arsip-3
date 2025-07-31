@@ -30,6 +30,7 @@ class DatabaseManager(QObject):
         self.setup_auto_backup_timer()
         self._wal_shm_last_clear = 0
         self._wal_shm_debounce_seconds = 5
+        self._wal_shm_handled = False
 
     def ensure_database_exists(self):
         db_dir = os.path.dirname(self.db_path)
@@ -78,21 +79,6 @@ class DatabaseManager(QObject):
 
     def check_temp_files(self):
         try:
-            wal_path = self.db_path + "-wal"
-            shm_path = self.db_path + "-shm"
-            wal_or_shm_exists = os.path.exists(wal_path) or os.path.exists(shm_path)
-            now = time.time()
-            if wal_or_shm_exists:
-                self._wal_shm_last_clear = 0
-                self._wal_shm_handled = False
-            else:
-                if self._wal_shm_last_clear == 0:
-                    self._wal_shm_last_clear = now
-                # Only emit if clear for debounce period and not handled yet
-                if not getattr(self, "_wal_shm_handled", False):
-                    if now - self._wal_shm_last_clear > self._wal_shm_debounce_seconds:
-                        self.data_changed.emit()
-                        self._wal_shm_handled = True
             if not os.path.exists(self.temp_dir):
                 return
             for temp_file in os.listdir(self.temp_dir):
