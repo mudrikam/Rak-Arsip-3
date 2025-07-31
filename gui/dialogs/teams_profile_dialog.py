@@ -360,6 +360,21 @@ class TeamsProfileDialog(QDialog):
             "Note": 3
         }
         reverse = sort_order == "Descending"
+        def format_hours_human_readable(hours):
+            try:
+                total_minutes = int(round(float(hours) * 60))
+                jam = total_minutes // 60
+                menit = total_minutes % 60
+                if jam > 0 and menit > 0:
+                    return f"{jam} jam {menit} menit"
+                elif jam > 0:
+                    return f"{jam} jam"
+                elif menit > 0:
+                    return f"{menit} menit"
+                else:
+                    return "0 menit"
+            except Exception:
+                return ""
         attendance_with_hours = []
         for r in self.attendance_records_filtered:
             date, check_in, check_out, note = r
@@ -369,7 +384,8 @@ class TeamsProfileDialog(QDialog):
                     dt_in = datetime.strptime(check_in, "%Y-%m-%d %H:%M:%S")
                     dt_out = datetime.strptime(check_out, "%Y-%m-%d %H:%M:%S")
                     delta = dt_out - dt_in
-                    hours = round(delta.total_seconds() / 3600, 2)
+                    hours_float = delta.total_seconds() / 3600
+                    hours = format_hours_human_readable(hours_float)
                 except Exception:
                     hours = ""
             attendance_with_hours.append((date, check_in, check_out, note, hours))
@@ -378,8 +394,26 @@ class TeamsProfileDialog(QDialog):
             key_idx = sort_map[sort_field]
             try:
                 if sort_field == "Hours":
+                    def hours_to_minutes(hstr):
+                        try:
+                            if not hstr:
+                                return 0
+                            if "jam" in hstr or "menit" in hstr:
+                                parts = hstr.split()
+                                jam = 0
+                                menit = 0
+                                if "jam" in parts:
+                                    jam_idx = parts.index("jam")
+                                    jam = int(parts[jam_idx - 1])
+                                if "menit" in parts:
+                                    menit_idx = parts.index("menit")
+                                    menit = int(parts[menit_idx - 1])
+                                return jam * 60 + menit
+                            return int(float(hstr) * 60)
+                        except Exception:
+                            return 0
                     self.attendance_records_filtered.sort(
-                        key=lambda x: (x[key_idx] if isinstance(x[key_idx], (int, float)) else float(x[key_idx]) if str(x[key_idx]).replace('.', '', 1).isdigit() else 0),
+                        key=lambda x: hours_to_minutes(x[key_idx]),
                         reverse=reverse
                     )
                 else:
@@ -472,7 +506,18 @@ class TeamsProfileDialog(QDialog):
                     pass
             elif check_out:
                 last_checkout = format_date_indonesian(check_out, with_time=True)
-        total_hours = round(total_seconds / 3600, 2)
+        def format_total_hours_human_readable(total_seconds):
+            jam = total_seconds // 3600
+            menit = (total_seconds % 3600) // 60
+            if jam > 0 and menit > 0:
+                return f"{jam} jam {menit} menit"
+            elif jam > 0:
+                return f"{jam} jam"
+            elif menit > 0:
+                return f"{menit} menit"
+            else:
+                return "0 menit"
+        total_hours = format_total_hours_human_readable(total_seconds)
         if full_name is None and self._selected_team_index is not None and 0 <= self._selected_team_index < len(self._teams_data):
             full_name = self._teams_data[self._selected_team_index].get("full_name", "")
         # Attendance summary styling (follow earnings style)
