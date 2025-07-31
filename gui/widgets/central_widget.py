@@ -208,17 +208,17 @@ class CentralWidget(QWidget):
         self.search_edit.returnPressed.connect(self.apply_search)
         self.search_edit.textChanged.connect(self._on_search_text_changed)
 
+        self._empty_table_timer = QTimer(self)
+        self._empty_table_timer.setSingleShot(True)
+        self._empty_table_timer.setInterval(1000)
+        self._empty_table_timer.timeout.connect(self._on_empty_table_timeout)
+
         self.load_data_from_database()
 
         # Connect NameFieldWidget.project_created to refresh_table
         if hasattr(parent, "main_action_dock") and hasattr(parent.main_action_dock, "_name_field_widget"):
             name_field_widget = parent.main_action_dock._name_field_widget
             name_field_widget.project_created.connect(self._on_project_created)
-
-        self._empty_table_timer = QTimer(self)
-        self._empty_table_timer.setSingleShot(True)
-        self._empty_table_timer.setInterval(1000)
-        self._empty_table_timer.timeout.connect(self._on_empty_table_timeout)
 
     def _on_project_created(self):
         # Ambil data project terakhir dari database
