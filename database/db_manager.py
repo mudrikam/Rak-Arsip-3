@@ -29,7 +29,7 @@ class DatabaseManager(QObject):
             self.auto_backup_database_daily()
         self.setup_auto_backup_timer()
         self._wal_shm_last_clear = 0
-        self._wal_shm_debounce_seconds = 2
+        self._wal_shm_debounce_seconds = 5
 
     def ensure_database_exists(self):
         db_dir = os.path.dirname(self.db_path)
