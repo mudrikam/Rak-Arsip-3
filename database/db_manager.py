@@ -12,7 +12,7 @@ class DatabaseManager(QObject):
     data_changed = Signal()
     status_message = Signal(str, int)
     
-    def __init__(self, config_manager, window_config_manager, parent_widget=None):
+    def __init__(self, config_manager, window_config_manager, parent_widget=None, first_launch=False):
         super().__init__()
         self.config_manager = config_manager
         self.window_config_manager = window_config_manager
@@ -25,7 +25,8 @@ class DatabaseManager(QObject):
         self._parent_widget = parent_widget
         self.ensure_database_exists()
         self.setup_file_watcher()
-        self.auto_backup_database_daily()
+        if first_launch:
+            self.auto_backup_database_daily()
         self.setup_auto_backup_timer()
 
     def ensure_database_exists(self):

@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (
     QFormLayout, QLineEdit, QPushButton, QMessageBox, QHBoxLayout, QSizePolicy, QHeaderView, QComboBox, QTextEdit, QSpinBox, QSpacerItem, QApplication, QToolTip, QMenu, QMainWindow, QInputDialog, QDialogButtonBox
 )
 from PySide6.QtCore import Qt, QPoint
-from PySide6.QtGui import QCursor, QKeySequence, QShortcut, QAction
+from PySide6.QtGui import QCursor, QKeySequence, QShortcut, QAction, QColor
 from database.db_manager import DatabaseManager
 from manager.config_manager import ConfigManager
 from pathlib import Path
@@ -790,6 +790,12 @@ class ClientDataDialog(QDialog):
         page_records = self.files_records_filtered[start_idx:end_idx]
         self.files_table.setRowCount(len(page_records))
 
+        # Ambil status_options dari window_config.json untuk pewarnaan status
+        basedir = Path(__file__).parent.parent.parent
+        window_config_path = basedir / "configs" / "window_config.json"
+        config_manager = ConfigManager(str(window_config_path))
+        status_options = config_manager.get("status_options")
+
         # Calculate total_price and status_counts globally for all filtered records
         total_price = 0
         status_counts = {}
@@ -826,7 +832,16 @@ class ClientDataDialog(QDialog):
             self.files_table.setItem(row_idx, 0, QTableWidgetItem(str(file_name)))
             self.files_table.setItem(row_idx, 1, QTableWidgetItem(str(file_date)))
             self.files_table.setItem(row_idx, 2, QTableWidgetItem(price_display))
-            self.files_table.setItem(row_idx, 3, QTableWidgetItem(str(status)))
+            # Status coloring sesuai window_config.json, tanpa bold
+            status_item = QTableWidgetItem(str(status))
+            if status in status_options:
+                color = status_options[status].get("color", "")
+                if color:
+                    status_item.setForeground(QColor(color))
+                font = status_item.font()
+                font.setBold(False)
+                status_item.setFont(font)
+            self.files_table.setItem(row_idx, 3, status_item)
             self.files_table.setItem(row_idx, 4, QTableWidgetItem(str(note)))
             self.files_table.setItem(row_idx, 5, QTableWidgetItem(str(batch)))
 

@@ -26,7 +26,7 @@ class MainWindow(QMainWindow):
         db_config_path = Path(basedir) / "configs" / "db_config.json"
         self.db_config_manager = ConfigManager(str(db_config_path))
 
-        self.db_manager = DatabaseManager(self.db_config_manager, self.config_manager, parent_widget=self)
+        self.db_manager = DatabaseManager(self.db_config_manager, self.config_manager, parent_widget=self, first_launch=True)
 
         self.menu_bar = MainMenu(self.config_manager, self)
         self.setMenuBar(self.menu_bar)

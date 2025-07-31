@@ -953,6 +953,13 @@ class TeamsProfileDialog(QDialog):
         end_idx = start_idx + self.earnings_page_size
         page_records = self.earnings_records_filtered[start_idx:end_idx]
         self.earnings_table.setRowCount(len(page_records))
+
+        # Pewarnaan status sesuai window_config.json hanya untuk tabel earnings
+        basedir = Path(__file__).parent.parent.parent
+        window_config_path = basedir / "configs" / "window_config.json"
+        config_manager = ConfigManager(str(window_config_path))
+        status_options = config_manager.get("status_options")
+
         for row_idx, record in enumerate(page_records):
             file_name, file_date, amount_display, note, status, client_name, batch, file_path = record
             formatted_date = format_date_indonesian(file_date)
@@ -961,6 +968,13 @@ class TeamsProfileDialog(QDialog):
             item_amount = QTableWidgetItem(str(amount_display))
             item_note = QTableWidgetItem(str(note) if note else "")
             item_status = QTableWidgetItem(str(status))
+            if status in status_options:
+                color = status_options[status].get("color", "")
+                if color:
+                    item_status.setForeground(QColor(color))
+                font = item_status.font()
+                font.setBold(False)
+                item_status.setFont(font)
             item_client = QTableWidgetItem(str(client_name))
             item_batch = QTableWidgetItem(str(batch))
             item_file_name.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
