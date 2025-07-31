@@ -144,7 +144,8 @@ class MainActionDock(QDockWidget):
         label_disk = QLabel("Disk")
         combo_disk = QComboBox(frame_left)
         combo_disk.setMinimumWidth(180)
-        combo_disk.addItem("Scanning...")
+        combo_disk.clear()
+        combo_disk.addItem("")  # Empty initial
         disk_row.addWidget(disk_icon)
         disk_row.addWidget(label_disk)
         disk_row.addWidget(combo_disk)
@@ -157,6 +158,8 @@ class MainActionDock(QDockWidget):
         combo_folder = QComboBox(frame_left)
         combo_folder.setEnabled(False)
         combo_folder.setMinimumWidth(180)
+        combo_folder.clear()
+        combo_folder.addItem("")  # Empty initial
         folder_row.addWidget(folder_icon)
         folder_row.addWidget(label_folder)
         folder_row.addWidget(combo_folder)
@@ -378,13 +381,24 @@ class MainActionDock(QDockWidget):
 
         def load_templates():
             try:
+                # Simpan index dan template_id sebelum refresh
+                prev_index = combo_template.currentIndex()
+                prev_template_id = combo_template.itemData(prev_index) if prev_index > 0 else None
+                prev_text = combo_template.currentText()
                 self.db_manager.connect()
                 templates = self.db_manager.get_all_templates()
                 combo_template.clear()
                 combo_template.addItem("No Template")
+                found_index = 0
                 for template in templates:
                     combo_template.addItem(template['name'])
                     combo_template.setItemData(combo_template.count() - 1, template['id'])
+                    # Cari index template_id sebelumnya
+                    if prev_template_id is not None and template['id'] == prev_template_id:
+                        found_index = combo_template.count() - 1
+                    elif prev_template_id is None and template['name'] == prev_text:
+                        found_index = combo_template.count() - 1
+                combo_template.setCurrentIndex(found_index)
                 show_statusbar_message(self, "Templates loaded")
             except Exception as e:
                 print(f"Error loading templates: {e}")
@@ -649,19 +663,22 @@ class MainActionDock(QDockWidget):
 
     @Slot(list)
     def _on_disks_ready(self, disks):
+        self._combo_disk.blockSignals(True)
         self._combo_disk.clear()
+        self._combo_disk.addItem("")  # Always empty initial
         if disks:
             self._combo_disk.addItems(disks)
             self._combo_disk.setEnabled(True)
             self._adjust_folder_width()
-            self._combo_disk.setCurrentIndex(0)
-            self._on_disk_changed(0)
+            # Do not auto-select any disk
+            # self._combo_disk.setCurrentIndex(0)
+            # self._on_disk_changed(0)
         else:
-            self._combo_disk.addItem("Scanning...")
             self._combo_disk.setEnabled(False)
             self._combo_folder.clear()
+            self._combo_folder.addItem("")
             self._combo_folder.setEnabled(False)
-            self._on_disk_changed(0)
+        self._combo_disk.blockSignals(False)
 
     def get_current_color_hex(self):
         return self._color_hex_label.text()

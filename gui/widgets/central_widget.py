@@ -220,6 +220,9 @@ class CentralWidget(QWidget):
             name_field_widget = parent.main_action_dock._name_field_widget
             name_field_widget.project_created.connect(self._on_project_created)
 
+        self._category_changed = False
+        self._subcategory_changed = False
+
     def _on_project_created(self):
         # Ambil data project terakhir dari database
         self.db_manager.connect()
@@ -317,11 +320,18 @@ class CentralWidget(QWidget):
             try:
                 self.db_manager.connect()
                 status_id = self.db_manager.get_status_id(new_data['status'])
+                # Cek perubahan kategori/subkategori
+                old_category = row_data.get('category', '')
+                old_subcategory = row_data.get('subcategory', '')
                 category_id = self.db_manager.get_or_create_category(new_data['category']) if new_data['category'] else None
                 subcategory_id = self.db_manager.get_or_create_subcategory(
                     category_id,
                     new_data['subcategory']
                 ) if new_data['subcategory'] and new_data['category'] else None
+                if new_data['category'] and new_data['category'] != old_category:
+                    self._category_changed = True
+                if new_data['subcategory'] and new_data['subcategory'] != old_subcategory:
+                    self._subcategory_changed = True
                 self.db_manager.update_file_record(
                     file_id=file_id,
                     name=new_data['name'],
@@ -407,12 +417,12 @@ class CentralWidget(QWidget):
 
     def refresh_table(self):
         self.load_data_from_database(keep_search=True)
-        # Refresh categories, subcategories, and templates in MainActionDock if available
         main_window = self._main_window
         if main_window and hasattr(main_window, "main_action_dock"):
             main_action = main_window.main_action_dock
+            # Refresh kategori hanya jika ada perubahan
             if hasattr(main_action, "_combo_category") and hasattr(main_action, "_combo_subcategory"):
-                if hasattr(main_action, "_combo_category") and hasattr(main_action, "db_manager"):
+                if self._category_changed:
                     try:
                         main_action.db_manager.connect()
                         categories = main_action.db_manager.get_all_categories()
@@ -422,9 +432,10 @@ class CentralWidget(QWidget):
                         main_action.db_manager.close()
                     except Exception as e:
                         print(f"Error refreshing categories: {e}")
-                # Refresh subcategory based on current category
+                    self._category_changed = False
                 current_category = main_action._combo_category.currentText().strip()
-                if current_category:
+                # Refresh subkategori hanya jika ada perubahan
+                if self._subcategory_changed and current_category:
                     try:
                         main_action.db_manager.connect()
                         subcategories = main_action.db_manager.get_subcategories_by_category(current_category)
@@ -435,23 +446,34 @@ class CentralWidget(QWidget):
                         main_action.db_manager.close()
                     except Exception as e:
                         print(f"Error refreshing subcategories: {e}")
-                else:
+                    self._subcategory_changed = False
+                elif not current_category:
                     main_action._combo_subcategory.clear()
                     main_action._combo_subcategory.addItem("")
                     main_action._combo_subcategory.setEnabled(False)
             if hasattr(main_action, "_combo_template"):
                 try:
+                    combo_template = main_action._combo_template
+                    prev_index = combo_template.currentIndex()
+                    prev_template_id = combo_template.itemData(prev_index) if prev_index > 0 else None
+                    prev_text = combo_template.currentText()
                     main_action.db_manager.connect()
                     templates = main_action.db_manager.get_all_templates()
-                    main_action._combo_template.clear()
-                    main_action._combo_template.addItem("No Template")
+                    combo_template.clear()
+                    combo_template.addItem("No Template")
+                    found_index = 0
                     for template in templates:
-                        main_action._combo_template.addItem(template['name'])
-                        main_action._combo_template.setItemData(main_action._combo_template.count() - 1, template['id'])
+                        combo_template.addItem(template['name'])
+                        combo_template.setItemData(combo_template.count() - 1, template['id'])
+                        if prev_template_id is not None and template['id'] == prev_template_id:
+                            found_index = combo_template.count() - 1
+                        elif prev_template_id is None and template['name'] == prev_text:
+                            found_index = combo_template.count() - 1
+                    combo_template.setCurrentIndex(found_index)
                     main_action.db_manager.close()
                 except Exception as e:
                     print(f"Error refreshing templates: {e}")
-        show_statusbar_message(self, "Table and main action categories/templates refreshed")
+        show_statusbar_message(self, "Table refreshed")
         if self._select_after_refresh:
             self._select_row_by_name_path(*self._select_after_refresh)
             self._select_after_refresh = None
@@ -961,11 +983,17 @@ class CentralWidget(QWidget):
             try:
                 self.db_manager.connect()
                 status_id = self.db_manager.get_status_id(new_data['status'])
+                old_category = row_data.get('category', '')
+                old_subcategory = row_data.get('subcategory', '')
                 category_id = self.db_manager.get_or_create_category(new_data['category']) if new_data['category'] else None
                 subcategory_id = self.db_manager.get_or_create_subcategory(
                     category_id,
                     new_data['subcategory']
                 ) if new_data['subcategory'] and new_data['category'] else None
+                if new_data['category'] and new_data['category'] != old_category:
+                    self._category_changed = True
+                if new_data['subcategory'] and new_data['subcategory'] != old_subcategory:
+                    self._subcategory_changed = True
                 self.db_manager.update_file_record(
                     file_id=file_id,
                     name=new_data['name'],
