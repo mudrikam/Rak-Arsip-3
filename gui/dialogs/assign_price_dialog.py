@@ -145,7 +145,7 @@ class AssignPriceDialog(QDialog):
         # Only save price on focus out, not on every textChanged
         self.price_edit.installEventFilter(self)
         self.currency_combo.currentTextChanged.connect(self._on_price_changed)
-        self.note_edit.textChanged.connect(self._on_note_changed)
+        self.note_edit.installEventFilter(self)
         self.client_combo.currentIndexChanged.connect(self._on_client_changed)
         self.add_batch_btn.clicked.connect(self._on_add_batch)
         self.edit_batch_btn.clicked.connect(self._on_edit_batch)
@@ -156,6 +156,8 @@ class AssignPriceDialog(QDialog):
     def eventFilter(self, obj, event):
         if obj == self.price_edit and event.type() == QEvent.FocusOut:
             self._on_price_changed()
+        if obj == self.note_edit and event.type() == QEvent.FocusOut:
+            self._on_note_changed()
         return super().eventFilter(obj, event)
 
     def _refresh_batch_combo(self):
