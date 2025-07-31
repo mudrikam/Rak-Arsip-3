@@ -908,12 +908,12 @@ class TeamsProfileDialog(QDialog):
             self.earnings_table.setItem(row_idx, 4, item_status)
             self.earnings_table.setItem(row_idx, 5, item_client)
             self.earnings_table.setItem(row_idx, 6, item_batch)
-        # Summary calculation for ALL records, not just current page
+        # Summary calculation for ALL filtered and sorted records (not just current page)
         total_amount = 0
         total_pending = 0
         total_paid = 0
         currency_label = ""
-        for record in self.earnings_records_all:
+        for record in self.earnings_records_filtered:
             amount_display = record[2]
             status = record[4]
             if not currency_label and " " in str(amount_display):
