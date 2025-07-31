@@ -113,15 +113,11 @@ class DiskScanThread(QThread):
         self.disks_found.emit(disks)
 
 class MainActionDock(QDockWidget):
-    def __init__(self, config_manager, parent=None):
+    def __init__(self, config_manager, parent=None, db_manager=None):
         super().__init__("Project Creator", parent)
         self.setWindowIcon(qta.icon("fa6s.circle-plus"))
         self.config_manager = config_manager
-        
-        basedir = Path(__file__).parent.parent.parent
-        db_config_path = basedir / "configs" / "db_config.json"
-        db_config_manager = ConfigManager(str(db_config_path))
-        self.db_manager = DatabaseManager(db_config_manager, self.config_manager)
+        self.db_manager = db_manager
         
         container = QWidget(self)
         main_vlayout = QVBoxLayout(container)

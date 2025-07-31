@@ -6,12 +6,13 @@ import threading
 from pathlib import Path
 from datetime import datetime, timedelta
 from PySide6.QtCore import QObject, Signal, QTimer
+from helpers.show_statusbar_helper import show_statusbar_message, find_main_window
 
 class DatabaseManager(QObject):
     data_changed = Signal()
     status_message = Signal(str, int)
     
-    def __init__(self, config_manager, window_config_manager):
+    def __init__(self, config_manager, window_config_manager, parent_widget=None):
         super().__init__()
         self.config_manager = config_manager
         self.window_config_manager = window_config_manager
@@ -21,9 +22,11 @@ class DatabaseManager(QObject):
         self.connection = None
         self.session_id = str(int(time.time() * 1000))
         self.temp_dir = os.path.join(os.path.dirname(self.db_path), "temp")
+        self._parent_widget = parent_widget
         self.ensure_database_exists()
         self.setup_file_watcher()
         self.auto_backup_database_daily()
+        self.setup_auto_backup_timer()
 
     def ensure_database_exists(self):
         db_dir = os.path.dirname(self.db_path)
@@ -387,6 +390,11 @@ class DatabaseManager(QObject):
         self.connection.commit()
         self.close()
         self.create_temp_file()
+        
+    def setup_auto_backup_timer(self):
+        self.auto_backup_timer = QTimer(self)
+        self.auto_backup_timer.timeout.connect(self.auto_backup_database_daily)
+        self.auto_backup_timer.start(60 * 60 * 1000)
 
     def auto_backup_database_daily(self):
         backup_dir = os.path.join(os.path.dirname(self.db_path), "db_backups")
@@ -465,6 +473,10 @@ class DatabaseManager(QObject):
                         f"  Total records: {new_total_records}"
                     )
                 print(msg)
+                widget = self._parent_widget if self._parent_widget is not None else self.parent()
+                main_window = find_main_window(widget) if widget is not None else None
+                if main_window is not None:
+                    show_statusbar_message(main_window, "Hourly backup sucesfully initiated", 3000)
         except Exception as e:
             print(f"Error creating daily backup: {e}")
         finally:

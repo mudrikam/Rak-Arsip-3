@@ -20,13 +20,6 @@ def show_statusbar_message(widget, message, timeout=2000):
             statusbar.showMessage(message, timeout)
 
 
-def connect_db_status_signal(db_manager, widget):
-    def handler(msg, timeout):
-        show_statusbar_message(widget, msg, timeout)
-
-    db_manager.status_message.connect(handler)
-
-
 def get_datetime_string():
     now = datetime.now()
     if sys.platform == "win32":

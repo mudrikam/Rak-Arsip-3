@@ -31,7 +31,7 @@ class NoHoverDelegate(QStyledItemDelegate):
 class CentralWidget(QWidget):
     row_selected = Signal(dict)
     
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, db_manager=None):
         super().__init__(parent)
         self.config_manager = parent.config_manager
         self.status_config = self.config_manager.get("status_options")
@@ -45,13 +45,7 @@ class CentralWidget(QWidget):
         self.markdown_generator = MarkdownGenerator()
         self._select_after_refresh = None
 
-        if hasattr(parent, 'main_action_dock') and hasattr(parent.main_action_dock, 'db_manager'):
-            self.db_manager = parent.main_action_dock.db_manager
-        else:
-            basedir = Path(__file__).parent.parent.parent
-            db_config_path = basedir / "configs" / "db_config.json"
-            db_config_manager = ConfigManager(str(db_config_path))
-            self.db_manager = DatabaseManager(db_config_manager, self.config_manager)
+        self.db_manager = db_manager
         
         self.db_manager.data_changed.connect(self.auto_refresh_table)
         
