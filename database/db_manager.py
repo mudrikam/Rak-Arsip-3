@@ -40,7 +40,7 @@ class DatabaseManager(QObject):
     def enable_wal_mode(self):
         cursor = self.connection.cursor()
         cursor.execute("PRAGMA journal_mode=WAL")
-        cursor.execute("PRAGMA synchronous=FULL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
         cursor.execute("PRAGMA cache_size=10000")
         cursor.execute("PRAGMA temp_store=MEMORY")
         cursor.execute("PRAGMA mmap_size=268435456")
@@ -124,21 +124,23 @@ class DatabaseManager(QObject):
             self.cleanup_wal_shm_files()
 
     def create_tables(self):
-        self.connect()
-        cursor = self.connection.cursor()
-        for table_name, columns in self.tables_config.items():
-            column_defs = []
-            foreign_keys = []
-            for column_name, column_def in columns.items():
-                if column_name.startswith("FOREIGN KEY"):
-                    foreign_keys.append(f"{column_name} {column_def}")
-                else:
-                    column_defs.append(f"{column_name} {column_def}")
-            all_defs = column_defs + foreign_keys
-            create_sql = f"CREATE TABLE IF NOT EXISTS {table_name} ({', '.join(all_defs)})"
-            cursor.execute(create_sql)
-        self.connection.commit()
-        self.close()
+        try:
+            self.connect()
+            cursor = self.connection.cursor()
+            for table_name, columns in self.tables_config.items():
+                column_defs = []
+                foreign_keys = []
+                for column_name, column_def in columns.items():
+                    if column_name.startswith("FOREIGN KEY"):
+                        foreign_keys.append(f"{column_name} {column_def}")
+                    else:
+                        column_defs.append(f"{column_name} {column_def}")
+                all_defs = column_defs + foreign_keys
+                create_sql = f"CREATE TABLE IF NOT EXISTS {table_name} ({', '.join(all_defs)})"
+                cursor.execute(create_sql)
+            self.connection.commit()
+        finally:
+            self.close()
 
     def initialize_statuses(self):
         self.connect()
