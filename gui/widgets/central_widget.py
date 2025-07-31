@@ -461,6 +461,11 @@ class CentralWidget(QWidget):
                     self.selected_row_data = row_data
                     self._selected_row_index = row
                     self.row_selected.emit(row_data)
+                    # Trigger properties widget refresh after select
+                    if hasattr(self.parent(), "properties_widget"):
+                        properties_widget = getattr(self.parent(), "properties_widget")
+                        if properties_widget:
+                            properties_widget.update_properties(row_data)
                     break
 
     def _on_search_text_changed(self, text):
