@@ -210,7 +210,7 @@ class CentralWidget(QWidget):
 
         self._empty_table_timer = QTimer(self)
         self._empty_table_timer.setSingleShot(True)
-        self._empty_table_timer.setInterval(1000)
+        self._empty_table_timer.setInterval(2000)
         self._empty_table_timer.timeout.connect(self._on_empty_table_timeout)
 
         self.load_data_from_database()
