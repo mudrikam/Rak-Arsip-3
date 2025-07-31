@@ -458,11 +458,13 @@ class DatabaseManager(QObject):
                 if old_time is not None:
                     old_dt = datetime.fromtimestamp(old_time).strftime("%Y-%m-%d %H:%M:%S")
                     new_dt = datetime.fromtimestamp(new_time).strftime("%Y-%m-%d %H:%M:%S")
+                    added_records = new_total_records - old_total_records if old_total_records is not None and new_total_records is not None else "?"
                     msg = (
                         f"Backup created on launch: {backup_filename}\n"
                         f"  Modified: {old_dt} → {new_dt}\n"
                         f"  Size: {old_size} bytes → {new_size} bytes\n"
-                        f"  Total records: {old_total_records} → {new_total_records}"
+                        f"  Total records: {old_total_records} → {new_total_records}\n"
+                        f"  Added records: {added_records}"
                     )
                 else:
                     new_dt = datetime.fromtimestamp(new_time).strftime("%Y-%m-%d %H:%M:%S")
