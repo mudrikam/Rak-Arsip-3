@@ -196,7 +196,7 @@ class EarningsHelper:
         if not hasattr(self, "_earnings_team_id") or self._earnings_team_id is None:
             self.dialog.earnings_table.setRowCount(0)
             return
-        basedir = Path(__file__).parent.parent.parent
+        basedir = Path(__file__).resolve().parents[3]
         db_config_path = basedir / "configs" / "db_config.json"
         config_manager = ConfigManager(str(db_config_path))
         db_manager = DatabaseManager(config_manager, config_manager)
@@ -422,7 +422,7 @@ class EarningsHelper:
 
     def _add_detailed_status_breakdown(self, parent_layout, team_id, search_text, batch_filter, status_filter):
         """Add detailed status breakdown like client data files"""
-        basedir = Path(__file__).parent.parent.parent
+        basedir = Path(__file__).resolve().parents[3]
         db_config_path = basedir / "configs" / "db_config.json"
         config_manager = ConfigManager(str(db_config_path))
         db_manager = DatabaseManager(config_manager, config_manager)

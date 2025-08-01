@@ -121,7 +121,7 @@ class AttendanceHelper:
         self._attendance_team_id = team["id"]
         self._attendance_full_name = team.get("full_name", "")
         self.attendance_current_page = 1
-        basedir = Path(__file__).parent.parent.parent
+        basedir = Path(__file__).resolve().parents[3]
         db_config_path = basedir / "configs" / "db_config.json"
         config_manager = ConfigManager(str(db_config_path))
         db_manager = DatabaseManager(config_manager, config_manager)
@@ -182,7 +182,7 @@ class AttendanceHelper:
         if not hasattr(self, "_attendance_team_id") or self._attendance_team_id is None:
             self.dialog.attendance_table.setRowCount(0)
             return
-        basedir = Path(__file__).parent.parent.parent
+        basedir = Path(__file__).resolve().parents[3]
         db_config_path = basedir / "configs" / "db_config.json"
         config_manager = ConfigManager(str(db_config_path))
         db_manager = DatabaseManager(config_manager, config_manager)

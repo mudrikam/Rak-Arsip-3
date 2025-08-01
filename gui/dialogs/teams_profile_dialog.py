@@ -1,8 +1,8 @@
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QTabWidget
-from .teams_profile_helper_teams import TeamsHelper
-from .teams_profile_helper_attendance import AttendanceHelper
-from .teams_profile_helper_earnings import EarningsHelper
-from .teams_profile_helper_ui import UIHelper
+from .team_profile_helper.teams_profile_helper_teams import TeamsHelper
+from .team_profile_helper.teams_profile_helper_attendance import AttendanceHelper
+from .team_profile_helper.teams_profile_helper_earnings import EarningsHelper
+from .team_profile_helper.teams_profile_helper_ui import UIHelper
 
 class TeamsProfileDialog(QDialog):
     def __init__(self, parent=None):
