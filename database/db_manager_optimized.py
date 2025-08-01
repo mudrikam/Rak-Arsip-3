@@ -4,6 +4,7 @@ import time
 from pathlib import Path
 from datetime import datetime, timedelta
 from PySide6.QtCore import QObject, Signal, QTimer
+from helpers.show_statusbar_helper import show_statusbar_message, find_main_window
 
 # Import all helper classes
 from .db_helper_connection import DatabaseConnectionHelper
