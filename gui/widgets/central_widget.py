@@ -747,7 +747,7 @@ class CentralWidget(QWidget):
         try:
             self.db_manager.connect()
             status_id = self.db_manager.get_status_id(value)
-            if status_id:
+            if status_id is not None:
                 self.db_manager.update_file_status(row_data['id'], status_id)
                 row_data['status_id'] = status_id
                 combo = self.table.cellWidget(row, 4)

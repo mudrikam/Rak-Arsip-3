@@ -195,6 +195,10 @@ class DatabaseManager(QObject):
         """Get status statistics by client ID filtered."""
         return self.clients_helper.get_status_statistics_by_client_id(client_id, search_text, batch_filter)
 
+    def get_overall_statistics(self):
+        """Get overall statistics for all clients."""
+        return self.clients_helper.get_overall_statistics()
+
     def get_client_name_by_file_id(self, file_id):
         """Get client name by file ID."""
         return self.clients_helper.get_client_name_by_file_id(file_id)

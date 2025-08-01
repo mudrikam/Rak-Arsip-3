@@ -489,3 +489,46 @@ class DatabaseClientsHelper:
         
         self.db_manager.close()
         return status_stats
+
+    def get_overall_statistics(self):
+        """Get overall statistics for all clients"""
+        self.db_manager.connect(write=False)
+        cursor = self.db_manager.connection.cursor()
+        
+        # Get total files and draft count from ALL files (not just assigned ones)
+        # Use LOWER() for case-insensitive comparison
+        cursor.execute("""
+            SELECT 
+                COUNT(*) as total_files,
+                SUM(CASE WHEN LOWER(s.name) = 'draft' THEN 1 ELSE 0 END) as draft_count
+            FROM files f
+            LEFT JOIN statuses s ON f.status_id = s.id
+        """)
+        
+        row = cursor.fetchone()
+        total_files = row["total_files"] if row and row["total_files"] else 0
+        draft_count = row["draft_count"] if row and row["draft_count"] else 0
+        
+        # Get total asset value by currency from ALL item_price records
+        cursor.execute("""
+            SELECT 
+                ip.currency,
+                SUM(CASE WHEN ip.price IS NOT NULL AND ip.price != '' THEN CAST(ip.price AS REAL) ELSE 0 END) as total_value
+            FROM item_price ip
+            WHERE ip.currency IS NOT NULL AND ip.currency != ''
+            GROUP BY ip.currency
+        """)
+        
+        asset_values = {}
+        for row in cursor.fetchall():
+            currency = row["currency"].upper() if row["currency"] else "UNKNOWN"
+            total_value = row["total_value"] if row["total_value"] else 0
+            asset_values[currency] = total_value
+        
+        self.db_manager.close()
+        
+        return {
+            "total_files": total_files,
+            "draft_count": draft_count,
+            "asset_values": asset_values
+        }

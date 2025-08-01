@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QFormLayout, QLineEdit, QPushButton, QDateEdit, QHBoxLayout, QLabel, QMessageBox, QInputDialog
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QFormLayout, QLineEdit, QPushButton, QDateEdit, QHBoxLayout, QLabel, QMessageBox, QInputDialog, QFrame
 from PySide6.QtCore import Qt, QDate
 from PySide6.QtGui import QColor
 import qtawesome as qta
@@ -19,6 +19,68 @@ class TeamsHelper:
     def init_teams_tab(self, tab_widget):
         tab = QWidget()
         tab_layout = QVBoxLayout(tab)
+        # Statistik panel konsisten dengan Clients tab
+        stats_frame = QFrame()
+        stats_frame.setFrameStyle(QFrame.StyledPanel)
+        stats_frame.setLineWidth(1)
+        stats_frame.setMinimumHeight(60)
+        stats_frame.setMaximumHeight(80)
+        stats_layout = QHBoxLayout(stats_frame)
+        stats_layout.setContentsMargins(10, 8, 10, 8)
+        # Total Work Days
+        days_layout = QVBoxLayout()
+        self.total_days_label = QLabel("Total Work Days:")
+        self.total_days_label.setStyleSheet("font-weight: bold; color: #e67e22; font-size: 12px;")
+        self.total_days_label.setAlignment(Qt.AlignCenter)
+        self.total_days_value = QLabel("0")
+        self.total_days_value.setStyleSheet("font-size: 13px; font-weight: bold;")
+        self.total_days_value.setAlignment(Qt.AlignCenter)
+        days_layout.addWidget(self.total_days_label)
+        days_layout.addWidget(self.total_days_value)
+        days_layout.setAlignment(Qt.AlignCenter)
+        # Total Work Hours
+        hours_layout = QVBoxLayout()
+        self.total_hours_label = QLabel("Total Work Hours:")
+        self.total_hours_label.setStyleSheet("font-weight: bold; color: #3498db; font-size: 12px;")
+        self.total_hours_label.setAlignment(Qt.AlignCenter)
+        self.total_hours_value = QLabel("0")
+        self.total_hours_value.setStyleSheet("font-size: 13px; font-weight: bold;")
+        self.total_hours_value.setAlignment(Qt.AlignCenter)
+        hours_layout.addWidget(self.total_hours_label)
+        hours_layout.addWidget(self.total_hours_value)
+        hours_layout.setAlignment(Qt.AlignCenter)
+        # Total Paid Earning
+        paid_layout = QVBoxLayout()
+        self.total_paid_label = QLabel("Total Paid Earning:")
+        self.total_paid_label.setStyleSheet("font-weight: bold; color: #27ae60; font-size: 12px;")
+        self.total_paid_label.setAlignment(Qt.AlignCenter)
+        self.total_paid_value = QLabel("0")
+        self.total_paid_value.setStyleSheet("font-size: 13px; font-weight: bold;")
+        self.total_paid_value.setAlignment(Qt.AlignCenter)
+        paid_layout.addWidget(self.total_paid_label)
+        paid_layout.addWidget(self.total_paid_value)
+        paid_layout.setAlignment(Qt.AlignCenter)
+        # Total Pending Earning
+        pending_layout = QVBoxLayout()
+        self.total_pending_label = QLabel("Total Pending Earning:")
+        self.total_pending_label.setStyleSheet("font-weight: bold; color: #8e44ad; font-size: 12px;")
+        self.total_pending_label.setAlignment(Qt.AlignCenter)
+        self.total_pending_value = QLabel("0")
+        self.total_pending_value.setStyleSheet("font-size: 13px; font-weight: bold;")
+        self.total_pending_value.setAlignment(Qt.AlignCenter)
+        pending_layout.addWidget(self.total_pending_label)
+        pending_layout.addWidget(self.total_pending_value)
+        pending_layout.setAlignment(Qt.AlignCenter)
+        # Add layouts to stats layout with separators
+        stats_layout.addLayout(days_layout)
+        stats_layout.addWidget(self._create_separator())
+        stats_layout.addLayout(hours_layout)
+        stats_layout.addWidget(self._create_separator())
+        stats_layout.addLayout(paid_layout)
+        stats_layout.addWidget(self._create_separator())
+        stats_layout.addLayout(pending_layout)
+        tab_layout.addWidget(stats_frame)
+        self.stats_panel = stats_frame
         self.dialog.teams_table = QTableWidget(tab)
         self.dialog.teams_table.setColumnCount(12)
         self.dialog.teams_table.setHorizontalHeaderLabels([
@@ -32,6 +94,82 @@ class TeamsHelper:
         tab_layout.addWidget(self.dialog.teams_table)
         tab_widget.addTab(tab, qta.icon("fa6s.users"), "Teams")
         self.load_teams_data()
+
+    def _create_separator(self):
+        separator = QFrame()
+        separator.setFrameShape(QFrame.VLine)
+        separator.setFrameShadow(QFrame.Sunken)
+        separator.setStyleSheet("color: #bdc3c7;")
+        return separator
+
+    def update_stats_panel(self):
+        # Hitung total hari kerja, total jam kerja, total paid/pending earning untuk seluruh tim
+        total_days = 0
+        total_seconds = 0
+        for tid, attendance_list in self._attendance_map.items():
+            days_set = set()
+            for att in attendance_list:
+                date_str = att[0]
+                days_set.add(date_str)
+                check_in = att[1]
+                check_out = att[2]
+                if check_in and check_out:
+                    try:
+                        from datetime import datetime
+                        dt_in = datetime.strptime(check_in, "%Y-%m-%d %H:%M:%S")
+                        dt_out = datetime.strptime(check_out, "%Y-%m-%d %H:%M:%S")
+                        delta = dt_out - dt_in
+                        total_seconds += delta.total_seconds()
+                    except Exception:
+                        pass
+            total_days += len(days_set)
+        # Group earnings by currency
+        paid_by_currency = {}
+        pending_by_currency = {}
+        for tid, earnings_list in self._earnings_map.items():
+            for earn in earnings_list:
+                amount = float(earn.get("amount", 0)) if earn.get("amount") else 0
+                currency = earn.get("currency", "IDR") or "IDR"
+                status = earn.get("status", "")
+                if status == "Paid":
+                    paid_by_currency[currency] = paid_by_currency.get(currency, 0) + amount
+                elif status == "Pending":
+                    pending_by_currency[currency] = pending_by_currency.get(currency, 0) + amount
+        
+        # Format jam kerja
+        h = int(total_seconds // 3600)
+        m = int((total_seconds % 3600) // 60)
+        if h > 0 and m > 0:
+            total_hours_str = f"{h} hours {m} minutes"
+        elif h > 0:
+            total_hours_str = f"{h} hours"
+        elif m > 0:
+            total_hours_str = f"{m} minutes"
+        else:
+            total_hours_str = "0 minutes"
+        
+        # Format paid earnings by currency
+        paid_parts = []
+        for currency, amount in paid_by_currency.items():
+            if currency.upper() == "USD":
+                paid_parts.append(f"${int(amount):,}")
+            else:
+                paid_parts.append(f"Rp {int(amount):,}")
+        paid_display = " + ".join(paid_parts) if paid_parts else "0"
+        
+        # Format pending earnings by currency
+        pending_parts = []
+        for currency, amount in pending_by_currency.items():
+            if currency.upper() == "USD":
+                pending_parts.append(f"${int(amount):,}")
+            else:
+                pending_parts.append(f"Rp {int(amount):,}")
+        pending_display = " + ".join(pending_parts) if pending_parts else "0"
+        
+        self.total_days_value.setText(str(total_days))
+        self.total_hours_value.setText(total_hours_str)
+        self.total_paid_value.setText(paid_display)
+        self.total_pending_value.setText(pending_display)
 
     def init_details_tab(self, tab_widget):
         tab = QWidget()
@@ -141,6 +279,8 @@ class TeamsHelper:
                 color = QColor(52, 186, 14, int(0.57 * 255))
                 for col in range(self.dialog.teams_table.columnCount()):
                     self.dialog.teams_table.item(row_idx, col).setBackground(color)
+        # Update statistik panel setelah data tim di-load
+        self.update_stats_panel()
 
     def fill_details_form(self, row):
         if 0 <= row < len(self._teams_data):
