@@ -11,14 +11,23 @@ import os
 import subprocess
 from helpers.show_statusbar_helper import show_statusbar_message
 
-def format_date_indonesian(date_str, with_time=False):
-    hari_map = {
-        0: "Senin", 1: "Selasa", 2: "Rabu", 3: "Kamis", 4: "Jumat", 5: "Sabtu", 6: "Minggu"
-    }
-    bulan_map = {
-        1: "Januari", 2: "Februari", 3: "Maret", 4: "April", 5: "Mei", 6: "Juni",
-        7: "Juli", 8: "Agustus", 9: "September", 10: "Oktober", 11: "November", 12: "Desember"
-    }
+def format_date_indonesian(date_str, with_time=False, language="id"):
+    if language == "en":
+        hari_map = {
+            0: "Monday", 1: "Tuesday", 2: "Wednesday", 3: "Thursday", 4: "Friday", 5: "Saturday", 6: "Sunday"
+        }
+        bulan_map = {
+            1: "January", 2: "February", 3: "March", 4: "April", 5: "May", 6: "June",
+            7: "July", 8: "August", 9: "September", 10: "October", 11: "November", 12: "December"
+        }
+    else:
+        hari_map = {
+            0: "Senin", 1: "Selasa", 2: "Rabu", 3: "Kamis", 4: "Jumat", 5: "Sabtu", 6: "Minggu"
+        }
+        bulan_map = {
+            1: "Januari", 2: "Februari", 3: "Maret", 4: "April", 5: "Mei", 6: "Juni",
+            7: "Juli", 8: "Agustus", 9: "September", 10: "Oktober", 11: "November", 12: "Desember"
+        }
     if not date_str:
         return "-"
     try:
@@ -178,6 +187,14 @@ class TeamsProfileDialog(QDialog):
         self.attendance_search_edit.setMinimumHeight(32)
         self.attendance_search_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         search_row.addWidget(self.attendance_search_edit)
+        
+        self.attendance_language_combo = QComboBox()
+        self.attendance_language_combo.addItem("ID", "id")
+        self.attendance_language_combo.addItem("EN", "en")
+        self.attendance_language_combo.setCurrentIndex(0)
+        search_row.addWidget(QLabel("Ln:"))
+        search_row.addWidget(self.attendance_language_combo)
+        
         self.attendance_sort_combo = QComboBox()
         self.attendance_sort_combo.addItems([
             "Date", "Check In", "Check Out", "Hours", "Note", "Hari", "Bulan", "Tahun"
@@ -191,19 +208,16 @@ class TeamsProfileDialog(QDialog):
         self.attendance_day_filter_combo = QComboBox()
         self.attendance_day_filter_combo.addItem("All Days")
         self.attendance_day_filter_combo.addItems(["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"])
-        search_row.addWidget(QLabel("Day:"))
         search_row.addWidget(self.attendance_day_filter_combo)
         # Bulan filter
         self.attendance_month_filter_combo = QComboBox()
         self.attendance_month_filter_combo.addItem("All Months")
         for i in range(1, 13):
             self.attendance_month_filter_combo.addItem(format_date_indonesian(f"2023-{i:02d}-01").split(",")[1].split()[1])
-        search_row.addWidget(QLabel("Month:"))
         search_row.addWidget(self.attendance_month_filter_combo)
         # Tahun filter
         self.attendance_year_filter_combo = QComboBox()
         self.attendance_year_filter_combo.addItem("All Years")
-        search_row.addWidget(QLabel("Year:"))
         search_row.addWidget(self.attendance_year_filter_combo)
         tab_layout.addLayout(search_row)
         self.attendance_table = QTableWidget(tab)
@@ -234,6 +248,7 @@ class TeamsProfileDialog(QDialog):
         tab_layout.addLayout(pagination_row)
         self.tab_widget.addTab(tab, qta.icon("fa6s.calendar-days"), "Attendance Records")
         self.attendance_search_edit.textChanged.connect(self._attendance_search_changed)
+        self.attendance_language_combo.currentIndexChanged.connect(self._attendance_language_changed)
         self.attendance_prev_btn.clicked.connect(self._attendance_prev_page)
         self.attendance_next_btn.clicked.connect(self._attendance_next_page)
         self.attendance_page_input.valueChanged.connect(self._attendance_goto_page)
@@ -251,6 +266,11 @@ class TeamsProfileDialog(QDialog):
         self.attendance_day_filter = "All Days"
         self.attendance_month_filter = "All Months"
         self.attendance_year_filter = "All Years"
+        self.attendance_language = "id"
+
+    def _attendance_language_changed(self):
+        self.attendance_language = self.attendance_language_combo.currentData()
+        self._update_attendance_table()
 
     def _attendance_filter_changed(self):
         self.attendance_day_filter = self.attendance_day_filter_combo.currentText()
@@ -338,16 +358,17 @@ class TeamsProfileDialog(QDialog):
         sort_order = self.attendance_sort_order
         page_size = self.attendance_page_size
         offset = (self.attendance_current_page - 1) * page_size
+
+        current_language = getattr(self, 'attendance_language', 'id')
+
         total_rows = db_manager.count_attendance_by_team_id_filtered(
             team_id, search_text, day_filter, month_filter, year_filter
         )
         self._attendance_total_pages = max(1, (total_rows + page_size - 1) // page_size)
-        # Ambil semua records untuk filter tahun
         all_records = db_manager.get_attendance_by_team_id_paged(
             team_id, None, None, None, None, "Date", "Descending", 0, 10000
         )
         self.attendance_records_all = all_records
-        # Ambil records terfilter untuk tampilan tabel
         records = db_manager.get_attendance_by_team_id_paged(
             team_id, search_text, day_filter, month_filter, year_filter,
             sort_field, sort_order, offset, page_size
@@ -359,9 +380,9 @@ class TeamsProfileDialog(QDialog):
         self.attendance_table.setRowCount(len(records))
         for row_idx, record in enumerate(records):
             date, check_in, check_out, note, _ = record
-            formatted_date = format_date_indonesian(date)
-            formatted_checkin = format_date_indonesian(check_in, with_time=True) if check_in else ""
-            formatted_checkout = format_date_indonesian(check_out, with_time=True) if check_out else ""
+            formatted_date = format_date_indonesian(date, language=current_language)
+            formatted_checkin = format_date_indonesian(check_in, with_time=True, language=current_language) if check_in else ""
+            formatted_checkout = format_date_indonesian(check_out, with_time=True, language=current_language) if check_out else ""
             hours = ""
             if check_in and check_out:
                 try:
@@ -414,7 +435,7 @@ class TeamsProfileDialog(QDialog):
             else:
                 return "0 minutes"
         total_hours = format_total_hours_human_readable(summary["total_seconds"])
-        last_checkout = format_date_indonesian(summary["last_checkout"], with_time=True) if summary["last_checkout"] and summary["last_checkout"] != "-" else "-"
+        last_checkout = format_date_indonesian(summary["last_checkout"], with_time=True, language=current_language) if summary["last_checkout"] and summary["last_checkout"] != "-" else "-"
         if full_name is None and hasattr(self, "_attendance_full_name"):
             full_name = self._attendance_full_name
         def format_thousands(val):

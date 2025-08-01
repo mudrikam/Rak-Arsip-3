@@ -63,7 +63,6 @@ class DatabaseManager(QObject):
                 try:
                     os.remove(f)
                     if not os.path.exists(f):
-                        print(f"Successfully removed {f}")
                         break
                 except Exception as e:
                     print(f"Error removing {f} (attempt {retry+1}): {e}")
