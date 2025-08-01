@@ -144,3 +144,8 @@ class ClientDataDatabaseHelper:
             search_text=search_text,
             batch_filter=batch_filter
         )
+
+    def get_overall_statistics(self):
+        """Get overall statistics for all clients"""
+        db_manager = self.get_db_manager()
+        return db_manager.get_overall_statistics()

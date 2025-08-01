@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QComboBox, QLabel,
-    QTableWidget, QTableWidgetItem, QSizePolicy, QHeaderView
+    QTableWidget, QTableWidgetItem, QSizePolicy, QHeaderView, QFrame
 )
 from PySide6.QtCore import Qt
 import qtawesome as qta
@@ -27,6 +27,9 @@ class ClientDataClientsHelper:
         """Initialize the clients tab"""
         tab = QWidget()
         tab_layout = QVBoxLayout(tab)
+        
+        # Statistics panel
+        self._create_statistics_panel(tab_layout)
         
         # Search and sort row
         row = QHBoxLayout()
@@ -71,6 +74,84 @@ class ClientDataClientsHelper:
         # Load initial data
         self.load_clients_data()
     
+    def _create_statistics_panel(self, parent_layout):
+        """Create the statistics panel above the search"""
+        stats_frame = QFrame()
+        stats_frame.setFrameStyle(QFrame.StyledPanel)
+        stats_frame.setLineWidth(1)
+        stats_frame.setMinimumHeight(60)
+        stats_frame.setMaximumHeight(80)
+        
+        stats_layout = QHBoxLayout(stats_frame)
+        stats_layout.setContentsMargins(10, 8, 10, 8)
+        
+        # Total Queue (Draft files)
+        queue_layout = QVBoxLayout()
+        self.queue_label = QLabel("Total Queue:")
+        self.queue_label.setStyleSheet("font-weight: bold; color: #e67e22;")
+        self.queue_label.setAlignment(Qt.AlignCenter)
+        self.queue_value = QLabel("0")
+        self.queue_value.setStyleSheet("font-size: 16px; font-weight: bold;")
+        self.queue_value.setAlignment(Qt.AlignCenter)
+        queue_layout.addWidget(self.queue_label)
+        queue_layout.addWidget(self.queue_value)
+        queue_layout.setAlignment(Qt.AlignCenter)
+        
+        # Total Files
+        files_layout = QVBoxLayout()
+        self.files_label = QLabel("Total Files:")
+        self.files_label.setStyleSheet("font-weight: bold; color: #3498db;")
+        self.files_label.setAlignment(Qt.AlignCenter)
+        self.files_value = QLabel("0")
+        self.files_value.setStyleSheet("font-size: 16px; font-weight: bold;")
+        self.files_value.setAlignment(Qt.AlignCenter)
+        files_layout.addWidget(self.files_label)
+        files_layout.addWidget(self.files_value)
+        files_layout.setAlignment(Qt.AlignCenter)
+        
+        # Total Asset Value USD
+        usd_layout = QVBoxLayout()
+        self.usd_label = QLabel("Total Asset Value (USD):")
+        self.usd_label.setStyleSheet("font-weight: bold; color: #27ae60;")
+        self.usd_label.setAlignment(Qt.AlignCenter)
+        self.usd_value = QLabel("$0.00")
+        self.usd_value.setStyleSheet("font-size: 16px; font-weight: bold;")
+        self.usd_value.setAlignment(Qt.AlignCenter)
+        usd_layout.addWidget(self.usd_label)
+        usd_layout.addWidget(self.usd_value)
+        usd_layout.setAlignment(Qt.AlignCenter)
+        
+        # Total Asset Value IDR
+        idr_layout = QVBoxLayout()
+        self.idr_label = QLabel("Total Asset Value (IDR):")
+        self.idr_label.setStyleSheet("font-weight: bold; color: #8e44ad;")
+        self.idr_label.setAlignment(Qt.AlignCenter)
+        self.idr_value = QLabel("Rp 0")
+        self.idr_value.setStyleSheet("font-size: 16px; font-weight: bold;")
+        self.idr_value.setAlignment(Qt.AlignCenter)
+        idr_layout.addWidget(self.idr_label)
+        idr_layout.addWidget(self.idr_value)
+        idr_layout.setAlignment(Qt.AlignCenter)
+        
+        # Add layouts to stats layout with separators
+        stats_layout.addLayout(queue_layout)
+        stats_layout.addWidget(self._create_separator())
+        stats_layout.addLayout(files_layout)
+        stats_layout.addWidget(self._create_separator())
+        stats_layout.addLayout(usd_layout)
+        stats_layout.addWidget(self._create_separator())
+        stats_layout.addLayout(idr_layout)
+        
+        parent_layout.addWidget(stats_frame)
+    
+    def _create_separator(self):
+        """Create a vertical separator line"""
+        separator = QFrame()
+        separator.setFrameShape(QFrame.VLine)
+        separator.setFrameShadow(QFrame.Sunken)
+        separator.setStyleSheet("color: #bdc3c7;")
+        return separator
+    
     def on_clients_sort_changed(self):
         """Handle sort changes"""
         self.clients_sort_field = self.clients_sort_combo.currentText()
@@ -86,6 +167,39 @@ class ClientDataClientsHelper:
         """Load clients data from database"""
         self._clients_data_all = self.db_helper.get_all_clients()
         self.update_clients_table()
+        self.update_statistics()
+    
+    def update_statistics(self):
+        """Update the statistics panel with current data"""
+        try:
+            stats = self.db_helper.get_overall_statistics()
+            
+            # Update Total Queue (draft count)
+            draft_count = stats.get("draft_count", 0)
+            self.queue_value.setText(str(draft_count))
+            
+            # Update Total Files
+            total_files = stats.get("total_files", 0)
+            self.files_value.setText(str(total_files))
+            
+            # Update Asset Values
+            asset_values = stats.get("asset_values", {})
+            
+            # Format USD value
+            usd_value = asset_values.get("USD", 0)
+            self.usd_value.setText(f"${usd_value:,.2f}")
+            
+            # Format IDR value
+            idr_value = asset_values.get("IDR", 0)
+            self.idr_value.setText(f"Rp {idr_value:,.0f}")
+            
+        except Exception as e:
+            print(f"Error updating statistics: {e}")
+            # Set default values if error occurs
+            self.queue_value.setText("0")
+            self.files_value.setText("0")
+            self.usd_value.setText("$0.00")
+            self.idr_value.setText("Rp 0")
     
     def update_clients_table(self):
         """Update the clients table with filtered and sorted data"""
@@ -184,6 +298,10 @@ class ClientDataClientsHelper:
     def refresh_data(self):
         """Refresh clients data from database"""
         self.load_clients_data()
+    
+    def refresh_statistics(self):
+        """Refresh only the statistics without reloading all data"""
+        self.update_statistics()
     
     def select_client_by_name(self, client_name):
         """Select client by name after refresh"""
