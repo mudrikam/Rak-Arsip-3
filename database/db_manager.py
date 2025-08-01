@@ -191,6 +191,10 @@ class DatabaseManager(QObject):
         """Sum price by client ID filtered."""
         return self.clients_helper.sum_price_by_client_id_filtered(client_id, search_text, batch_filter)
 
+    def get_status_statistics_by_client_id(self, client_id, search_text=None, batch_filter=None):
+        """Get status statistics by client ID filtered."""
+        return self.clients_helper.get_status_statistics_by_client_id(client_id, search_text, batch_filter)
+
     def get_client_name_by_file_id(self, file_id):
         """Get client name by file ID."""
         return self.clients_helper.get_client_name_by_file_id(file_id)

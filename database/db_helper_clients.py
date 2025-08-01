@@ -438,3 +438,54 @@ class DatabaseClientsHelper:
         batch_numbers = [row[0] for row in cursor.fetchall()]
         self.db_manager.close()
         return batch_numbers
+
+    def get_status_statistics_by_client_id(self, client_id, search_text=None, batch_filter=None):
+        """Get status-based statistics (count and total price) for specific client with filters."""
+        self.db_manager.connect(write=False)
+        cursor = self.db_manager.connection.cursor()
+        where_clauses = ["fcp.client_id = ?"]
+        params = [client_id]
+        
+        if search_text:
+            search_pattern = f"%{search_text}%"
+            where_clauses.append(
+                "(f.name LIKE ? OR f.date LIKE ? OR ip.price LIKE ? OR s.name LIKE ? OR ip.note LIKE ?)"
+            )
+            params.extend([search_pattern] * 5)
+        
+        if batch_filter:
+            where_clauses.append("fcb.batch_number = ?")
+            params.append(batch_filter)
+        
+        join_batch = "LEFT JOIN file_client_batch fcb ON fcb.file_id = f.id AND fcb.client_id = fcp.client_id"
+        where_sql = "WHERE " + " AND ".join(where_clauses)
+        
+        sql = f"""
+            SELECT
+                s.name as status,
+                COUNT(*) as count,
+                SUM(CASE WHEN ip.price IS NOT NULL AND ip.price != '' THEN CAST(ip.price AS FLOAT) ELSE 0 END) as total_price
+            FROM file_client_price fcp
+            JOIN files f ON fcp.file_id = f.id
+            JOIN item_price ip ON fcp.item_price_id = ip.id
+            LEFT JOIN statuses s ON f.status_id = s.id
+            {join_batch}
+            {where_sql}
+            GROUP BY s.name
+            ORDER BY s.name ASC
+        """
+        cursor.execute(sql, params)
+        
+        status_stats = {}
+        for row in cursor.fetchall():
+            status = row["status"] if row["status"] else "No Status"
+            count = row["count"] if row["count"] else 0
+            total_price = row["total_price"] if row["total_price"] else 0
+            
+            status_stats[status] = {
+                "count": count,
+                "total_price": total_price
+            }
+        
+        self.db_manager.close()
+        return status_stats
