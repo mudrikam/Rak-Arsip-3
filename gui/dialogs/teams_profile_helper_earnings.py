@@ -32,6 +32,7 @@ class EarningsHelper:
         self._earnings_team_id = None
         self._earnings_current_username = ""
         self._earnings_total_pages = 1
+        self._earnings_status_filter_value = None
 
     def init_earnings_tab(self, tab_widget):
         tab = QWidget()
@@ -54,6 +55,12 @@ class EarningsHelper:
         search_row.addWidget(QLabel("Sort by:"))
         search_row.addWidget(self.dialog.earnings_sort_combo)
         search_row.addWidget(self.dialog.earnings_sort_order_combo)
+        
+        self.dialog.earnings_status_filter_combo = QComboBox()
+        self.dialog.earnings_status_filter_combo.setMinimumWidth(120)
+        self.dialog.earnings_status_filter_combo.addItem("All Status")
+        search_row.addWidget(QLabel("Status:"))
+        search_row.addWidget(self.dialog.earnings_status_filter_combo)
         self.dialog.earnings_batch_filter_combo = QComboBox()
         self.dialog.earnings_batch_filter_combo.setMinimumWidth(120)
         self.dialog.earnings_batch_filter_combo.addItem("All Batches")
@@ -92,6 +99,7 @@ class EarningsHelper:
         self.dialog.earnings_next_btn.clicked.connect(self.earnings_next_page)
         self.dialog.earnings_page_input.valueChanged.connect(self.earnings_goto_page)
         self.dialog.earnings_batch_filter_combo.currentIndexChanged.connect(self.on_earnings_batch_filter_changed)
+        self.dialog.earnings_status_filter_combo.currentIndexChanged.connect(self.on_earnings_status_filter_changed)
         self.dialog.earnings_sort_combo.currentIndexChanged.connect(self.on_earnings_sort_changed)
         self.dialog.earnings_sort_order_combo.currentIndexChanged.connect(self.on_earnings_sort_changed)
         self.dialog.earnings_table.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -126,6 +134,30 @@ class EarningsHelper:
             self.dialog.earnings_batch_filter_combo.setCurrentIndex(0)
         self._earnings_batch_filter_value = None if self.dialog.earnings_batch_filter_combo.currentIndex() == 0 else self.dialog.earnings_batch_filter_combo.currentText()
         self.dialog.earnings_batch_filter_combo.blockSignals(False)
+
+    def refresh_earnings_status_filter_combo(self, status_set):
+        self.dialog.earnings_status_filter_combo.blockSignals(True)
+        current = self.dialog.earnings_status_filter_combo.currentText() if self.dialog.earnings_status_filter_combo.count() > 0 else "All Status"
+        self.dialog.earnings_status_filter_combo.clear()
+        self.dialog.earnings_status_filter_combo.addItem("All Status")
+        status_list = sorted([s for s in status_set if s])
+        for status in status_list:
+            self.dialog.earnings_status_filter_combo.addItem(status)
+        idx = self.dialog.earnings_status_filter_combo.findText(current)
+        if idx >= 0:
+            self.dialog.earnings_status_filter_combo.setCurrentIndex(idx)
+        else:
+            self.dialog.earnings_status_filter_combo.setCurrentIndex(0)
+        self._earnings_status_filter_value = None if self.dialog.earnings_status_filter_combo.currentIndex() == 0 else self.dialog.earnings_status_filter_combo.currentText()
+        self.dialog.earnings_status_filter_combo.blockSignals(False)
+
+    def on_earnings_status_filter_changed(self, idx):
+        if idx == 0:
+            self._earnings_status_filter_value = None
+        else:
+            self._earnings_status_filter_value = self.dialog.earnings_status_filter_combo.currentText()
+        self.earnings_current_page = 1
+        self.update_earnings_table(self._earnings_current_username)
 
     def on_earnings_batch_filter_changed(self, idx):
         if idx == 0:
@@ -171,31 +203,69 @@ class EarningsHelper:
         team_id = self._earnings_team_id
         search_text = self.dialog.earnings_search_edit.text().strip()
         batch_filter = self._earnings_batch_filter_value
+        status_filter = self._earnings_status_filter_value
         sort_field = self.earnings_sort_field
         sort_order = self.earnings_sort_order
         page_size = self.earnings_page_size
         offset = (self.earnings_current_page - 1) * page_size
-        total_rows = db_manager.count_earnings_by_team_id_filtered(
-            team_id, search_text, batch_filter
-        )
-        self._earnings_total_pages = max(1, (total_rows + page_size - 1) // page_size)
+        
+        # Get all records first to calculate total and populate filters
         all_records = db_manager.get_earnings_by_team_id_paged(
             team_id, search_text, None, sort_field, sort_order, 0, 10000
         )
         batch_set = set()
+        status_set = set()
         for rec in all_records:
             batch = rec[6]
+            status = rec[4]
             if batch:
                 batch_set.add(batch)
+            if status:
+                status_set.add(status)
         self.refresh_earnings_batch_filter_combo(batch_set)
+        self.refresh_earnings_status_filter_combo(status_set)
         batch_filter = self._earnings_batch_filter_value
-        records = db_manager.get_earnings_by_team_id_paged(
-            team_id, search_text, batch_filter, sort_field, sort_order, offset, page_size
+        status_filter = self._earnings_status_filter_value
+        
+        # Get all records for filter population and manual status filtering
+        all_records_unfiltered = db_manager.get_earnings_by_team_id_paged(
+            team_id, search_text, batch_filter, sort_field, sort_order, 0, 10000
         )
+        
+        # Apply status filter manually
+        if status_filter:
+            filtered_records = [rec for rec in all_records_unfiltered if rec[4] == status_filter]
+        else:
+            filtered_records = all_records_unfiltered
+        
+        # Calculate pagination for filtered records
+        total_filtered = len(filtered_records)
+        self._earnings_total_pages = max(1, (total_filtered + page_size - 1) // page_size)
+        
+        # Get page slice
+        start_idx = offset
+        end_idx = start_idx + page_size
+        records = filtered_records[start_idx:end_idx]
+        
         self.earnings_records_filtered = records
-        summary = db_manager.earnings_summary_by_team_id_filtered(
-            team_id, search_text, batch_filter
+        
+        # For summary, use batch filter but calculate manually for status
+        summary_records = db_manager.get_earnings_by_team_id_paged(
+            team_id, search_text, batch_filter, sort_field, sort_order, 0, 10000
         )
+        if status_filter:
+            summary_records = [rec for rec in summary_records if rec[4] == status_filter]
+        
+        # Calculate summary manually
+        total_amount = sum(float(rec[2]) if rec[2] else 0 for rec in summary_records)
+        total_pending = sum(float(rec[2]) if rec[2] and rec[4] == "Pending" else 0 for rec in summary_records)
+        total_paid = sum(float(rec[2]) if rec[2] and rec[4] == "Paid" else 0 for rec in summary_records)
+        
+        summary = {
+            'total_amount': total_amount,
+            'total_pending': total_pending,
+            'total_paid': total_paid
+        }
         self.dialog.earnings_table.setRowCount(len(records))
         window_config_path = basedir / "configs" / "window_config.json"
         config_manager2 = ConfigManager(str(window_config_path))
@@ -257,6 +327,19 @@ class EarningsHelper:
             if widget:
                 widget.deleteLater()
         
+        # Main summary widget with left-right layout
+        main_summary_widget = QWidget()
+        main_summary_layout = QHBoxLayout(main_summary_widget)
+        main_summary_layout.setContentsMargins(0, 0, 0, 0)
+        main_summary_layout.setSpacing(20)
+        main_summary_layout.setAlignment(Qt.AlignTop)
+        
+        # Left side: Original layout (Name + Pending + Paid + Total)
+        left_info_widget = QWidget()
+        left_info_layout = QVBoxLayout(left_info_widget)
+        left_info_layout.setContentsMargins(0, 0, 0, 0)
+        left_info_layout.setSpacing(2)
+        
         full_name = ""
         if username:
             for team in getattr(self.dialog.teams_helper, "_teams_data", []):
@@ -265,10 +348,12 @@ class EarningsHelper:
                     break
         
         full_name_label = QLabel(f"Name: {full_name}")
-        full_name_label.setStyleSheet("font-size:12px; font-weight:bold; margin-bottom:2px;")
-        self.dialog.earnings_summary_layout.addWidget(full_name_label)
+        full_name_label.setStyleSheet("font-size:12px; font-weight:bold;")
+        left_info_layout.addWidget(full_name_label)
         
+        # Pending status row with icon
         pending_row = QHBoxLayout()
+        pending_row.setContentsMargins(0, 0, 0, 0)
         pending_icon = QLabel()
         pending_icon.setPixmap(qta.icon("fa6s.clock", color="#ffb300").pixmap(16, 16))
         pending_label = QLabel("Pending:")
@@ -281,10 +366,13 @@ class EarningsHelper:
         pending_row.addWidget(pending_amount)
         pending_row.addStretch()
         pending_widget = QWidget()
+        pending_widget.setContentsMargins(0, 0, 0, 0)
         pending_widget.setLayout(pending_row)
-        self.dialog.earnings_summary_layout.addWidget(pending_widget)
+        left_info_layout.addWidget(pending_widget)
         
+        # Paid status row with icon
         paid_row = QHBoxLayout()
+        paid_row.setContentsMargins(0, 0, 0, 0)
         paid_icon = QLabel()
         paid_icon.setPixmap(qta.icon("fa6s.money-bill-wave", color="#009688").pixmap(16, 16))
         paid_label = QLabel("Paid:")
@@ -297,10 +385,13 @@ class EarningsHelper:
         paid_row.addWidget(paid_amount)
         paid_row.addStretch()
         paid_widget = QWidget()
+        paid_widget.setContentsMargins(0, 0, 0, 0)
         paid_widget.setLayout(paid_row)
-        self.dialog.earnings_summary_layout.addWidget(paid_widget)
+        left_info_layout.addWidget(paid_widget)
         
+        # Total estimate row with icon
         estimate_row = QHBoxLayout()
+        estimate_row.setContentsMargins(0, 0, 0, 0)
         estimate_icon = QLabel()
         estimate_icon.setPixmap(qta.icon("fa6s.chart-column", color="#1976d2").pixmap(16, 16))
         estimate_label = QLabel("Total Estimate:")
@@ -313,12 +404,112 @@ class EarningsHelper:
         estimate_row.addWidget(estimate_amount)
         estimate_row.addStretch()
         estimate_widget = QWidget()
+        estimate_widget.setContentsMargins(0, 0, 0, 0)
         estimate_widget.setLayout(estimate_row)
-        self.dialog.earnings_summary_layout.addWidget(estimate_widget)
+        left_info_layout.addWidget(estimate_widget)
         
-        records_label = QLabel(f"Total Earnings Records: {total_rows}")
+        records_label = QLabel(f"Total Earnings Records: {total_filtered}")
         records_label.setStyleSheet("color:#666; font-size:11px; margin-top:2px;")
-        self.dialog.earnings_summary_layout.addWidget(records_label)
+        left_info_layout.addWidget(records_label)
+        
+        main_summary_layout.addWidget(left_info_widget, 1)
+        
+        # Right side: Detailed status breakdown
+        self._add_detailed_status_breakdown(main_summary_layout, team_id, search_text, batch_filter, status_filter)
+        
+        # Add main summary widget to layout
+        self.dialog.earnings_summary_layout.addWidget(main_summary_widget)
+
+    def _add_detailed_status_breakdown(self, parent_layout, team_id, search_text, batch_filter, status_filter):
+        """Add detailed status breakdown like client data files"""
+        basedir = Path(__file__).parent.parent.parent
+        db_config_path = basedir / "configs" / "db_config.json"
+        config_manager = ConfigManager(str(db_config_path))
+        db_manager = DatabaseManager(config_manager, config_manager)
+        
+        # Get all records for detailed breakdown (without status filter for complete stats)
+        all_records_for_stats = db_manager.get_earnings_by_team_id_paged(
+            team_id, search_text, batch_filter, "File Name", "Ascending", 0, 10000
+        )
+        
+        # If status filter is active, only show stats for that status
+        if status_filter:
+            all_records_for_stats = [rec for rec in all_records_for_stats if rec[4] == status_filter]
+        
+        if not all_records_for_stats:
+            return
+        
+        # Calculate status statistics manually
+        status_stats = {}
+        for record in all_records_for_stats:
+            status = record[4] if len(record) > 4 else ""
+            amount = float(record[2]) if len(record) > 2 and record[2] else 0
+            
+            if status not in status_stats:
+                status_stats[status] = {"count": 0, "total_amount": 0}
+            
+            status_stats[status]["count"] += 1
+            status_stats[status]["total_amount"] += amount
+        
+        # Get status colors from config
+        window_config_path = basedir / "configs" / "window_config.json"
+        config_manager2 = ConfigManager(str(window_config_path))
+        status_options = config_manager2.get("status_options")
+        if not status_options:
+            return
+        
+        currency_label = "IDR"
+        
+        # Create vertical layout for detailed status statistics
+        stats_widget = QWidget()
+        stats_layout = QVBoxLayout(stats_widget)
+        stats_layout.setContentsMargins(0, 0, 0, 0)
+        stats_layout.setSpacing(2)  # Same spacing as client data files
+        stats_layout.setAlignment(Qt.AlignTop | Qt.AlignLeft)  # Align to top and left like client data files
+
+        # Sort status stats by count (descending) for better presentation
+        sorted_status_stats = sorted(status_stats.items(), key=lambda x: x[1].get("count", 0), reverse=True)
+        
+        # Add status statistics
+        for status, data in sorted_status_stats:
+            count = data.get("count", 0)
+            total_amount = data.get("total_amount", 0)
+            
+            if count == 0:
+                continue
+            
+            # Format amount (same formatting as client data files)
+            try:
+                amount_float = float(total_amount)
+                if amount_float.is_integer():
+                    amount_str = f"{int(amount_float):,}".replace(",", ".")
+                else:
+                    amount_str = f"{amount_float:,.2f}".replace(",", ".")
+            except Exception:
+                amount_str = str(total_amount)
+            
+            amount_display = f"{currency_label} {amount_str}" if currency_label else amount_str
+            
+            # Create status label with count and amount (same format as client data files)
+            status_text = f"{status}: {count} records ({amount_display})"
+            status_label = QLabel(status_text)
+            status_label.setAlignment(Qt.AlignLeft)  # Ensure left alignment
+            
+            # Apply status color if available (same styling as client data files)
+            if status in status_options:
+                status_color = status_options[status].get("color")
+                font_weight = status_options[status].get("font_weight")
+                if status_color and font_weight:
+                    status_label.setStyleSheet(f"color: {status_color}; font-weight: {font_weight}; font-size: 11px;")
+                else:
+                    status_label.setStyleSheet("font-size: 11px;")
+            else:
+                status_label.setStyleSheet("font-size: 11px;")
+            
+            stats_layout.addWidget(status_label)
+        
+        # Add the stats widget to parent layout
+        parent_layout.addWidget(stats_widget, 1)
 
     def get_global_earnings_index(self, row_in_page):
         start_idx = (self.earnings_current_page - 1) * self.earnings_page_size
@@ -448,4 +639,5 @@ class EarningsHelper:
         self.earnings_records_all = []
         self.earnings_records_filtered = []
         self.earnings_current_page = 1
+        self._earnings_status_filter_value = None
         self.update_earnings_table()

@@ -284,77 +284,149 @@ class AttendanceHelper:
             if widget:
                 widget.deleteLater()
         
+        # Main summary widget with left-right layout (like earnings)
+        main_summary_widget = QWidget()
+        main_summary_layout = QHBoxLayout(main_summary_widget)
+        main_summary_layout.setContentsMargins(0, 0, 0, 0)
+        main_summary_layout.setSpacing(20)
+        main_summary_layout.setAlignment(Qt.AlignTop)
+        
+        # Left side: Basic info (Name + totals)
+        left_info_widget = QWidget()
+        left_info_layout = QVBoxLayout(left_info_widget)
+        left_info_layout.setContentsMargins(0, 0, 0, 0)
+        left_info_layout.setSpacing(2)
+        
+        # Name label
         full_name_label = QLabel(f"Name: {full_name or ''}")
-        full_name_label.setStyleSheet("font-size:12px; font-weight:bold; margin-bottom:2px;")
-        self.dialog.attendance_summary_layout.addWidget(full_name_label)
+        full_name_label.setStyleSheet("font-size:12px; font-weight:bold;")
+        left_info_layout.addWidget(full_name_label)
         
-        days_row = QHBoxLayout()
-        days_icon = QLabel()
-        days_icon.setPixmap(qta.icon("fa6s.calendar-days", color="#1976d2").pixmap(16, 16))
-        days_label = QLabel("Total Days:")
-        days_label.setStyleSheet("color:#1976d2; font-size:12px; font-weight:bold;")
-        days_count = QLabel(str(summary["total_days"]))
-        days_count.setStyleSheet("font-size:12px; font-weight:bold;")
-        days_row.setSpacing(4)
-        days_row.addWidget(days_icon)
-        days_row.addWidget(days_label)
-        days_row.addWidget(days_count)
-        days_row.addStretch()
-        days_widget = QWidget()
-        days_widget.setLayout(days_row)
-        self.dialog.attendance_summary_layout.addWidget(days_widget)
+        # Total Days row with icon
+        total_days_row = QHBoxLayout()
+        total_days_row.setContentsMargins(0, 0, 0, 0)
+        total_days_icon = QLabel()
+        total_days_icon.setPixmap(qta.icon("fa6s.calendar-days", color="#1976d2").pixmap(16, 16))
+        total_days_label = QLabel("Total Days:")
+        total_days_label.setStyleSheet("color:#1976d2; font-size:12px; font-weight:bold;")
+        total_days_amount = QLabel(f"{summary['total_days']}")
+        total_days_amount.setStyleSheet("font-size:12px; font-weight:bold;")
+        total_days_row.setSpacing(4)
+        total_days_row.addWidget(total_days_icon)
+        total_days_row.addWidget(total_days_label)
+        total_days_row.addWidget(total_days_amount)
+        total_days_row.addStretch()
+        total_days_widget = QWidget()
+        total_days_widget.setContentsMargins(0, 0, 0, 0)
+        total_days_widget.setLayout(total_days_row)
+        left_info_layout.addWidget(total_days_widget)
         
-        records_row = QHBoxLayout()
-        records_icon = QLabel()
-        records_icon.setPixmap(qta.icon("fa6s.clipboard-list", color="#009688").pixmap(16, 16))
-        records_label = QLabel("Total Records:")
-        records_label.setStyleSheet("color:#009688; font-size:12px; font-weight:bold;")
-        records_count = QLabel(str(summary["total_records"]))
-        records_count.setStyleSheet("font-size:12px; font-weight:bold;")
-        records_row.setSpacing(4)
-        records_row.addWidget(records_icon)
-        records_row.addWidget(records_label)
-        records_row.addWidget(records_count)
-        records_row.addStretch()
-        records_widget = QWidget()
-        records_widget.setLayout(records_row)
-        self.dialog.attendance_summary_layout.addWidget(records_widget)
+        # Total Records row with icon
+        total_records_row = QHBoxLayout()
+        total_records_row.setContentsMargins(0, 0, 0, 0)
+        total_records_icon = QLabel()
+        total_records_icon.setPixmap(qta.icon("fa6s.list", color="#009688").pixmap(16, 16))
+        total_records_label = QLabel("Total Records:")
+        total_records_label.setStyleSheet("color:#009688; font-size:12px; font-weight:bold;")
+        total_records_amount = QLabel(f"{summary['total_records']}")
+        total_records_amount.setStyleSheet("font-size:12px; font-weight:bold;")
+        total_records_row.setSpacing(4)
+        total_records_row.addWidget(total_records_icon)
+        total_records_row.addWidget(total_records_label)
+        total_records_row.addWidget(total_records_amount)
+        total_records_row.addStretch()
+        total_records_widget = QWidget()
+        total_records_widget.setContentsMargins(0, 0, 0, 0)
+        total_records_widget.setLayout(total_records_row)
+        left_info_layout.addWidget(total_records_widget)
         
-        hours_row = QHBoxLayout()
-        hours_icon = QLabel()
-        hours_icon.setPixmap(qta.icon("fa6s.clock", color="#ffb300").pixmap(16, 16))
-        hours_label = QLabel("Total Work Hours:")
-        hours_label.setStyleSheet("color:#ffb300; font-size:12px; font-weight:bold;")
-        hours_count = QLabel(str(total_hours))
-        hours_count.setStyleSheet("font-size:12px; font-weight:bold;")
-        hours_row.setSpacing(4)
-        hours_row.addWidget(hours_icon)
-        hours_row.addWidget(hours_label)
-        hours_row.addWidget(hours_count)
-        hours_row.addStretch()
-        hours_widget = QWidget()
-        hours_widget.setLayout(hours_row)
-        self.dialog.attendance_summary_layout.addWidget(hours_widget)
+        # Total Work Hours row with icon
+        total_hours_row = QHBoxLayout()
+        total_hours_row.setContentsMargins(0, 0, 0, 0)
+        total_hours_icon = QLabel()
+        total_hours_icon.setPixmap(qta.icon("fa6s.clock", color="#ffb300").pixmap(16, 16))
+        total_hours_label = QLabel("Total Work Hours:")
+        total_hours_label.setStyleSheet("color:#ffb300; font-size:12px; font-weight:bold;")
+        total_hours_amount = QLabel(f"{total_hours}")
+        total_hours_amount.setStyleSheet("font-size:12px; font-weight:bold;")
+        total_hours_row.setSpacing(4)
+        total_hours_row.addWidget(total_hours_icon)
+        total_hours_row.addWidget(total_hours_label)
+        total_hours_row.addWidget(total_hours_amount)
+        total_hours_row.addStretch()
+        total_hours_widget = QWidget()
+        total_hours_widget.setContentsMargins(0, 0, 0, 0)
+        total_hours_widget.setLayout(total_hours_row)
+        left_info_layout.addWidget(total_hours_widget)
         
-        last_row = QHBoxLayout()
-        last_icon = QLabel()
-        last_icon.setPixmap(qta.icon("fa6s.arrow-right-to-city", color="#666").pixmap(16, 16))
-        last_label = QLabel("Last Checkout:")
-        last_label.setStyleSheet("color:#666; font-size:12px; font-weight:bold;")
-        last_checkout_label = QLabel(str(last_checkout))
-        last_checkout_label.setStyleSheet("font-size:12px; font-weight:bold;")
-        last_row.setSpacing(4)
-        last_row.addWidget(last_icon)
-        last_row.addWidget(last_label)
-        last_row.addWidget(last_checkout_label)
-        last_row.addStretch()
-        last_widget = QWidget()
-        last_widget.setLayout(last_row)
-        self.dialog.attendance_summary_layout.addWidget(last_widget)
+        # Last Checkout row with icon
+        last_checkout_row = QHBoxLayout()
+        last_checkout_row.setContentsMargins(0, 0, 0, 0)
+        last_checkout_icon = QLabel()
+        last_checkout_icon.setPixmap(qta.icon("fa6s.door-open", color="#666").pixmap(16, 16))
+        last_checkout_label = QLabel("Last Checkout:")
+        last_checkout_label.setStyleSheet("color:#666; font-size:12px; font-weight:bold;")
+        last_checkout_amount = QLabel(f"{last_checkout}")
+        last_checkout_amount.setStyleSheet("font-size:12px; font-weight:bold;")
+        last_checkout_row.setSpacing(4)
+        last_checkout_row.addWidget(last_checkout_icon)
+        last_checkout_row.addWidget(last_checkout_label)
+        last_checkout_row.addWidget(last_checkout_amount)
+        last_checkout_row.addStretch()
+        last_checkout_widget = QWidget()
+        last_checkout_widget.setContentsMargins(0, 0, 0, 0)
+        last_checkout_widget.setLayout(last_checkout_row)
+        left_info_layout.addWidget(last_checkout_widget)
         
+        # Filtered records count
         filtered_label = QLabel(f"Filtered Attendance Records: {total_rows}")
-        filtered_label.setStyleSheet("color:#666; font-size:11px; margin-top:2px;")
-        self.dialog.attendance_summary_layout.addWidget(filtered_label)
+        filtered_label.setStyleSheet("color:#666; font-size:11px;")
+        left_info_layout.addWidget(filtered_label)
+        
+        main_summary_layout.addWidget(left_info_widget)
+        
+        # Right side: Day breakdown (like status breakdown in earnings)
+        self._add_day_breakdown(main_summary_layout, summary)
+        
+        # Add main summary widget to layout
+        self.dialog.attendance_summary_layout.addWidget(main_summary_widget)
+
+    def _add_day_breakdown(self, parent_layout, summary):
+        """Add day-based breakdown like earnings status breakdown"""
+        if not summary.get("day_breakdown"):
+            return
+        
+        # Create vertical layout for day statistics
+        stats_widget = QWidget()
+        stats_layout = QVBoxLayout(stats_widget)
+        stats_layout.setContentsMargins(0, 0, 0, 0)
+        stats_layout.setSpacing(0)  # Same spacing as left side
+        stats_layout.setAlignment(Qt.AlignTop | Qt.AlignLeft)  # Align to top and left
+        
+        # Add header label for stats section
+        header_label = QLabel("Day Breakdown:")
+        header_label.setStyleSheet("font-size: 11px; font-weight: bold; color: #666;")
+        stats_layout.addWidget(header_label)
+        
+        # Sort day breakdown by count (descending)
+        day_breakdown = summary.get("day_breakdown", {})
+        sorted_days = sorted(day_breakdown.items(), key=lambda x: x[1], reverse=True)
+        
+        # Add day statistics
+        for day, count in sorted_days:
+            if count == 0:
+                continue
+            
+            # Create day label with count (same format as earnings)
+            day_text = f"{day}: {count} records"
+            day_label = QLabel(day_text)
+            day_label.setStyleSheet("font-size: 11px; color: #555;")
+            day_label.setAlignment(Qt.AlignLeft)  # Ensure text is left-aligned
+            
+            stats_layout.addWidget(day_label)
+        
+        # Add the stats widget to parent layout
+        parent_layout.addWidget(stats_widget)
 
     def clear_attendance_data(self):
         self.dialog.attendance_table.setRowCount(0)
