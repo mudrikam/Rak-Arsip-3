@@ -105,7 +105,7 @@ class TeamsHelper:
         self.dialog.save_button.setEnabled(False)
 
     def fetch_team_data(self):
-        basedir = Path(__file__).parent.parent.parent
+        basedir = Path(__file__).resolve().parents[3]
         db_config_path = basedir / "configs" / "db_config.json"
         config_manager = ConfigManager(str(db_config_path))
         db_manager = DatabaseManager(config_manager, config_manager)
@@ -194,7 +194,7 @@ class TeamsHelper:
         self.dialog.earnings_helper.clear_earnings_data()
 
     def save_team_details(self):
-        basedir = Path(__file__).parent.parent.parent
+        basedir = Path(__file__).resolve().parents[3]
         db_config_path = basedir / "configs" / "db_config.json"
         config_manager = ConfigManager(str(db_config_path))
         db_manager = DatabaseManager(config_manager, config_manager)

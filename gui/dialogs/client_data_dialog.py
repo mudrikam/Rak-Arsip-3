@@ -5,11 +5,11 @@ from PySide6.QtCore import Qt, QPoint
 import qtawesome as qta
 
 # Import helper classes
-from .client_data_helper_database import ClientDataDatabaseHelper
-from .client_data_helper_clients import ClientDataClientsHelper
-from .client_data_helper_details import ClientDataDetailsHelper
-from .client_data_helper_files import ClientDataFilesHelper
-from .client_data_helper_batch import ClientDataBatchHelper
+from .client_data_helper.client_data_helper_database import ClientDataDatabaseHelper
+from .client_data_helper.client_data_helper_clients import ClientDataClientsHelper
+from .client_data_helper.client_data_helper_details import ClientDataDetailsHelper
+from .client_data_helper.client_data_helper_files import ClientDataFilesHelper
+from .client_data_helper.client_data_helper_batch import ClientDataBatchHelper
 
 class BatchEditDialog(QDialog):
     """Dialog for editing batch information"""

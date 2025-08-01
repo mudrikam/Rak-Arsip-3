@@ -6,14 +6,14 @@ from datetime import datetime, timedelta
 from PySide6.QtCore import QObject, Signal, QTimer
 
 # Import all helper classes
-from .db_helper_connection import DatabaseConnectionHelper
-from .db_helper_categories import DatabaseCategoriesHelper
-from .db_helper_templates import DatabaseTemplatesHelper
-from .db_helper_files import DatabaseFilesHelper
-from .db_helper_clients import DatabaseClientsHelper
-from .db_helper_teams import DatabaseTeamsHelper
-from .db_helper_price import DatabasePriceHelper
-from .db_helper_backup import DatabaseBackupHelper
+from .db_helper.db_helper_connection import DatabaseConnectionHelper
+from .db_helper.db_helper_categories import DatabaseCategoriesHelper
+from .db_helper.db_helper_templates import DatabaseTemplatesHelper
+from .db_helper.db_helper_files import DatabaseFilesHelper
+from .db_helper.db_helper_clients import DatabaseClientsHelper
+from .db_helper.db_helper_teams import DatabaseTeamsHelper
+from .db_helper.db_helper_price import DatabasePriceHelper
+from .db_helper.db_helper_backup import DatabaseBackupHelper
 
 
 class DatabaseManager(QObject):

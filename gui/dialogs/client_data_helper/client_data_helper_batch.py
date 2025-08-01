@@ -140,7 +140,7 @@ class ClientDataBatchHelper:
             return
         
         # Import the dialog to avoid circular imports
-        from .client_data_dialog import BatchEditDialog
+        from ..client_data_dialog import BatchEditDialog
         
         dialog = BatchEditDialog(parent=self.parent, client_id=self._selected_client_id, show_client_combo=False)
         if dialog.exec() == QDialog.Accepted:
@@ -168,7 +168,7 @@ class ClientDataBatchHelper:
         note = self.batch_table.item(row, 1).text()
         
         # Import the dialog to avoid circular imports
-        from .client_data_dialog import BatchEditDialog
+        from ..client_data_dialog import BatchEditDialog
         
         dialog = BatchEditDialog(
             batch_number, note, self._selected_client_id, None, 

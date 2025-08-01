@@ -13,7 +13,7 @@ class ClientDataDatabaseHelper:
     def get_db_manager(self):
         """Get database manager instance"""
         if self._db_manager is None:
-            basedir = Path(__file__).parent.parent.parent
+            basedir = Path(__file__).resolve().parents[3]
             db_config_path = basedir / "configs" / "db_config.json"
             self._config_manager = ConfigManager(str(db_config_path))
             self._db_manager = DatabaseManager(self._config_manager, self._config_manager)
@@ -21,7 +21,7 @@ class ClientDataDatabaseHelper:
     
     def get_config_manager(self, config_type="db"):
         """Get config manager instance"""
-        basedir = Path(__file__).parent.parent.parent
+        basedir = Path(__file__).resolve().parents[3]
         if config_type == "window":
             config_path = basedir / "configs" / "window_config.json"
         else:
