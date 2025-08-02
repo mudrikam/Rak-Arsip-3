@@ -1,9 +1,11 @@
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget, QGroupBox,
     QCheckBox, QListWidget, QListWidgetItem, QPushButton, QLineEdit,
-    QTextEdit, QLabel, QMessageBox, QFileDialog, QInputDialog, QListView, QAbstractItemView, QProgressBar, QSpinBox
+    QTextEdit, QLabel, QMessageBox, QFileDialog, QInputDialog, QListView, QAbstractItemView, QProgressBar, QSpinBox,
+    QTableWidget, QTableWidgetItem, QHeaderView, QSizePolicy, QMenu, QFormLayout, QComboBox, QDialogButtonBox
 )
 from PySide6.QtCore import Qt, QCoreApplication
+from PySide6.QtGui import QAction, QIcon
 import qtawesome as qta
 import csv
 import os
@@ -28,6 +30,7 @@ class PreferencesWindow(QDialog):
         self.create_categories_tab()
         self.create_templates_tab()
         self.create_backup_tab()
+        self.create_url_tab()
         
         layout.addWidget(self.tab_widget)
         
@@ -47,6 +50,206 @@ class PreferencesWindow(QDialog):
         layout.addLayout(button_layout)
         
         self.load_data()
+
+    def create_url_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        
+        # URL Provider group
+        provider_group = QGroupBox("URL Providers")
+        provider_layout = QVBoxLayout(provider_group)
+        
+        # Search and action buttons row
+        row = QHBoxLayout()
+        self.provider_search_edit = QLineEdit()
+        self.provider_search_edit.setPlaceholderText("Search provider name or description...")
+        self.provider_search_edit.setMinimumHeight(32)
+        self.provider_search_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        row.addWidget(self.provider_search_edit, 1)
+        row.addStretch()
+        
+        # Action buttons
+        self.provider_add_btn = QPushButton(qta.icon("fa6s.plus"), "Add Provider")
+        self.provider_edit_btn = QPushButton(qta.icon("fa6s.pen-to-square"), "Edit Provider")
+        self.provider_delete_btn = QPushButton(qta.icon("fa6s.trash"), "Delete Provider")
+        row.addWidget(self.provider_add_btn)
+        row.addWidget(self.provider_edit_btn)
+        row.addWidget(self.provider_delete_btn)
+        provider_layout.addLayout(row)
+        
+        # Provider table
+        self.provider_table = QTableWidget(tab)
+        self.provider_table.setColumnCount(6)
+        self.provider_table.setHorizontalHeaderLabels([
+            "Name", "Description", "Status", "Account Email", "Password", "URLs"
+        ])
+        self.provider_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.provider_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.provider_table.setSelectionMode(QTableWidget.SingleSelection)
+        
+        # Configure column widths
+        header = self.provider_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.Fixed)
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.Fixed)
+        header.setSectionResizeMode(3, QHeaderView.Fixed)
+        header.setSectionResizeMode(4, QHeaderView.Fixed)
+        header.setSectionResizeMode(5, QHeaderView.Fixed)
+        header.resizeSection(0, 150)
+        header.resizeSection(2, 80)
+        header.resizeSection(3, 200)
+        header.resizeSection(4, 100)
+        header.resizeSection(5, 60)
+        
+        provider_layout.addWidget(self.provider_table)
+        layout.addWidget(provider_group)
+        
+        # Connect signals
+        self.provider_add_btn.clicked.connect(self.on_provider_add)
+        self.provider_edit_btn.clicked.connect(self.on_provider_edit)
+        self.provider_delete_btn.clicked.connect(self.on_provider_delete)
+        self.provider_table.cellDoubleClicked.connect(self.on_provider_edit)
+        self.provider_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.provider_table.customContextMenuRequested.connect(self.show_provider_context_menu)
+        self.provider_search_edit.textChanged.connect(self.on_provider_search_changed)
+        
+        self.tab_widget.addTab(tab, qta.icon("fa6s.link"), "URL")
+
+    def show_provider_context_menu(self, pos):
+        """Show context menu for provider table"""
+        index = self.provider_table.indexAt(pos)
+        if not index.isValid():
+            return
+        
+        row = index.row()
+        menu = QMenu(self.provider_table)
+        
+        action_edit = QAction(qta.icon("fa6s.pen-to-square"), "Edit Provider", self)
+        action_delete = QAction(qta.icon("fa6s.trash"), "Delete Provider", self)
+        
+        def do_edit():
+            self.provider_table.selectRow(row)
+            self.on_provider_edit()
+        
+        def do_delete():
+            self.provider_table.selectRow(row)
+            self.on_provider_delete()
+        
+        action_edit.triggered.connect(do_edit)
+        action_delete.triggered.connect(do_delete)
+        
+        menu.addAction(action_edit)
+        menu.addAction(action_delete)
+        menu.exec(self.provider_table.viewport().mapToGlobal(pos))
+
+    def load_url_providers(self):
+        """Load all URL providers from database"""
+        self.provider_table.setRowCount(0)
+        try:
+            providers = self.db_manager.get_all_url_providers()
+            self.provider_table.setRowCount(len(providers))
+            for row_idx, provider in enumerate(providers):
+                provider_id, name, description, status, email, password, url_count = provider
+                self.provider_table.setItem(row_idx, 0, QTableWidgetItem(str(name)))
+                self.provider_table.setItem(row_idx, 1, QTableWidgetItem(str(description or "")))
+                status_item = QTableWidgetItem(str(status or ""))
+                if status == "Ready":
+                    status_item.setForeground(Qt.green)
+                elif status == "In use":
+                    status_item.setForeground(Qt.yellow)
+                elif status == "Full":
+                    status_item.setForeground(Qt.red)
+                self.provider_table.setItem(row_idx, 2, status_item)
+                self.provider_table.setItem(row_idx, 3, QTableWidgetItem(str(email or "")))
+                password_masked = "*" * len(str(password)) if password else ""
+                self.provider_table.setItem(row_idx, 4, QTableWidgetItem(password_masked))
+                self.provider_table.setItem(row_idx, 5, QTableWidgetItem(str(url_count)))
+                self.provider_table.item(row_idx, 0).setData(Qt.UserRole, provider_id)
+        except Exception as e:
+            print(f"Error loading URL providers: {e}")
+
+    def on_provider_search_changed(self):
+        """Filter providers based on search text"""
+        search_text = self.provider_search_edit.text().strip().lower()
+        
+        for row in range(self.provider_table.rowCount()):
+            name_item = self.provider_table.item(row, 0)
+            desc_item = self.provider_table.item(row, 1)
+            
+            name_text = name_item.text().lower() if name_item else ""
+            desc_text = desc_item.text().lower() if desc_item else ""
+            
+            if search_text in name_text or search_text in desc_text:
+                self.provider_table.setRowHidden(row, False)
+            else:
+                self.provider_table.setRowHidden(row, True)
+
+    def on_provider_add(self):
+        """Handle add provider button click"""
+        dialog = ProviderEditDialog(parent=self)
+        if dialog.exec() == QDialog.Accepted:
+            name, description, status, email, password = dialog.get_values()
+            if not name.strip():
+                QMessageBox.warning(self, "Validation Error", "Provider name cannot be empty.")
+                return
+            
+            try:
+                self.db_manager.add_url_provider(name, description, status, email, password)
+                self.load_url_providers()
+                QMessageBox.information(self, "Success", "Provider added successfully.")
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"Failed to add provider: {e}")
+
+    def on_provider_edit(self):
+        """Handle edit provider button click"""
+        row = self.provider_table.currentRow()
+        if row < 0:
+            QMessageBox.warning(self, "No Provider Selected", "Please select a provider to edit.")
+            return
+        
+        provider_id = self.provider_table.item(row, 0).data(Qt.UserRole)
+        
+        try:
+            provider = self.db_manager.get_url_provider_by_id(provider_id)
+            
+            if provider:
+                provider_id_db, name, description, status, email, password = provider
+                dialog = ProviderEditDialog(name, description, status, email, password, parent=self)
+                if dialog.exec() == QDialog.Accepted:
+                    new_name, new_description, new_status, new_email, new_password = dialog.get_values()
+                    if not new_name.strip():
+                        QMessageBox.warning(self, "Validation Error", "Provider name cannot be empty.")
+                        return
+                    
+                    self.db_manager.update_url_provider(provider_id, new_name, new_description, new_status, new_email, new_password)
+                    self.load_url_providers()
+                    QMessageBox.information(self, "Success", "Provider updated successfully.")
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Failed to edit provider: {e}")
+
+    def on_provider_delete(self):
+        """Handle delete provider button click"""
+        row = self.provider_table.currentRow()
+        if row < 0:
+            QMessageBox.warning(self, "No Provider Selected", "Please select a provider to delete.")
+            return
+        
+        provider_id = self.provider_table.item(row, 0).data(Qt.UserRole)
+        provider_name = self.provider_table.item(row, 0).text()
+        
+        reply = QMessageBox.question(
+            self, "Delete Provider", 
+            f"Are you sure you want to delete provider '{provider_name}'?\n"
+            "This action cannot be undone."
+        )
+        
+        if reply == QMessageBox.Yes:
+            try:
+                self.db_manager.delete_url_provider(provider_id)
+                self.load_url_providers()
+                QMessageBox.information(self, "Success", "Provider deleted successfully.")
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"Failed to delete provider: {e}")
 
     def create_action_options_tab(self):
         tab = QWidget()
@@ -435,6 +638,7 @@ class PreferencesWindow(QDialog):
         self.gemini_status_label.setText("")
         self.load_categories()
         self.load_templates()
+        self.load_url_providers()
         self.refresh_db_backup_list()
 
     def load_categories(self):
@@ -761,3 +965,105 @@ class PreferencesWindow(QDialog):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to save preferences: {e}")
             self.accept()
+
+
+class ProviderEditDialog(QDialog):
+    """Dialog for adding/editing URL providers"""
+    
+    def __init__(self, name="", description="", status="", email="", password="", parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Provider Details")
+        self.setMinimumSize(400, 300)
+        self.setModal(True)
+        
+        layout = QVBoxLayout(self)
+        
+        # Form layout
+        form_layout = QFormLayout()
+        
+        self.name_edit = QLineEdit()
+        self.name_edit.setText(name)
+        self.name_edit.setPlaceholderText("Enter provider name...")
+        form_layout.addRow("Name:", self.name_edit)
+        
+        self.description_edit = QTextEdit()
+        self.description_edit.setPlainText(description)
+        self.description_edit.setPlaceholderText("Enter provider description...")
+        self.description_edit.setMaximumHeight(80)
+        form_layout.addRow("Description:", self.description_edit)
+        
+        # Status combo box
+        self.status_combo = QComboBox()
+        self.status_combo.addItems(["Ready", "In use", "Full"])
+        if status in ["Ready", "In use", "Full"]:
+            self.status_combo.setCurrentText(status)
+        else:
+            self.status_combo.setCurrentText("Ready")
+        form_layout.addRow("Status:", self.status_combo)
+        
+        self.email_edit = QLineEdit()
+        self.email_edit.setText(email)
+        self.email_edit.setPlaceholderText("Enter account email...")
+        form_layout.addRow("Account Email:", self.email_edit)
+        
+        # Password field with show/hide button
+        password_layout = QHBoxLayout()
+        self.password_edit = QLineEdit()
+        self.password_edit.setText(password)
+        self.password_edit.setPlaceholderText("Enter password...")
+        self.password_edit.setEchoMode(QLineEdit.Password)
+        
+        self.show_password_btn = QPushButton()
+        self.show_password_btn.setIcon(qta.icon("fa6s.eye"))
+        self.show_password_btn.setCheckable(True)
+        self.show_password_btn.setFixedSize(32, 32)
+        self.show_password_btn.setToolTip("Show/Hide Password")
+        self.show_password_btn.clicked.connect(self.toggle_password_visibility)
+        
+        password_layout.addWidget(self.password_edit)
+        password_layout.addWidget(self.show_password_btn)
+        password_layout.setContentsMargins(0, 0, 0, 0)
+        
+        password_widget = QWidget()
+        password_widget.setLayout(password_layout)
+        form_layout.addRow("Password:", password_widget)
+        
+        layout.addLayout(form_layout)
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        
+        self.save_btn = QPushButton("Save")
+        self.save_btn.setIcon(qta.icon("fa6s.check"))
+        self.save_btn.clicked.connect(self.accept)
+        
+        self.cancel_btn = QPushButton("Cancel")
+        self.cancel_btn.setIcon(qta.icon("fa6s.xmark"))
+        self.cancel_btn.clicked.connect(self.reject)
+        
+        button_layout.addWidget(self.save_btn)
+        button_layout.addWidget(self.cancel_btn)
+        layout.addLayout(button_layout)
+        
+        # Focus on name field
+        self.name_edit.setFocus()
+    
+    def toggle_password_visibility(self):
+        """Toggle password field visibility"""
+        if self.show_password_btn.isChecked():
+            self.password_edit.setEchoMode(QLineEdit.Normal)
+            self.show_password_btn.setIcon(qta.icon("fa6s.eye-slash"))
+        else:
+            self.password_edit.setEchoMode(QLineEdit.Password)
+            self.show_password_btn.setIcon(qta.icon("fa6s.eye"))
+    
+    def get_values(self):
+        """Get form values"""
+        return (
+            self.name_edit.text().strip(),
+            self.description_edit.toPlainText().strip(),
+            self.status_combo.currentText(),
+            self.email_edit.text().strip(),
+            self.password_edit.text().strip()
+        )
