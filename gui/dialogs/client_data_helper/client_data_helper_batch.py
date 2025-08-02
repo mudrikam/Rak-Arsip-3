@@ -62,7 +62,7 @@ class ClientDataBatchHelper:
         self.batch_add_btn.clicked.connect(self.on_batch_add)
         self.batch_edit_btn.clicked.connect(self.on_batch_edit)
         self.batch_delete_btn.clicked.connect(self.on_batch_delete)
-        self.batch_table.cellDoubleClicked.connect(self.on_batch_edit)
+        self.batch_table.cellDoubleClicked.connect(self.on_batch_row_double_clicked)
         self.batch_table.cellClicked.connect(self.on_batch_row_clicked)
         self.batch_table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.batch_table.customContextMenuRequested.connect(self.show_batch_context_menu)
@@ -251,3 +251,24 @@ class ClientDataBatchHelper:
         # Load file URLs for this batch
         if hasattr(self.parent, '_load_file_urls_for_batch'):
             self.parent._load_file_urls_for_batch(self._selected_client_id, batch_number, client_name)
+    
+    def on_batch_row_double_clicked(self, row, col):
+        """Handle batch row double click - switch to File URLs tab"""
+        if row >= len(self._batch_data_filtered):
+            return
+        
+        batch_number = self._batch_data_filtered[row][0]
+        client_name = self.parent._selected_client_name
+        
+        # Load file URLs for this batch
+        if hasattr(self.parent, '_load_file_urls_for_batch'):
+            self.parent._load_file_urls_for_batch(self._selected_client_id, batch_number, client_name)
+        
+        # Switch to File URLs tab
+        if hasattr(self.parent, 'tab_widget'):
+            # Find the File URLs tab index (usually tab index 2: Client Details, Batch List, File URLs)
+            for i in range(self.parent.tab_widget.count()):
+                tab_text = self.parent.tab_widget.tabText(i)
+                if "File URLs" in tab_text:
+                    self.parent.tab_widget.setCurrentIndex(i)
+                    break

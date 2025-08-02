@@ -145,7 +145,7 @@ class DatabaseUrlsHelper:
         cursor = self.db_manager.connection.cursor()
         
         cursor.execute("""
-            SELECT f.name, up.name as provider_name, fu.url_value, fu.note
+            SELECT f.id, f.name, up.name as provider_name, fu.url_value, fu.note, f.date, f.root, f.path, f.status_id, f.category_id, f.subcategory_id
             FROM files f
             JOIN file_client_batch fcb ON f.id = fcb.file_id
             JOIN file_url fu ON f.id = fu.file_id

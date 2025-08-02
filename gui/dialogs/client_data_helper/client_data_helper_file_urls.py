@@ -1,10 +1,11 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QTableWidget,
-    QTableWidgetItem, QSizePolicy, QHeaderView, QMessageBox, QMenu, QComboBox, QLabel, QApplication
+    QTableWidgetItem, QSizePolicy, QHeaderView, QMessageBox, QMenu, QComboBox, QLabel, QApplication, QToolTip, QDialog
 )
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QCursor
 import qtawesome as qta
+import webbrowser
 
 class ClientDataFileUrlsHelper:
     """Helper class for File URLs tab functionality"""
@@ -68,14 +69,23 @@ class ClientDataFileUrlsHelper:
         
         # File URLs table
         self.file_urls_table = QTableWidget(tab)
-        self.file_urls_table.setColumnCount(4)
+        self.file_urls_table.setColumnCount(5)
         self.file_urls_table.setHorizontalHeaderLabels([
-            "Filename", "Provider", "URL", "Note"
+            "Filename", "Provider", "URL", "Note", "Actions"
         ])
         self.file_urls_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.file_urls_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.file_urls_table.setSelectionMode(QTableWidget.SingleSelection)
-        self.file_urls_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        
+        # Set column widths
+        header = self.file_urls_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.Stretch)  # Filename
+        header.setSectionResizeMode(1, QHeaderView.Stretch)  # Provider
+        header.setSectionResizeMode(2, QHeaderView.Stretch)  # URL
+        header.setSectionResizeMode(3, QHeaderView.Stretch)  # Note
+        header.setSectionResizeMode(4, QHeaderView.Fixed)    # Actions
+        self.file_urls_table.setColumnWidth(4, 120)  # Fixed width for Actions column
+        
         tab_layout.addWidget(self.file_urls_table)
         
         # Add tab to widget
@@ -126,14 +136,14 @@ class ClientDataFileUrlsHelper:
         """Update the file URLs table with filtered and sorted data"""
         search_text = self.file_urls_search_edit.text().strip().lower()
         
-        # Filter data - data is tuple: (filename, provider_name, url_value, note)
+        # Filter data - data is tuple: (file_id, filename, provider_name, url_value, note, date, root, path, status_id, category_id, subcategory_id)
         if search_text:
             self._file_urls_data_filtered = [
                 item for item in self._file_urls_data_all
-                if (search_text in str(item[0]).lower() or  # filename
-                    search_text in str(item[1]).lower() or  # provider_name
-                    search_text in str(item[2]).lower() or  # url_value
-                    search_text in str(item[3] or "").lower())  # note
+                if (search_text in str(item[1]).lower() or  # filename
+                    search_text in str(item[2]).lower() or  # provider_name
+                    search_text in str(item[3]).lower() or  # url_value
+                    search_text in str(item[4] or "").lower())  # note
             ]
         else:
             self._file_urls_data_filtered = list(self._file_urls_data_all)
@@ -143,13 +153,13 @@ class ClientDataFileUrlsHelper:
         sort_ascending = self.file_urls_order_combo.currentText() == "Ascending"
         
         field_map = {
-            "Filename": 0,
-            "Provider": 1, 
-            "URL": 2,
-            "Note": 3
+            "Filename": 1,   # filename
+            "Provider": 2,   # provider_name
+            "URL": 3,        # url_value
+            "Note": 4        # note
         }
         
-        sort_index = field_map.get(sort_field, 0)
+        sort_index = field_map.get(sort_field, 1)
         self._file_urls_data_filtered.sort(
             key=lambda x: str(x[sort_index] or "").lower(),
             reverse=not sort_ascending
@@ -158,10 +168,105 @@ class ClientDataFileUrlsHelper:
         # Update table
         self.file_urls_table.setRowCount(len(self._file_urls_data_filtered))
         for row_idx, item in enumerate(self._file_urls_data_filtered):
-            self.file_urls_table.setItem(row_idx, 0, QTableWidgetItem(str(item[0] or "")))  # filename
-            self.file_urls_table.setItem(row_idx, 1, QTableWidgetItem(str(item[1] or "")))  # provider
-            self.file_urls_table.setItem(row_idx, 2, QTableWidgetItem(str(item[2] or "")))  # url
-            self.file_urls_table.setItem(row_idx, 3, QTableWidgetItem(str(item[3] or "")))  # note
+            self.file_urls_table.setItem(row_idx, 0, QTableWidgetItem(str(item[1] or "")))  # filename
+            self.file_urls_table.setItem(row_idx, 1, QTableWidgetItem(str(item[2] or "")))  # provider
+            self.file_urls_table.setItem(row_idx, 2, QTableWidgetItem(str(item[3] or "")))  # url
+            self.file_urls_table.setItem(row_idx, 3, QTableWidgetItem(str(item[4] or "")))  # note
+            
+            # Add action buttons widget
+            self._create_action_buttons(row_idx, item)
+    
+    def _create_action_buttons(self, row_idx, item):
+        """Create action buttons widget for a table row"""
+        actions_widget = QWidget()
+        actions_layout = QHBoxLayout(actions_widget)
+        actions_layout.setContentsMargins(5, 2, 5, 2)
+        actions_layout.setSpacing(2)
+        
+        # Edit button
+        edit_btn = QPushButton()
+        edit_btn.setIcon(qta.icon("fa6s.pen-to-square"))
+        edit_btn.setFixedSize(28, 28)
+        edit_btn.setToolTip("Edit URL assignment")
+        edit_btn.clicked.connect(lambda: self._edit_file_url(item))
+        actions_layout.addWidget(edit_btn)
+        
+        # Copy URL button
+        copy_btn = QPushButton()
+        copy_btn.setIcon(qta.icon("fa6s.copy"))
+        copy_btn.setFixedSize(28, 28)
+        copy_btn.setToolTip("Copy URL to clipboard")
+        copy_btn.clicked.connect(lambda: self._copy_url(item, copy_btn))
+        actions_layout.addWidget(copy_btn)
+        
+        # Open URL button
+        open_btn = QPushButton()
+        open_btn.setIcon(qta.icon("fa6s.arrow-up-right-from-square"))
+        open_btn.setFixedSize(28, 28)
+        open_btn.setToolTip("Open URL in browser")
+        open_btn.clicked.connect(lambda: self._open_url(item))
+        actions_layout.addWidget(open_btn)
+        
+        actions_layout.addStretch()
+        self.file_urls_table.setCellWidget(row_idx, 4, actions_widget)
+    
+    def _edit_file_url(self, item):
+        """Edit URL assignment for the file"""
+        try:
+            file_id = item[0]
+            filename = item[1]
+            
+            # Create file record dictionary similar to central widget format
+            file_record = {
+                "id": file_id,
+                "name": filename,
+                "date": item[5],
+                "root": item[6], 
+                "path": item[7],
+                "status_id": item[8],
+                "category_id": item[9],
+                "subcategory_id": item[10]
+            }
+            
+            # Import and show assign file URL dialog
+            from gui.dialogs.assign_file_url_dialog import AssignFileUrlDialog
+            
+            # Get the actual database manager from the helper
+            db_manager = self.db_helper.get_db_manager()
+            
+            dialog = AssignFileUrlDialog(file_record, db_manager, self.parent)
+            if dialog.exec() == QDialog.Accepted:
+                # Refresh the table
+                self.load_file_urls_for_batch(self._selected_client_id, self._selected_batch_number, 
+                                            self._client_name_label.text().replace("Client: ", ""))
+                
+        except Exception as e:
+            print(f"Error editing file URL: {e}")
+            QMessageBox.warning(self.parent, "Error", f"Failed to edit URL assignment: {str(e)}")
+    
+    def _copy_url(self, item, button):
+        """Copy URL to clipboard"""
+        try:
+            url = item[3]  # url_value
+            if url:
+                QApplication.clipboard().setText(str(url))
+                QToolTip.showText(QCursor.pos(), f"{url}\nCopied to clipboard", button)
+            else:
+                QToolTip.showText(QCursor.pos(), "No URL to copy", button)
+        except Exception as e:
+            print(f"Error copying URL: {e}")
+    
+    def _open_url(self, item):
+        """Open URL in browser"""
+        try:
+            url = item[3]  # url_value
+            if url:
+                webbrowser.open(str(url))
+            else:
+                QMessageBox.information(self.parent, "Info", "No URL to open")
+        except Exception as e:
+            print(f"Error opening URL: {e}")
+            QMessageBox.warning(self.parent, "Error", f"Failed to open URL: {str(e)}")
     
     def show_file_urls_context_menu(self, pos):
         """Show context menu for file URLs table"""
@@ -182,17 +287,16 @@ class ClientDataFileUrlsHelper:
         action_open_url = QAction(icon_open, "Open URL", self.parent)
         
         def copy_filename():
-            filename = self._file_urls_data_filtered[row][0]  # first element is filename
+            filename = self._file_urls_data_filtered[row][1]  # second element is filename
             QApplication.clipboard().setText(filename)
         
         def copy_url():
-            url = self._file_urls_data_filtered[row][2]  # third element is url
+            url = self._file_urls_data_filtered[row][3]  # fourth element is url
             QApplication.clipboard().setText(url)
         
         def open_url():
-            url = self._file_urls_data_filtered[row][2]  # third element is url
+            url = self._file_urls_data_filtered[row][3]  # fourth element is url
             if url:
-                import webbrowser
                 webbrowser.open(url)
         
         action_copy_filename.triggered.connect(copy_filename)
@@ -210,7 +314,7 @@ class ClientDataFileUrlsHelper:
             return
         
         file_data = self._file_urls_data_filtered[row]
-        file_name = file_data[0]  # first element is filename
+        file_name = file_data[1]  # second element is filename
         
         if file_name:
             # Copy filename to clipboard
