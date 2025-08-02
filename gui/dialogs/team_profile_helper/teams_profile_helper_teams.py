@@ -316,7 +316,7 @@ class TeamsHelper:
 
     def on_team_row_double_clicked(self, row, col):
         self.fill_details_form(row)
-        self.dialog.tab_widget.setCurrentIndex(1)
+        self.dialog.tab_widget.setCurrentIndex(3)
 
     def add_member_mode(self):
         self._selected_team_index = None
