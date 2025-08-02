@@ -613,11 +613,9 @@ class MainActionDock(QDockWidget):
         def on_template_changed(index):
             if index == 0:
                 name_field_widget.set_selected_template(None)
-                show_statusbar_message(self, "Template cleared")
             else:
                 template_id = combo_template.itemData(index)
                 name_field_widget.set_selected_template(template_id)
-                show_statusbar_message(self, f"Template selected: {combo_template.currentText()} (ID: {template_id})")
             update_template_color_label()
 
         combo_disk.currentIndexChanged.connect(on_disk_changed)

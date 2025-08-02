@@ -14,6 +14,7 @@ from .db_helper.db_helper_clients import DatabaseClientsHelper
 from .db_helper.db_helper_teams import DatabaseTeamsHelper
 from .db_helper.db_helper_price import DatabasePriceHelper
 from .db_helper.db_helper_backup import DatabaseBackupHelper
+from .db_helper.db_helper_urls import DatabaseUrlsHelper
 
 
 class DatabaseManager(QObject):
@@ -46,6 +47,7 @@ class DatabaseManager(QObject):
         self.teams_helper = DatabaseTeamsHelper(self)
         self.price_helper = DatabasePriceHelper(self)
         self.backup_helper = DatabaseBackupHelper(self)
+        self.urls_helper = DatabaseUrlsHelper(self)
 
         # Initialize database
         self.connection_helper.ensure_database_exists()
@@ -375,3 +377,45 @@ class DatabaseManager(QObject):
     def export_to_csv(self, csv_path, progress_callback=None):
         """Export to CSV."""
         return self.backup_helper.export_to_csv(csv_path, progress_callback)
+
+    # URL Provider methods - delegate to urls helper
+    def get_all_url_providers(self):
+        """Get all URL providers."""
+        return self.urls_helper.get_all_url_providers()
+
+    def add_url_provider(self, name, description, status, email, password):
+        """Add URL provider."""
+        return self.urls_helper.add_url_provider(name, description, status, email, password)
+
+    def update_url_provider(self, provider_id, name, description, status, email, password):
+        """Update URL provider."""
+        return self.urls_helper.update_url_provider(provider_id, name, description, status, email, password)
+
+    def delete_url_provider(self, provider_id):
+        """Delete URL provider."""
+        return self.urls_helper.delete_url_provider(provider_id)
+
+    def get_url_provider_by_id(self, provider_id):
+        """Get URL provider by ID."""
+        return self.urls_helper.get_url_provider_by_id(provider_id)
+
+    # File URL methods - delegate to urls helper
+    def add_file_url(self, file_id, provider_id, url_value, note=""):
+        """Add file URL assignment."""
+        return self.urls_helper.add_file_url(file_id, provider_id, url_value, note)
+
+    def update_file_url(self, file_url_id, provider_id, url_value, note=""):
+        """Update file URL assignment."""
+        return self.urls_helper.update_file_url(file_url_id, provider_id, url_value, note)
+
+    def get_file_urls_by_file_id(self, file_id):
+        """Get file URLs by file ID."""
+        return self.urls_helper.get_file_urls_by_file_id(file_id)
+    
+    def get_file_urls_by_batch_and_client(self, batch_id, client_id):
+        """Get all file URLs for files in a specific batch and client"""
+        return self.urls_helper.get_file_urls_by_batch_and_client(batch_id, client_id)
+
+    def delete_file_url(self, file_url_id):
+        """Delete file URL assignment."""
+        return self.urls_helper.delete_file_url(file_url_id)

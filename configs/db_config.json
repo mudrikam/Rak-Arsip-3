@@ -134,5 +134,28 @@
             "updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
             "FOREIGN KEY (client_id)": "REFERENCES client(id)"
         }
+        ,
+        "file_url": {
+            "id": "INTEGER PRIMARY KEY AUTOINCREMENT",
+            "file_id": "INTEGER NOT NULL",
+            "provider_id": "INTEGER NOT NULL",
+            "url_value": "TEXT NOT NULL",
+            "note": "TEXT",
+            "created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+            "updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+            "FOREIGN KEY (file_id)": "REFERENCES files(id)",
+            "FOREIGN KEY (provider_id)": "REFERENCES url_provider(id)"
+        }
+        ,
+        "url_provider": {
+            "id": "INTEGER PRIMARY KEY AUTOINCREMENT",
+            "name": "TEXT NOT NULL UNIQUE",
+            "description": "TEXT",
+            "status": "TEXT",
+            "email": "TEXT",
+            "password": "TEXT",
+            "created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+            "updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP"
+        }
     }
 }

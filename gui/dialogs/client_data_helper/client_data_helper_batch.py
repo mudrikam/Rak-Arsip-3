@@ -63,6 +63,7 @@ class ClientDataBatchHelper:
         self.batch_edit_btn.clicked.connect(self.on_batch_edit)
         self.batch_delete_btn.clicked.connect(self.on_batch_delete)
         self.batch_table.cellDoubleClicked.connect(self.on_batch_edit)
+        self.batch_table.cellClicked.connect(self.on_batch_row_clicked)
         self.batch_table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.batch_table.customContextMenuRequested.connect(self.show_batch_context_menu)
         self.batch_search_edit.textChanged.connect(self.on_batch_search_changed)
@@ -238,3 +239,15 @@ class ClientDataBatchHelper:
         self._batch_data_all = []
         self._batch_data_filtered = []
         self._selected_client_id = None
+    
+    def on_batch_row_clicked(self, row, col):
+        """Handle batch row click - load file URLs for selected batch"""
+        if row >= len(self._batch_data_filtered):
+            return
+        
+        batch_number = self._batch_data_filtered[row][0]
+        client_name = self.parent._selected_client_name
+        
+        # Load file URLs for this batch
+        if hasattr(self.parent, '_load_file_urls_for_batch'):
+            self.parent._load_file_urls_for_batch(self._selected_client_id, batch_number, client_name)

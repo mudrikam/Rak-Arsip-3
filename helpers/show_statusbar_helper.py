@@ -12,7 +12,7 @@ def find_main_window(widget):
     return widget.window()
 
 
-def show_statusbar_message(widget, message, timeout=2000):
+def show_statusbar_message(widget, message, timeout=3000):
     main_window = find_main_window(widget)
     if hasattr(main_window, "statusBar"):
         statusbar = main_window.statusBar()
