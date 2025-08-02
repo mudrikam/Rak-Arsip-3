@@ -10,6 +10,7 @@ from .client_data_helper.client_data_helper_clients import ClientDataClientsHelp
 from .client_data_helper.client_data_helper_details import ClientDataDetailsHelper
 from .client_data_helper.client_data_helper_files import ClientDataFilesHelper
 from .client_data_helper.client_data_helper_batch import ClientDataBatchHelper
+from .client_data_helper.client_data_helper_file_urls import ClientDataFileUrlsHelper
 
 class BatchEditDialog(QDialog):
     """Dialog for editing batch information"""
@@ -85,6 +86,7 @@ class ClientDataDialog(QDialog):
         self.details_helper = ClientDataDetailsHelper(self, self.db_helper)
         self.files_helper = ClientDataFilesHelper(self, self.db_helper)
         self.batch_helper = ClientDataBatchHelper(self, self.db_helper)
+        self.file_urls_helper = ClientDataFileUrlsHelper(self, self.db_helper)
         
         # Shared state variables
         self._selected_client_name = ""
@@ -99,6 +101,7 @@ class ClientDataDialog(QDialog):
         self.details_helper.init_details_tab(self.tab_widget)
         self.files_helper.init_files_tab(self.tab_widget)
         self.batch_helper.init_batch_list_tab(self.tab_widget)
+        self.file_urls_helper.init_file_urls_tab(self.tab_widget)
     
     # Legacy method compatibility - delegate to helpers
     def _load_clients_data(self):
@@ -131,6 +134,9 @@ class ClientDataDialog(QDialog):
             # Load related data
             self.files_helper.load_files_for_client(client["id"], client.get("client_name", ""))
             self.batch_helper.load_batch_list_for_client(client["id"])
+            
+            # Clear file URLs tab when client changes
+            self.file_urls_helper.clear_file_urls_tab()
     
     def _copy_detail_to_clipboard(self, key, btn=None):
         """Copy detail to clipboard - delegates to details helper"""
@@ -260,6 +266,26 @@ class ClientDataDialog(QDialog):
     def _on_batch_delete(self):
         """Handle batch delete - delegates to batch helper"""
         self.batch_helper.on_batch_delete()
+    
+    def _load_file_urls_for_batch(self, client_id, batch_number, client_name=""):
+        """Load file URLs for batch - delegates to file URLs helper"""
+        self.file_urls_helper.load_file_urls_for_batch(client_id, batch_number, client_name)
+    
+    def _on_file_urls_search_changed(self):
+        """Handle file URLs search change - delegates to file URLs helper"""
+        self.file_urls_helper.on_file_urls_search_changed()
+    
+    def _on_file_urls_sort_changed(self):
+        """Handle file URLs sort change - delegates to file URLs helper"""
+        self.file_urls_helper.on_file_urls_sort_changed()
+    
+    def _on_file_urls_row_double_clicked(self, row, col):
+        """Handle file URLs row double click - delegates to file URLs helper"""
+        self.file_urls_helper.on_file_urls_row_double_clicked(row, col)
+    
+    def _show_file_urls_context_menu(self, pos):
+        """Show file URLs context menu - delegates to file URLs helper"""
+        self.file_urls_helper.show_file_urls_context_menu(pos)
     
     def _on_client_row_clicked(self, row, col):
         """Handle client row click"""

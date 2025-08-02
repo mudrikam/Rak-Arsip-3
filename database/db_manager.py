@@ -411,6 +411,10 @@ class DatabaseManager(QObject):
     def get_file_urls_by_file_id(self, file_id):
         """Get file URLs by file ID."""
         return self.urls_helper.get_file_urls_by_file_id(file_id)
+    
+    def get_file_urls_by_batch_and_client(self, batch_id, client_id):
+        """Get all file URLs for files in a specific batch and client"""
+        return self.urls_helper.get_file_urls_by_batch_and_client(batch_id, client_id)
 
     def delete_file_url(self, file_url_id):
         """Delete file URL assignment."""

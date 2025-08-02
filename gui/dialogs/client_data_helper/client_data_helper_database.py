@@ -149,3 +149,8 @@ class ClientDataDatabaseHelper:
         """Get overall statistics for all clients"""
         db_manager = self.get_db_manager()
         return db_manager.get_overall_statistics()
+
+    def get_file_urls_by_batch_and_client(self, batch_id, client_id):
+        """Get file URLs for files in specific batch and client"""
+        db_manager = self.get_db_manager()
+        return db_manager.get_file_urls_by_batch_and_client(batch_id, client_id)

@@ -139,6 +139,25 @@ class DatabaseUrlsHelper:
         self.db_manager.close()
         return urls
 
+    def get_file_urls_by_batch_and_client(self, batch_id, client_id):
+        """Get all file URLs for files in a specific batch and client"""
+        self.db_manager.connect(write=False)
+        cursor = self.db_manager.connection.cursor()
+        
+        cursor.execute("""
+            SELECT f.name, up.name as provider_name, fu.url_value, fu.note
+            FROM files f
+            JOIN file_client_batch fcb ON f.id = fcb.file_id
+            JOIN file_url fu ON f.id = fu.file_id
+            JOIN url_provider up ON fu.provider_id = up.id
+            WHERE fcb.batch_number = ? AND fcb.client_id = ?
+            ORDER BY f.name, up.name
+        """, (batch_id, client_id))
+        
+        urls = cursor.fetchall()
+        self.db_manager.close()
+        return urls
+
     def delete_file_url(self, file_url_id):
         """Delete file URL assignment from database"""
         self.db_manager.connect()
