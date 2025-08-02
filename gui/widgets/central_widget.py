@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QColor, QAction, QFontMetrics, QCursor, QKeySequence, QShortcut
 from PySide6.QtCore import Signal, Qt, QTimer
 import qtawesome as qta
+import time
 from database.db_manager import DatabaseManager
 from manager.config_manager import ConfigManager
 from pathlib import Path
@@ -260,7 +261,6 @@ class CentralWidget(QWidget):
 
     def auto_refresh_table(self):
         self.load_data_from_database()
-        show_statusbar_message(self, "Table auto-refreshed")
 
     def copy_name(self):
         if self.selected_row_data:
@@ -388,6 +388,9 @@ class CentralWidget(QWidget):
 
     def load_data_from_database(self, keep_search=False):
         try:
+            # Start timing
+            start_time = time.time()
+            
             self.db_manager.connect()
             self._search_query = self.search_edit.text().strip()
             self._status_filter = self.sort_status_value
@@ -398,6 +401,9 @@ class CentralWidget(QWidget):
             root_value = getattr(self, "sort_root_value", None)
             category_value = getattr(self, "sort_category_value", None)
             subcategory_value = getattr(self, "sort_subcategory_value", None)
+            
+            # Time count queries
+            count_start = time.time()
             self.total_records = self.db_manager.count_files()
             self.total_draft = self.db_manager.count_files(status_value="Draft")
             self.found_records = self.db_manager.count_files(
@@ -409,6 +415,10 @@ class CentralWidget(QWidget):
                 category_value=category_value,
                 subcategory_value=subcategory_value
             )
+            count_end = time.time()
+            
+            # Time data query
+            data_start = time.time()
             self.filtered_data = self.db_manager.get_files_page(
                 page=self.current_page,
                 page_size=self.page_size,
@@ -422,8 +432,17 @@ class CentralWidget(QWidget):
                 category_value=category_value,
                 subcategory_value=subcategory_value
             )
+            data_end = time.time()
+            
             self.update_table()
-            show_statusbar_message(self, "Loaded data from database")
+            
+            # Calculate total time
+            total_time = time.time() - start_time
+            count_time = (count_end - count_start) * 1000  # Convert to ms
+            data_time = (data_end - data_start) * 1000  # Convert to ms
+            total_time_ms = total_time * 1000  # Convert to ms
+            
+            show_statusbar_message(self, f"Data loaded in {total_time_ms:.1f}ms (count: {count_time:.1f}ms, data: {data_time:.1f}ms)")
         except Exception as e:
             print(f"Error loading data from database: {e}")
             self.filtered_data = []
@@ -490,7 +509,6 @@ class CentralWidget(QWidget):
                     main_action.db_manager.close()
                 except Exception as e:
                     print(f"Error refreshing templates: {e}")
-        show_statusbar_message(self, "Table refreshed")
         if self._select_after_refresh:
             self._select_row_by_name_path(*self._select_after_refresh)
             self._select_after_refresh = None
@@ -524,10 +542,6 @@ class CentralWidget(QWidget):
         self.load_data_from_database(keep_search=True)
         if not refresh_only:
             query = self.search_edit.text().lower()
-            if query:
-                show_statusbar_message(self, f"Search applied: {query}")
-            else:
-                show_statusbar_message(self, "Search cleared")
 
     def _truncate_path_by_width(self, path, column_width):
         if not path:
