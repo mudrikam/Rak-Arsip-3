@@ -134,7 +134,7 @@ class DatabaseBackupHelper:
             self.db_manager.close()
             src = self.db_manager.db_path
             if os.path.exists(src):
-                shutil.copy2(src, backup_path)
+                shutil.copyfile(src, backup_path)
             return backup_path
         except Exception as e:
             print(f"Error creating manual backup: {e}")
