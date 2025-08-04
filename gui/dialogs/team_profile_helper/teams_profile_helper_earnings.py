@@ -24,6 +24,7 @@ class EarningsHelper:
         self.dialog = dialog
         self.earnings_records_all = []
         self.earnings_records_filtered = []
+        self.earnings_records_all_filtered = []
         self.earnings_page_size = 20
         self.earnings_current_page = 1
         self._earnings_batch_filter_value = None
@@ -241,6 +242,9 @@ class EarningsHelper:
         # Calculate pagination for filtered records
         total_filtered = len(filtered_records)
         self._earnings_total_pages = max(1, (total_filtered + page_size - 1) // page_size)
+        
+        # Store all filtered records for global access
+        self.earnings_records_all_filtered = filtered_records
         
         # Get page slice
         start_idx = offset
@@ -517,9 +521,9 @@ class EarningsHelper:
 
     def on_earnings_row_double_clicked(self, row_in_page, col):
         global_idx = self.get_global_earnings_index(row_in_page)
-        if global_idx < 0 or global_idx >= len(self.earnings_records_filtered):
+        if global_idx < 0 or global_idx >= len(self.earnings_records_all_filtered):
             return
-        record = self.earnings_records_filtered[global_idx]
+        record = self.earnings_records_all_filtered[global_idx]
         file_name = record[0]
         QApplication.clipboard().setText(str(file_name))
         show_statusbar_message(self.dialog, f"Copied: {file_name}")
@@ -535,9 +539,9 @@ class EarningsHelper:
             return
         row_in_page = index.row()
         global_idx = self.get_global_earnings_index(row_in_page)
-        if global_idx < 0 or global_idx >= len(self.earnings_records_filtered):
+        if global_idx < 0 or global_idx >= len(self.earnings_records_all_filtered):
             return
-        record = self.earnings_records_filtered[global_idx]
+        record = self.earnings_records_all_filtered[global_idx]
         file_name = record[0]
         file_path = record[7] if len(record) > 7 else ""
         menu = QMenu(self.dialog.earnings_table)
@@ -586,9 +590,9 @@ class EarningsHelper:
         if row_in_page < 0:
             return
         global_idx = self.get_global_earnings_index(row_in_page)
-        if global_idx < 0 or global_idx >= len(self.earnings_records_filtered):
+        if global_idx < 0 or global_idx >= len(self.earnings_records_all_filtered):
             return
-        record = self.earnings_records_filtered[global_idx]
+        record = self.earnings_records_all_filtered[global_idx]
         file_name = record[0]
         QApplication.clipboard().setText(str(file_name))
         QToolTip.showText(QCursor.pos(), f"{file_name}\nCopied to clipboard")
@@ -598,9 +602,9 @@ class EarningsHelper:
         if row_in_page < 0:
             return
         global_idx = self.get_global_earnings_index(row_in_page)
-        if global_idx < 0 or global_idx >= len(self.earnings_records_filtered):
+        if global_idx < 0 or global_idx >= len(self.earnings_records_all_filtered):
             return
-        record = self.earnings_records_filtered[global_idx]
+        record = self.earnings_records_all_filtered[global_idx]
         file_path = record[7] if len(record) > 7 else ""
         QApplication.clipboard().setText(str(file_path))
         QToolTip.showText(QCursor.pos(), f"{file_path}\nCopied to clipboard")
@@ -610,9 +614,9 @@ class EarningsHelper:
         if row_in_page < 0:
             return
         global_idx = self.get_global_earnings_index(row_in_page)
-        if global_idx < 0 or global_idx >= len(self.earnings_records_filtered):
+        if global_idx < 0 or global_idx >= len(self.earnings_records_all_filtered):
             return
-        record = self.earnings_records_filtered[global_idx]
+        record = self.earnings_records_all_filtered[global_idx]
         file_path = record[7] if len(record) > 7 else ""
         if not file_path:
             return
