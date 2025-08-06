@@ -1,8 +1,9 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QTableWidget,
-    QTableWidgetItem, QSizePolicy, QHeaderView, QMessageBox, QMenu, QComboBox, QLabel
+    QTableWidgetItem, QSizePolicy, QHeaderView, QMessageBox, QMenu, QComboBox, QLabel,
+    QProgressDialog
 )
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QCoreApplication
 from PySide6.QtGui import QAction, QCursor
 import qtawesome as qta
 from pathlib import Path
@@ -24,6 +25,51 @@ class ClientDataInvoiceHelper:
         # Folder IDs
         self.rak_arsip_folder_id = None
         self.invoice_folder_id = None
+        
+        # Progress tracking
+        self.progress_dialog = None
+        self.current_step = 0
+        self.total_steps = 0
+    
+    def init_progress(self, steps, title="Processing..."):
+        """Initialize progress dialog with dynamic step calculation"""
+        self.total_steps = len(steps)
+        self.current_step = 0
+        
+        self.progress_dialog = QProgressDialog("Initializing...", "Cancel", 0, self.total_steps, self.parent)
+        self.progress_dialog.setWindowTitle(title)
+        self.progress_dialog.setModal(True)
+        self.progress_dialog.setValue(0)
+        self.progress_dialog.show()
+        QCoreApplication.processEvents()
+        
+        print(f"Progress initialized: {self.total_steps} steps")
+    
+    def update_progress(self, step_description):
+        """Update progress to next step with description"""
+        if not self.progress_dialog:
+            return False
+            
+        if self.progress_dialog.wasCanceled():
+            return False
+            
+        self.current_step += 1
+        progress_percentage = int((self.current_step / self.total_steps) * 100)
+        
+        self.progress_dialog.setLabelText(step_description)
+        self.progress_dialog.setValue(self.current_step)
+        QCoreApplication.processEvents()
+        
+        print(f"Progress: Step {self.current_step}/{self.total_steps} ({progress_percentage}%) - {step_description}")
+        return True
+    
+    def close_progress(self):
+        """Close progress dialog"""
+        if self.progress_dialog:
+            self.progress_dialog.close()
+            self.progress_dialog = None
+        self.current_step = 0
+        self.total_steps = 0
     
     def init_google_drive_connection(self):
         """Initialize Google Drive API connection"""
@@ -140,55 +186,144 @@ class ClientDataInvoiceHelper:
             QMessageBox.warning(self.parent, "No Selection", "Please select a client and batch first.")
             return
         
-        # Ensure folders exist
-        if not self.ensure_folders_exist():
-            print("Failed to ensure folders exist")
-            QMessageBox.critical(self.parent, "Error", "Failed to initialize Google Drive folders.")
-            return
+        # Get client info first to determine steps needed
+        client_name = file_urls_helper._client_name_label.text().replace("Client: ", "")
+        client_id = file_urls_helper._selected_client_id
+        batch_number = file_urls_helper._selected_batch_number
+        
+        # Get actual file count from database (not just filtered URLs)
+        actual_file_count = self.db_helper.count_file_client_batch_by_batch_number(batch_number)
+        total_files = actual_file_count  # Use actual count from database
+        
+        print(f"Client Name: {client_name}")
+        print(f"Client ID: {client_id}")
+        print(f"Batch Number: {batch_number}")
+        print(f"Total Files (from database): {total_files}")
+        print(f"Filtered URLs Count: {len(file_urls_helper._file_urls_data_filtered)}")
+        
+        # Define all possible steps dynamically
+        sync_steps = [
+            "Connecting to Google Drive",
+            "Checking/Creating main folders",
+            "Searching for invoice template", 
+            "Creating client folder structure",
+            "Generating invoice filename",
+            "Checking for existing invoice files"
+        ]
+        
+        # Add conditional step based on whether file exists or not
+        # We'll determine this during execution and add the appropriate step
+        
+        # Initialize progress with known steps
+        self.init_progress(sync_steps, "Syncing to Google Drive")
         
         try:
-            # Get client info
-            client_name = file_urls_helper._client_name_label.text().replace("Client: ", "")
-            client_id = file_urls_helper._selected_client_id
-            batch_number = file_urls_helper._selected_batch_number
-            total_files = len(file_urls_helper._file_urls_data_filtered)
+            # Step 1: Initialize Google Drive connection and ensure folders exist
+            if not self.update_progress("Connecting to Google Drive..."):
+                return
             
-            print(f"Client Name: {client_name}")
-            print(f"Client ID: {client_id}")
-            print(f"Batch Number: {batch_number}")
-            print(f"Total Files: {total_files}")
+            if not self.ensure_folders_exist():
+                print("Failed to ensure folders exist")
+                self.close_progress()
+                QMessageBox.critical(self.parent, "Error", "Failed to initialize Google Drive folders.")
+                return
             
-            # Step 1: Find Template folder and Invoice_Template file
+            # Step 2: Verify folders are ready
+            if not self.update_progress("Checking/Creating main folders..."):
+                return
+            
+            # Step 3: Find Template folder and Invoice_Template file
+            if not self.update_progress("Searching for invoice template..."):
+                return
+            
             template_file_id = self.find_invoice_template()
             if not template_file_id:
+                self.close_progress()
                 QMessageBox.critical(self.parent, "Template Not Found", "Invoice_Template file not found in Template folder.")
                 return
             
-            # Step 2: Create folder structure
+            # Step 4: Create folder structure
+            if not self.update_progress("Creating client folder structure..."):
+                return
+            
             target_folder_id = self.create_folder_structure(client_id, client_name)
             if not target_folder_id:
+                self.close_progress()
                 QMessageBox.critical(self.parent, "Folder Creation Failed", "Failed to create folder structure.")
                 return
             
-            # Step 3: Generate invoice filename
+            # Step 5: Generate invoice filename
+            if not self.update_progress("Generating invoice filename..."):
+                return
+            
             invoice_filename = self.generate_invoice_filename(client_name, batch_number, total_files)
             print(f"Generated filename: {invoice_filename}")
             
-            # Step 4: Check if invoice file already exists for this batch
-            existing_file_id = self.find_existing_invoice(target_folder_id, client_name, batch_number)
+            # Step 6: Check if invoice file already exists for this batch
+            if not self.update_progress("Checking for existing invoice files..."):
+                return
             
+            existing_file_id, existing_filename, existing_count = self.find_existing_invoice(target_folder_id, client_name, batch_number)
+            
+            # Now we know if we need to add update step or create step
             if existing_file_id:
-                print(f"Found existing invoice file for batch {batch_number}, updating instead of creating new file")
-                QMessageBox.information(
-                    self.parent, 
-                    "Update Mode", 
-                    f"Invoice file for batch {batch_number} already exists.\nUpdating existing file.\n\nFile ID: {existing_file_id}"
-                )
-                # TODO: Here we can add code to update the existing spreadsheet with new data
-                print(f"Invoice file updated with ID: {existing_file_id}")
+                # Check if count has changed and needs renaming
+                if existing_count != total_files:
+                    # Add rename step dynamically
+                    self.total_steps += 1
+                    self.progress_dialog.setMaximum(self.total_steps)
+                    
+                    if not self.update_progress(f"Renaming file (count changed: {existing_count} → {total_files})..."):
+                        return
+                    
+                    # Generate new filename with updated count
+                    new_filename = self.generate_invoice_filename(client_name, batch_number, total_files)
+                    
+                    # Rename the existing file
+                    renamed_file_id = self.rename_existing_invoice(existing_file_id, new_filename)
+                    
+                    if renamed_file_id:
+                        print(f"Successfully renamed existing invoice file for batch {batch_number}")
+                        self.close_progress()
+                        
+                        QMessageBox.information(
+                            self.parent, 
+                            "File Renamed", 
+                            f"Invoice file for batch {batch_number} has been renamed to reflect updated count.\n\nOld: {existing_filename}\nNew: {new_filename}\n\nFile ID: {renamed_file_id}"
+                        )
+                        print(f"Invoice file renamed with ID: {renamed_file_id}")
+                    else:
+                        self.close_progress()
+                        QMessageBox.critical(self.parent, "Rename Failed", "Failed to rename existing invoice file to update count.")
+                else:
+                    # Count is the same, just update
+                    self.total_steps += 1
+                    self.progress_dialog.setMaximum(self.total_steps)
+                    
+                    if not self.update_progress("Updating existing invoice file (count unchanged)..."):
+                        return
+                    
+                    print(f"Found existing invoice file for batch {batch_number}, count unchanged ({existing_count})")
+                    self.close_progress()
+                    
+                    QMessageBox.information(
+                        self.parent, 
+                        "Update Mode", 
+                        f"Invoice file for batch {batch_number} already exists with correct count ({existing_count}).\n\nFile: {existing_filename}\nFile ID: {existing_file_id}"
+                    )
+                    print(f"Invoice file already up to date with ID: {existing_file_id}")
             else:
-                # Step 5: Copy template and create new file
+                # Add create step dynamically
+                self.total_steps += 1
+                self.progress_dialog.setMaximum(self.total_steps)
+                
+                if not self.update_progress("Copying template and creating new invoice file..."):
+                    return
+                
                 new_file_id = self.copy_template_to_target(template_file_id, target_folder_id, invoice_filename)
+                
+                self.close_progress()
+                
                 if new_file_id:
                     QMessageBox.information(
                         self.parent, 
@@ -200,6 +335,7 @@ class ClientDataInvoiceHelper:
                     QMessageBox.critical(self.parent, "Copy Failed", "Failed to copy template and create invoice file.")
             
         except Exception as e:
+            self.close_progress()
             print(f"Error during sync: {e}")
             QMessageBox.critical(self.parent, "Sync Error", f"Error during sync: {str(e)}")
     
@@ -246,7 +382,8 @@ class ClientDataInvoiceHelper:
             return None
     
     def find_existing_invoice(self, target_folder_id, client_name, batch_number):
-        """Find existing invoice file for the same client and batch number"""
+        """Find existing invoice file for the same client and batch number
+        Returns: (file_id, filename, file_count) or (None, None, 0) if not found"""
         try:
             print(f"Checking for existing invoice file with batch number: {batch_number}")
             
@@ -274,18 +411,68 @@ class ClientDataInvoiceHelper:
                     filename = file['name']
                     if filename.startswith(search_pattern):
                         file_id = file['id']
-                        print(f"Found existing invoice file: {filename} (ID: {file_id})")
-                        return file_id
+                        current_count = self.extract_count_from_filename(filename)
+                        print(f"Found existing invoice file: {filename} (ID: {file_id}, Count: {current_count})")
+                        return (file_id, filename, current_count)
                 
                 print("No exact match found for the batch number pattern")
-                return None
+                return (None, None, 0)
             else:
                 print("No existing invoice files found for this batch")
-                return None
+                return (None, None, 0)
+                
+        except Exception as e:
+            print(f"Error finding existing invoice: {e}")
+            return (None, None, 0)
                 
         except Exception as e:
             print(f"Error finding existing invoice: {e}")
             return None
+    
+    def rename_existing_invoice(self, file_id, new_filename):
+        """Rename existing invoice file to reflect updated count"""
+        try:
+            print(f"Renaming existing file with ID: {file_id} to: {new_filename}")
+            
+            # Rename the file
+            file_metadata = {
+                'name': new_filename
+            }
+            
+            updated_file = self.drive_service.files().update(
+                fileId=file_id,
+                body=file_metadata,
+                fields='id,name'
+            ).execute()
+            
+            updated_file_id = updated_file.get('id')
+            updated_file_name = updated_file.get('name')
+            
+            print(f"Successfully renamed file to: {updated_file_name} (ID: {updated_file_id})")
+            
+            return updated_file_id
+            
+        except Exception as e:
+            print(f"Error renaming existing invoice: {e}")
+            return None
+    
+    def extract_count_from_filename(self, filename):
+        """Extract the file count from existing invoice filename"""
+        try:
+            # Expected pattern: Invoice_ClientName_BatchNumber_YYYY_Month_DD_COUNT
+            parts = filename.split('_')
+            if len(parts) >= 6:
+                # Count should be the last part
+                count_str = parts[-1]
+                try:
+                    return int(count_str)
+                except ValueError:
+                    print(f"Could not parse count from filename: {filename}")
+                    return 0
+            return 0
+        except Exception as e:
+            print(f"Error extracting count from filename: {e}")
+            return 0
     
     def create_folder_structure(self, client_id, client_name):
         """Create folder structure: INVOICE/client_id/year/month"""
