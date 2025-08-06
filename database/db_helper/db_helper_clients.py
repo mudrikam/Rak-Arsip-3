@@ -546,3 +546,26 @@ class DatabaseClientsHelper:
         if row:
             return row["created_at"]
         return None
+
+    def update_files_status_by_batch(self, batch_number, client_id, status_id):
+        """Update status of all files in a batch."""
+        self.db_manager.connect()
+        cursor = self.db_manager.connection.cursor()
+        
+        # Update files status for all files in the batch
+        cursor.execute("""
+            UPDATE files 
+            SET status_id = ?, updated_at = CURRENT_TIMESTAMP 
+            WHERE id IN (
+                SELECT fcb.file_id 
+                FROM file_client_batch fcb 
+                WHERE fcb.batch_number = ? AND fcb.client_id = ?
+            )
+        """, (status_id, batch_number, client_id))
+        
+        updated_count = cursor.rowcount
+        self.db_manager.connection.commit()
+        self.db_manager.create_temp_file()
+        self.db_manager.close()
+        
+        return updated_count

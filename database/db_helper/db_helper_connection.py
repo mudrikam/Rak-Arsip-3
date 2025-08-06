@@ -168,4 +168,6 @@ class DatabaseConnectionHelper(QObject):
         cursor.execute("SELECT id FROM statuses WHERE name = ?", (status_name,))
         result = cursor.fetchone()
         self.db_manager.close()
-        return result[0] if result else None
+        if result is not None:
+            return result[0]  # Return the ID even if it's 0
+        return None

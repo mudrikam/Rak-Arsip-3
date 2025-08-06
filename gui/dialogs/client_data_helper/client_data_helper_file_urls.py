@@ -108,33 +108,44 @@ class ClientDataFileUrlsHelper:
         
         # Payment Status (no label)
         self.payment_status_combo = QComboBox()
-        self.payment_status_combo.addItems(["Pending", "Paid"])
-        self.payment_status_combo.setCurrentText("Pending")
+        self.payment_status_combo.addItems(["", "Pending", "Paid"])  # Empty first option
+        self.payment_status_combo.setCurrentText("")  # Initially empty
         self.payment_status_combo.setMinimumWidth(100)
         self.payment_status_combo.setToolTip("Payment Status")
         bottom_controls_layout.addWidget(self.payment_status_combo)
         
-        bottom_controls_layout.addSpacing(20)
+        bottom_controls_layout.addStretch()
         
         # Payment Method (no label)
         self.payment_method_combo = QComboBox()
         self.payment_method_combo.addItems([
-            "GoPay", "DANA", "OVO", "LinkAja", "Bank Jago", 
+            "", "GoPay", "DANA", "OVO", "LinkAja", "Bank Jago", 
             "BCA", "BRI", "PayPal", "QRIS"
-        ])
-        self.payment_method_combo.setCurrentText("GoPay")
+        ])  # Empty first option
+        self.payment_method_combo.setCurrentText("")  # Initially empty
         self.payment_method_combo.setMinimumWidth(120)
         self.payment_method_combo.setToolTip("Payment Method")
         bottom_controls_layout.addWidget(self.payment_method_combo)
         
         bottom_controls_layout.addStretch()
         
+        # Update Record button
+        self.update_record_btn = QPushButton("Update Records")
+        self.update_record_btn.setIcon(qta.icon("fa6s.arrows-rotate"))
+        self.update_record_btn.setMinimumHeight(32)
+        self.update_record_btn.setMaximumWidth(140)
+        self.update_record_btn.setToolTip("Update All Records in Batch")
+        self.update_record_btn.clicked.connect(self.update_batch_records)
+        bottom_controls_layout.addWidget(self.update_record_btn)
+        
+        bottom_controls_layout.addStretch()
+        
         # Action buttons
         # Copy Invoice Link button
-        self.copy_invoice_link_btn = QPushButton()
+        self.copy_invoice_link_btn = QPushButton("Invoice Link")
         self.copy_invoice_link_btn.setIcon(qta.icon("fa6s.link"))
         self.copy_invoice_link_btn.setMinimumHeight(32)
-        self.copy_invoice_link_btn.setMaximumWidth(40)
+        self.copy_invoice_link_btn.setMaximumWidth(120)
         self.copy_invoice_link_btn.setToolTip("Copy Invoice Share Link")
         self.copy_invoice_link_btn.clicked.connect(self.copy_invoice_share_link)
         bottom_controls_layout.addWidget(self.copy_invoice_link_btn)
@@ -752,9 +763,9 @@ class ClientDataFileUrlsHelper:
         
         # Reset payment controls
         if self.payment_status_combo:
-            self.payment_status_combo.setCurrentText("Pending")
+            self.payment_status_combo.setCurrentText("")  # Reset to empty
         if self.payment_method_combo:
-            self.payment_method_combo.setCurrentText("GoPay")
+            self.payment_method_combo.setCurrentText("")  # Reset to empty
     
     def get_payment_status(self):
         """Get current payment status"""
@@ -776,6 +787,93 @@ class ClientDataFileUrlsHelper:
     def set_payment_method(self, method):
         """Set payment method"""
         if self.payment_method_combo:
-            methods = ["GoPay", "DANA", "OVO", "LinkAja", "Bank Jago", "BCA", "BRI", "PayPal", "QRIS"]
+            methods = ["", "GoPay", "DANA", "OVO", "LinkAja", "Bank Jago", "BCA", "BRI", "PayPal", "QRIS"]
             if method in methods:
                 self.payment_method_combo.setCurrentText(method)
+
+    def update_batch_records(self):
+        """Update all file records in current batch to selected status"""
+        try:
+            # Validate selections
+            if not self._selected_batch_number:
+                QMessageBox.warning(self.parent, "No Batch Selected", 
+                                  "Please select a batch first.")
+                return
+            
+            payment_status = self.payment_status_combo.currentText().strip()
+            if not payment_status:
+                QMessageBox.warning(self.parent, "No Status Selected", 
+                                  "Please select a payment status (Pending or Paid).")
+                return
+            
+            # Get status ID from database
+            status_id = self.db_helper.get_status_id_by_name(payment_status)
+            print(f"Debug: Looking for status '{payment_status}', found ID: {status_id}")
+            if status_id is None:  # Only check for None, not falsy values (to allow ID 0)
+                QMessageBox.critical(self.parent, "Status Not Found", 
+                                   f"Status '{payment_status}' not found in database.")
+                return
+            
+            # Get detailed information about files that will be updated
+            files_to_update = self.db_helper.get_all_files_by_batch_and_client_with_details(
+                self._selected_batch_number, self._selected_client_id
+            )
+            
+            if not files_to_update:
+                QMessageBox.information(self.parent, "No Files Found", 
+                                      f"No files found in batch {self._selected_batch_number}.")
+                return
+            
+            # Prepare detailed confirmation message
+            total_files = len(files_to_update)
+            file_list = []
+            for i, file_data in enumerate(files_to_update[:10]):  # Show first 10 files
+                filename = file_data[1] or "Unknown"
+                date = file_data[2] or "Unknown"
+                file_list.append(f"  {i+1}. {filename} ({date})")
+            
+            # Add "and X more..." if there are more than 10 files
+            if total_files > 10:
+                file_list.append(f"  ... and {total_files - 10} more files")
+            
+            file_details = "\n".join(file_list)
+            
+            # Confirm update with detailed information
+            reply = QMessageBox.question(self.parent, "Confirm Batch Update", 
+                                       f"Update all {total_files} files in batch '{self._selected_batch_number}' to status '{payment_status}'?\n\n"
+                                       f"Files to be updated:\n{file_details}\n\n"
+                                       f"This action will change the status of all these files.",
+                                       QMessageBox.Yes | QMessageBox.No, 
+                                       QMessageBox.No)
+            
+            if reply != QMessageBox.Yes:
+                return
+            
+            # Update all files in batch
+            updated_count = self.db_helper.update_files_status_by_batch(
+                self._selected_batch_number, 
+                self._selected_client_id, 
+                status_id
+            )
+            
+            # Show detailed success message
+            success_message = f"Successfully updated {updated_count} files to '{payment_status}' status.\n\n"
+            success_message += f"Batch: {self._selected_batch_number}\n"
+            success_message += f"Client: {self._client_name_label.text().replace('Client: ', '')}\n"
+            success_message += f"Status changed to: {payment_status}"
+            
+            QMessageBox.information(self.parent, "Batch Update Complete", success_message)
+            
+            # Refresh the table
+            self.load_file_urls_for_batch(
+                self._selected_client_id, 
+                self._selected_batch_number, 
+                self._client_name_label.text().replace("Client: ", "")
+            )
+            
+            print(f"Batch update completed: {updated_count} files updated to '{payment_status}'")
+            
+        except Exception as e:
+            print(f"Error updating batch records: {e}")
+            QMessageBox.critical(self.parent, "Update Failed", 
+                               f"Failed to update batch records: {str(e)}")

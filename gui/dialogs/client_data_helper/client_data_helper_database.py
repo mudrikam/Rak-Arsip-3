@@ -164,3 +164,13 @@ class ClientDataDatabaseHelper:
         """Get batch creation date from batch_list table."""
         db_manager = self.get_db_manager()
         return db_manager.get_batch_created_date(batch_number, client_id)
+
+    def get_status_id_by_name(self, status_name):
+        """Get status ID by status name."""
+        db_manager = self.get_db_manager()
+        return db_manager.get_status_id(status_name)
+
+    def update_files_status_by_batch(self, batch_number, client_id, status_id):
+        """Update status of all files in a batch."""
+        db_manager = self.get_db_manager()
+        return db_manager.update_files_status_by_batch(batch_number, client_id, status_id)

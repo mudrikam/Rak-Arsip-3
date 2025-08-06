@@ -427,3 +427,7 @@ class DatabaseManager(QObject):
     def get_batch_created_date(self, batch_number, client_id):
         """Get batch creation date from batch_list table."""
         return self.clients_helper.get_batch_created_date(batch_number, client_id)
+
+    def update_files_status_by_batch(self, batch_number, client_id, status_id):
+        """Update status of all files in a batch."""
+        return self.clients_helper.update_files_status_by_batch(batch_number, client_id, status_id)
