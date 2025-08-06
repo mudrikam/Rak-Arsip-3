@@ -35,7 +35,7 @@ class PreferencesWindow(QDialog):
         self.tab_widget.addTab(self.categories_helper.create_categories_tab(), qta.icon("fa6s.folder-tree"), "Categories")
         self.tab_widget.addTab(self.templates_helper.create_templates_tab(), qta.icon("fa6s.file-lines"), "Templates")
         self.tab_widget.addTab(self.backup_helper.create_backup_tab(), qta.icon("fa6s.database"), "Backup/Restore")
-        self.tab_widget.addTab(self.url_helper.create_url_tab(), qta.icon("fa6s.link"), "URL")
+        self.tab_widget.addTab(self.url_helper.create_url_tab(), qta.icon("fa6s.link"), "URL Providers")
         
         layout.addWidget(self.tab_widget)
         
