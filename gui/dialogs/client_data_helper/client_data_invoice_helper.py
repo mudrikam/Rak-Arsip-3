@@ -271,7 +271,7 @@ class ClientDataInvoiceHelper:
                 # Check if count has changed and needs renaming
                 if existing_count != total_files:
                     # Add rename step dynamically
-                    self.total_steps += 7  # Rename + Clear + Resize + Format + Merge + Copy Format + Delete Template
+                    self.total_steps += 13  # Rename + Clear + Resize + Format + Insert + Special + Merge + Format Copy + Delete + EF Merge + Payment Highlight + Final Merge + Final Format
                     self.progress_dialog.setMaximum(self.total_steps)
                     
                     if not self.update_progress(f"Renaming file (count changed: {existing_count} → {total_files})..."):
@@ -289,25 +289,7 @@ class ClientDataInvoiceHelper:
                         return
                     
                     # Update sheet data with detailed progress
-                    if not self.update_progress("Clearing existing data..."):
-                        return
-                    
-                    if not self.update_progress("Ensuring sheet size..."):
-                        return
-                    
-                    if not self.update_progress("Inserting invoice data..."):
-                        return
-                    
-                    if not self.update_progress("Merging filename cells..."):
-                        return
-                    
-                    if not self.update_progress("Applying formatting..."):
-                        return
-                    
-                    if not self.update_progress("Finalizing spreadsheet..."):
-                        return
-                    
-                    if self.update_invoice_sheet_data_with_progress(renamed_file_id, client_id, batch_number):
+                    if self.update_invoice_sheet_data_with_progress(renamed_file_id, client_id, batch_number, file_urls_helper, is_new_file=False):
                         print(f"Successfully updated invoice file and data for batch {batch_number}")
                         self.close_progress()
                         
@@ -322,28 +304,11 @@ class ClientDataInvoiceHelper:
                         QMessageBox.warning(self.parent, "Partial Success", f"File renamed successfully but failed to update sheet data.\n\nFile ID: {renamed_file_id}")
                 else:
                     # Count is the same, just update data
-                    self.total_steps += 6  # Clear + Resize + Format + Merge + Copy Format + Delete Template
+                    self.total_steps += 12  # Clear + Resize + Format + Insert + Special + Merge + Format Copy + Delete + EF Merge + Payment Highlight + Final Merge + Final Format
                     self.progress_dialog.setMaximum(self.total_steps)
                     
-                    if not self.update_progress("Clearing existing data..."):
-                        return
-                    
-                    if not self.update_progress("Ensuring sheet size..."):
-                        return
-                    
-                    if not self.update_progress("Inserting invoice data..."):
-                        return
-                    
-                    if not self.update_progress("Merging filename cells..."):
-                        return
-                    
-                    if not self.update_progress("Applying formatting..."):
-                        return
-                    
-                    if not self.update_progress("Finalizing spreadsheet..."):
-                        return
-                    
-                    if self.update_invoice_sheet_data_with_progress(existing_file_id, client_id, batch_number):
+                    # Update sheet data with detailed progress
+                    if self.update_invoice_sheet_data_with_progress(existing_file_id, client_id, batch_number, file_urls_helper, is_new_file=False):
                         print(f"Successfully updated invoice data for batch {batch_number}")
                         self.close_progress()
                         
@@ -358,7 +323,7 @@ class ClientDataInvoiceHelper:
                         QMessageBox.warning(self.parent, "Update Failed", f"Failed to update invoice sheet data.\n\nFile: {existing_filename}")
             else:
                 # Add create step dynamically
-                self.total_steps += 6  # Create + Clear + Resize + Format + Merge + Copy Format + Delete Template
+                self.total_steps += 12  # Create + Clear + Resize + Format + Insert + Special + Merge + Format Copy + Delete + EF Merge + Payment Highlight + Final Merge + Final Format
                 self.progress_dialog.setMaximum(self.total_steps)
                 
                 if not self.update_progress("Copying template and creating new invoice file..."):
@@ -372,25 +337,7 @@ class ClientDataInvoiceHelper:
                     return
                 
                 # Update sheet data for new file with detailed progress
-                if not self.update_progress("Clearing existing data..."):
-                    return
-                
-                if not self.update_progress("Ensuring sheet size..."):
-                    return
-                
-                if not self.update_progress("Inserting invoice data..."):
-                    return
-                
-                if not self.update_progress("Merging filename cells..."):
-                    return
-                
-                if not self.update_progress("Applying formatting..."):
-                    return
-                
-                if not self.update_progress("Finalizing spreadsheet..."):
-                    return
-                
-                if self.update_invoice_sheet_data_with_progress(new_file_id, client_id, batch_number):
+                if self.update_invoice_sheet_data_with_progress(new_file_id, client_id, batch_number, file_urls_helper, is_new_file=True):
                     self.close_progress()
                     
                     QMessageBox.information(
@@ -818,8 +765,8 @@ class ClientDataInvoiceHelper:
             print(f"Error updating invoice sheet data: {e}")
             return False
 
-    def update_invoice_sheet_data_with_progress(self, file_id, client_id, batch_number):
-        """Update invoice sheet with batch data - progress handled externally"""
+    def update_invoice_sheet_data_with_progress(self, file_id, client_id, batch_number, file_urls_helper=None, is_new_file=False):
+        """Update invoice sheet with batch data - with detailed progress tracking"""
         try:
             print(f"Updating invoice sheet data for file ID: {file_id}")
             
@@ -830,22 +777,35 @@ class ClientDataInvoiceHelper:
                 print("No batch data found")
                 return False
             
-            # Clear existing data from B39 downwards first
+            # Step 1: Clear existing data from B39 downwards first
+            if not self.update_progress("Clearing existing invoice data..."):
+                return False
+            
             if not self.clear_invoice_data_range(file_id):
                 print("Failed to clear existing data")
                 return False
             
-            # Ensure sheet has enough rows for the data
+            # Step 2: Ensure sheet has enough rows for the data
+            if not self.update_progress("Ensuring adequate sheet size..."):
+                return False
+            
             required_rows = 40 + len(batch_data)  # 40 for header + template + data rows start from 40
             if not self.ensure_sheet_size(file_id, required_rows):
                 print("Failed to ensure adequate sheet size")
                 return False
             
-            # Format data for sheet insertion
+            # Step 3: Format data for sheet insertion
+            if not self.update_progress("Formatting batch data for insertion..."):
+                return False
+            
             formatted_data = self.format_data_for_sheet(batch_data, batch_number)
             
             if not formatted_data:
                 print("No formatted data to insert")
+                return False
+            
+            # Step 4: Insert data starting from B40
+            if not self.update_progress("Inserting batch data into spreadsheet..."):
                 return False
             
             # Get actual sheet name
@@ -870,17 +830,52 @@ class ClientDataInvoiceHelper:
             
             print(f"Updated {result.get('updatedCells')} cells in range {range_name}")
             
-            # Merge cells for filename column (C-D-E) for each row
+            # Step 5: Update special invoice cells with batch info and payment data
+            if not self.update_progress("Updating special invoice cells..."):
+                return False
+            
+            if not self.update_invoice_special_cells(file_id, client_id, batch_number, len(batch_data), file_urls_helper, is_new_file):
+                print("Warning: Failed to update special invoice cells")
+                return False
+            
+            # Step 6: Merge EF cells for client/payment info
+            if not self.update_progress("Merging client information cells..."):
+                return False
+            
+            if not self.merge_ef_cells(file_id):
+                print("Warning: Failed to merge EF cells")
+                return False
+            
+            # Step 7: Highlight payment method cell
+            if not self.update_progress("Applying payment method highlighting..."):
+                return False
+            
+            if file_urls_helper:
+                payment_method = file_urls_helper.get_payment_method()
+                if payment_method and payment_method != "":
+                    if not self.highlight_payment_method_cell(file_id, payment_method):
+                        print("Warning: Failed to highlight payment method cell")
+            
+            # Step 8: Merge cells for filename column (C-D-E) for each row
+            if not self.update_progress("Merging filename cells..."):
+                return False
+            
             if not self.merge_filename_cells(file_id, len(formatted_data)):
                 print("Warning: Failed to merge filename cells")
                 return False
             
-            # Copy formatting from template row (39) to all data rows
+            # Step 9: Copy formatting from template row (39) to all data rows
+            if not self.update_progress("Copying template formatting..."):
+                return False
+            
             if not self.copy_template_row_formatting(file_id, len(formatted_data)):
                 print("Warning: Failed to copy row formatting")
                 return False
             
-            # Delete template row (39) after all data and formatting is complete
+            # Step 10: Delete template row (39) after all data and formatting is complete
+            if not self.update_progress("Cleaning up template row..."):
+                return False
+            
             if not self.delete_template_row(file_id):
                 print("Warning: Failed to delete template row 39")
                 return False
@@ -889,6 +884,257 @@ class ClientDataInvoiceHelper:
             
         except Exception as e:
             print(f"Error updating invoice sheet data: {e}")
+            return False
+
+    def update_invoice_special_cells(self, spreadsheet_id, client_id, batch_number, total_files, file_urls_helper=None, is_new_file=False):
+        """Update special invoice cells with batch info, client data, and payment information"""
+        try:
+            from datetime import datetime
+            
+            # Get actual sheet name
+            sheet_name = self.get_invoice_sheet_name(spreadsheet_id)
+            if not sheet_name:
+                print("Could not determine sheet name for special cells update")
+                return False
+            
+            # Get client name from database
+            client_name = ""
+            try:
+                client_data = self.db_helper.get_client_by_id(client_id)
+                if client_data:
+                    client_name = client_data.get('client_name', '')
+            except:
+                client_name = "Unknown Client"
+            
+            # Prepare cell updates
+            cell_updates = []
+            
+            # 1. Cell C4: batch number/datetime/jumlahfile format (LVL004/2025Jul03/20)
+            current_date = datetime.now()
+            date_format = current_date.strftime("%Y%b%d")  # e.g., 2025Aug06
+            c4_value = f"{batch_number}/{date_format}/{total_files}"
+            cell_updates.append({
+                'range': f"{sheet_name}!C4",
+                'values': [[c4_value]]
+            })
+            
+            # 2. Cell E9:F9 merged - Client name
+            cell_updates.append({
+                'range': f"{sheet_name}!E9:F9", 
+                'values': [[client_name, ""]]  # Second value empty because cells are merged
+            })
+            
+            # 3. Cell E10:F10 merged - Creation date (only set for new files)
+            if is_new_file:
+                creation_date = current_date.strftime("%m/%d/%Y")  # e.g., 8/6/2025
+                cell_updates.append({
+                    'range': f"{sheet_name}!E10:F10",
+                    'values': [[creation_date, ""]]  # Second value empty because cells are merged
+                })
+            
+            # 4. Payment status and method from file_urls_helper
+            if file_urls_helper:
+                payment_status = file_urls_helper.get_payment_status()
+                payment_method = file_urls_helper.get_payment_method()
+                
+                # Cell E15:F15 merged - Payment status
+                if payment_status:
+                    cell_updates.append({
+                        'range': f"{sheet_name}!E15:F15",
+                        'values': [[payment_status, ""]]  # Second value empty because cells are merged
+                    })
+                
+                # Cell E16:F16 merged - Payment date (only if status is Paid)
+                if payment_status == "Paid":
+                    payment_date = current_date.strftime("%m/%d/%Y")  # e.g., 8/20/2025
+                    cell_updates.append({
+                        'range': f"{sheet_name}!E16:F16",
+                        'values': [[payment_date, ""]]  # Second value empty because cells are merged
+                    })
+            
+            # Update all cells at once
+            if cell_updates:
+                for update in cell_updates:
+                    self.sheets_service.spreadsheets().values().update(
+                        spreadsheetId=spreadsheet_id,
+                        range=update['range'],
+                        valueInputOption='USER_ENTERED',
+                        body={'values': update['values']}
+                    ).execute()
+                
+                print(f"Updated {len(cell_updates)} special invoice cells")
+            
+            # Handle payment method highlighting
+            if file_urls_helper:
+                payment_method = file_urls_helper.get_payment_method()
+                if payment_method and payment_method != "":
+                    if not self.highlight_payment_method_cell(spreadsheet_id, payment_method):
+                        print("Warning: Failed to highlight payment method cell")
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error updating special invoice cells: {e}")
+            return False
+
+    def highlight_payment_method_cell(self, spreadsheet_id, payment_method):
+        """Highlight the appropriate cell based on payment method selection - clear others first"""
+        try:
+            # Payment method to cell mapping
+            payment_cell_map = {
+                "GoPay": "C21",
+                "DANA": "D21", 
+                "OVO": "E21",
+                "LinkAja": "F21",
+                "QRIS": "H19",
+                "Bank Jago": "C26",
+                "BCA": "C27",
+                "BRI": "C28",
+                "PayPal": "C29"
+            }
+            
+            # Get sheet ID for the request
+            sheet_id = 0  # Assuming Invoice is the first sheet
+            import re
+            
+            requests = []
+            
+            # First, clear all payment method cells (reset to default background)
+            for method, cell_ref in payment_cell_map.items():
+                # Convert cell reference to row/column indices
+                match = re.match(r'([A-Z]+)(\d+)', cell_ref)
+                if match:
+                    col_letters = match.group(1)
+                    row_number = int(match.group(2))
+                    
+                    # Convert column letters to index (A=0, B=1, etc.)
+                    col_index = 0
+                    for char in col_letters:
+                        col_index = col_index * 26 + (ord(char) - ord('A') + 1)
+                    col_index -= 1  # Convert to 0-based index
+                    
+                    row_index = row_number - 1  # Convert to 0-based index
+                    
+                    # Clear background color (set to default/transparent)
+                    requests.append({
+                        'repeatCell': {
+                            'range': {
+                                'sheetId': sheet_id,
+                                'startRowIndex': row_index,
+                                'endRowIndex': row_index + 1,
+                                'startColumnIndex': col_index,
+                                'endColumnIndex': col_index + 1
+                            },
+                            'cell': {
+                                'userEnteredFormat': {
+                                    'backgroundColor': {
+                                        'red': 1.0,
+                                        'green': 1.0,
+                                        'blue': 1.0
+                                    }
+                                }
+                            },
+                            'fields': 'userEnteredFormat.backgroundColor'
+                        }
+                    })
+            
+            # Now highlight only the selected payment method
+            target_cell = payment_cell_map.get(payment_method)
+            if target_cell:
+                # Convert cell reference to row/column indices
+                match = re.match(r'([A-Z]+)(\d+)', target_cell)
+                if match:
+                    col_letters = match.group(1)
+                    row_number = int(match.group(2))
+                    
+                    # Convert column letters to index (A=0, B=1, etc.)
+                    col_index = 0
+                    for char in col_letters:
+                        col_index = col_index * 26 + (ord(char) - ord('A') + 1)
+                    col_index -= 1  # Convert to 0-based index
+                    
+                    row_index = row_number - 1  # Convert to 0-based index
+                    
+                    # Create format request with green background
+                    requests.append({
+                        'repeatCell': {
+                            'range': {
+                                'sheetId': sheet_id,
+                                'startRowIndex': row_index,
+                                'endRowIndex': row_index + 1,
+                                'startColumnIndex': col_index,
+                                'endColumnIndex': col_index + 1
+                            },
+                            'cell': {
+                                'userEnteredFormat': {
+                                    'backgroundColor': {
+                                        'red': 0.0,
+                                        'green': 1.0,
+                                        'blue': 0.0
+                                    }
+                                }
+                            },
+                            'fields': 'userEnteredFormat.backgroundColor'
+                        }
+                    })
+            
+            # Execute all format requests in one batch
+            if requests:
+                body = {'requests': requests}
+                self.sheets_service.spreadsheets().batchUpdate(
+                    spreadsheetId=spreadsheet_id,
+                    body=body
+                ).execute()
+                
+                if target_cell:
+                    print(f"Cleared all payment cells and highlighted {target_cell} for {payment_method}")
+                else:
+                    print(f"Cleared all payment cells (no mapping found for: {payment_method})")
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error highlighting payment method cell: {e}")
+            return False
+
+    def merge_ef_cells(self, spreadsheet_id):
+        """Merge EF cells for rows 9, 10, 15, 16"""
+        try:
+            sheet_id = 0  # Assuming Invoice is the first sheet
+            
+            # Rows to merge EF cells (0-based indexing)
+            merge_rows = [8, 9, 14, 15]  # Rows 9, 10, 15, 16 in 0-based
+            
+            requests = []
+            for row_index in merge_rows:
+                merge_request = {
+                    'mergeCells': {
+                        'range': {
+                            'sheetId': sheet_id,
+                            'startRowIndex': row_index,
+                            'endRowIndex': row_index + 1,
+                            'startColumnIndex': 4,  # Column E (0-based = 4)
+                            'endColumnIndex': 6     # Column F (exclusive, so 6 means up to F)
+                        },
+                        'mergeType': 'MERGE_ALL'
+                    }
+                }
+                requests.append(merge_request)
+            
+            # Execute batch requests
+            if requests:
+                body = {'requests': requests}
+                self.sheets_service.spreadsheets().batchUpdate(
+                    spreadsheetId=spreadsheet_id,
+                    body=body
+                ).execute()
+                
+                print(f"Successfully merged EF cells for {len(requests)} rows")
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error merging EF cells: {e}")
             return False
 
     def get_invoice_sheet_name(self, spreadsheet_id):

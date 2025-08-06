@@ -37,6 +37,25 @@ class ClientDataDatabaseHelper:
             client["_file_count"] = file_count
         return clients
     
+    def get_client_by_id(self, client_id):
+        """Get client by ID"""
+        db_manager = self.get_db_manager()
+        db_manager.connect(write=False)
+        cursor = db_manager.connection.cursor()
+        cursor.execute("SELECT id, client_name, contact, links, status, note FROM client WHERE id = ?", (client_id,))
+        row = cursor.fetchone()
+        db_manager.close()
+        if row:
+            return {
+                "id": row[0],
+                "client_name": row[1],
+                "contact": row[2],
+                "links": row[3],
+                "status": row[4],
+                "note": row[5]
+            }
+        return None
+    
     def add_client(self, client_name, contact, links, status, note):
         """Add new client to database"""
         db_manager = self.get_db_manager()
