@@ -246,7 +246,7 @@ class ClientDataInvoiceHelper:
             if not self.update_progress("Creating client folder structure..."):
                 return
             
-            target_folder_id = self.create_folder_structure(client_id, client_name)
+            target_folder_id = self.create_folder_structure(client_id, client_name, batch_number)
             if not target_folder_id:
                 self.close_progress()
                 QMessageBox.critical(self.parent, "Folder Creation Failed", "Failed to create folder structure.")
@@ -474,16 +474,37 @@ class ClientDataInvoiceHelper:
             print(f"Error extracting count from filename: {e}")
             return 0
     
-    def create_folder_structure(self, client_id, client_name):
-        """Create folder structure: INVOICE/client_id/year/month"""
+    def create_folder_structure(self, client_id, client_name, batch_number):
+        """Create folder structure: INVOICE/client_id/year/month based on batch creation date"""
         try:
             from datetime import datetime
             
-            current_date = datetime.now()
-            year = current_date.strftime("%Y")
-            month = current_date.strftime("%B")  # Full month name like "August"
+            # Get batch creation date from database
+            batch_created_at = self.db_helper.get_batch_created_date(batch_number, client_id)
+            
+            if batch_created_at:
+                # Parse the database timestamp
+                if isinstance(batch_created_at, str):
+                    # Parse string format like "2025-08-06 14:30:25" or "2025-08-06"
+                    try:
+                        batch_date = datetime.strptime(batch_created_at, "%Y-%m-%d %H:%M:%S")
+                    except ValueError:
+                        try:
+                            batch_date = datetime.strptime(batch_created_at, "%Y-%m-%d")
+                        except ValueError:
+                            print(f"Unable to parse batch date: {batch_created_at}, using current date")
+                            batch_date = datetime.now()
+                else:
+                    batch_date = batch_created_at
+            else:
+                print(f"No batch found for batch_number: {batch_number}, using current date")
+                batch_date = datetime.now()
+            
+            year = batch_date.strftime("%Y")
+            month = batch_date.strftime("%B")  # Full month name like "August"
             
             print(f"Creating folder structure for client {client_id} ({client_name})")
+            print(f"Batch: {batch_number}, Batch Date: {batch_date.strftime('%Y-%m-%d')}")
             print(f"Year: {year}, Month: {month}")
             
             # Step 1: Check/Create client folder inside INVOICE
@@ -601,4 +622,58 @@ class ClientDataInvoiceHelper:
             
         except Exception as e:
             print(f"Error copying template: {e}")
+            return None
+    
+    def get_invoice_share_link(self, client_id, client_name, batch_number):
+        """Get shareable read-only link for invoice file"""
+        try:
+            if not self.drive_service:
+                if not self.init_google_drive_connection():
+                    return None
+            
+            if not self.ensure_folders_exist():
+                return None
+            
+            # Create folder structure path to find the file
+            target_folder_id = self.create_folder_structure(client_id, client_name, batch_number)
+            if not target_folder_id:
+                return None
+            
+            # Find existing invoice file
+            existing_file_id, existing_filename, existing_count = self.find_existing_invoice(target_folder_id, client_name, batch_number)
+            
+            if not existing_file_id:
+                print(f"No invoice file found for client {client_name}, batch {batch_number}")
+                return None
+            
+            # Get shareable link
+            print(f"Getting share link for file ID: {existing_file_id}")
+            
+            # Create permission for anyone with the link to view
+            permission = {
+                'type': 'anyone',
+                'role': 'reader'
+            }
+            
+            # Add the permission
+            self.drive_service.permissions().create(
+                fileId=existing_file_id,
+                body=permission,
+                fields='id'
+            ).execute()
+            
+            # Get the file details including webViewLink
+            file_info = self.drive_service.files().get(
+                fileId=existing_file_id,
+                fields='webViewLink, name'
+            ).execute()
+            
+            share_link = file_info.get('webViewLink')
+            filename = file_info.get('name')
+            
+            print(f"Share link obtained for {filename}: {share_link}")
+            return share_link
+            
+        except Exception as e:
+            print(f"Error getting invoice share link: {e}")
             return None

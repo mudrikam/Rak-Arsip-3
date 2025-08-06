@@ -423,3 +423,7 @@ class DatabaseManager(QObject):
     def delete_file_url(self, file_url_id):
         """Delete file URL assignment."""
         return self.urls_helper.delete_file_url(file_url_id)
+
+    def get_batch_created_date(self, batch_number, client_id):
+        """Get batch creation date from batch_list table."""
+        return self.clients_helper.get_batch_created_date(batch_number, client_id)

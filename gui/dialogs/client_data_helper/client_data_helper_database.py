@@ -159,3 +159,8 @@ class ClientDataDatabaseHelper:
         """Get all files by batch and client with complete details"""
         db_manager = self.get_db_manager()
         return db_manager.get_all_files_by_batch_and_client_with_details(batch_id, client_id)
+
+    def get_batch_created_date(self, batch_number, client_id):
+        """Get batch creation date from batch_list table."""
+        db_manager = self.get_db_manager()
+        return db_manager.get_batch_created_date(batch_number, client_id)

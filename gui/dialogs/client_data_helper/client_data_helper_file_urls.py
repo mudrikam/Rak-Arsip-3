@@ -106,18 +106,17 @@ class ClientDataFileUrlsHelper:
         # Bottom controls row - payment controls and action buttons in one row
         bottom_controls_layout = QHBoxLayout()
         
-        # Payment Status
-        bottom_controls_layout.addWidget(QLabel("Payment Status:"))
+        # Payment Status (no label)
         self.payment_status_combo = QComboBox()
         self.payment_status_combo.addItems(["Pending", "Paid"])
         self.payment_status_combo.setCurrentText("Pending")
         self.payment_status_combo.setMinimumWidth(100)
+        self.payment_status_combo.setToolTip("Payment Status")
         bottom_controls_layout.addWidget(self.payment_status_combo)
         
         bottom_controls_layout.addSpacing(20)
         
-        # Payment Method
-        bottom_controls_layout.addWidget(QLabel("Payment Method:"))
+        # Payment Method (no label)
         self.payment_method_combo = QComboBox()
         self.payment_method_combo.addItems([
             "GoPay", "DANA", "OVO", "LinkAja", "Bank Jago", 
@@ -125,27 +124,40 @@ class ClientDataFileUrlsHelper:
         ])
         self.payment_method_combo.setCurrentText("GoPay")
         self.payment_method_combo.setMinimumWidth(120)
+        self.payment_method_combo.setToolTip("Payment Method")
         bottom_controls_layout.addWidget(self.payment_method_combo)
         
         bottom_controls_layout.addStretch()
         
         # Action buttons
+        # Copy Invoice Link button
+        self.copy_invoice_link_btn = QPushButton()
+        self.copy_invoice_link_btn.setIcon(qta.icon("fa6s.link"))
+        self.copy_invoice_link_btn.setMinimumHeight(32)
+        self.copy_invoice_link_btn.setMaximumWidth(40)
+        self.copy_invoice_link_btn.setToolTip("Copy Invoice Share Link")
+        self.copy_invoice_link_btn.clicked.connect(self.copy_invoice_share_link)
+        bottom_controls_layout.addWidget(self.copy_invoice_link_btn)
+        
         # Upload Payment Proof button
         self.upload_proof_btn = QPushButton("Upload Payment Proof")
         self.upload_proof_btn.setIcon(qta.icon("fa6s.upload"))
         self.upload_proof_btn.setMinimumHeight(32)
+        self.upload_proof_btn.setToolTip("Upload Payment Proof Document")
         bottom_controls_layout.addWidget(self.upload_proof_btn)
         
         # Sync to Drive button
         self.sync_drive_btn = QPushButton("Sync to Drive")
         self.sync_drive_btn.setIcon(qta.icon("fa6b.google-drive"))
         self.sync_drive_btn.setMinimumHeight(32)
+        self.sync_drive_btn.setToolTip("Sync Invoice to Google Drive")
         bottom_controls_layout.addWidget(self.sync_drive_btn)
         
         # Export CSV button
         self.export_csv_btn = QPushButton("Export CSV")
         self.export_csv_btn.setIcon(qta.icon("fa6s.file-csv"))
         self.export_csv_btn.setMinimumHeight(32)
+        self.export_csv_btn.setToolTip("Export File URLs to CSV")
         self.export_csv_btn.clicked.connect(self.export_to_csv)
         bottom_controls_layout.addWidget(self.export_csv_btn)
         
@@ -190,6 +202,183 @@ class ClientDataFileUrlsHelper:
         except Exception as e:
             print(f"Error selecting payment proof: {e}")
             QMessageBox.warning(self.parent, "Error", f"Failed to select payment proof: {str(e)}")
+    
+    def copy_invoice_share_link(self):
+        """Copy invoice file share link to clipboard"""
+        try:
+            if not self._selected_client_id or not self._selected_batch_number:
+                QMessageBox.warning(self.parent, "No Selection", "Please select a client and batch first.")
+                return
+            
+            if not self._invoice_helper:
+                QMessageBox.warning(self.parent, "No Invoice Helper", "Invoice helper not available.")
+                return
+            
+            # Get client name
+            client_name = self._client_name_label.text().replace("Client: ", "")
+            total_files = self._total_files_label.text().replace("Total Files: ", "")
+            
+            # Initialize progress dialog for copy link process
+            from PySide6.QtWidgets import QProgressDialog
+            from PySide6.QtCore import QCoreApplication
+            import time
+            
+            progress = QProgressDialog("Getting invoice share link...", "Cancel", 0, 6, self.parent)
+            progress.setWindowTitle("Copy Invoice Link")
+            progress.setModal(True)
+            progress.setValue(0)
+            progress.show()
+            QCoreApplication.processEvents()
+            
+            if progress.wasCanceled():
+                return
+            
+            # Step 1: Initialize connection
+            progress.setLabelText("Connecting to Google Drive...")
+            progress.setValue(1)
+            QCoreApplication.processEvents()
+            time.sleep(0.3)  # Give user time to see the step
+            
+            if progress.wasCanceled():
+                return
+            
+            # Step 2: Check folders
+            progress.setLabelText("Checking folder structure...")
+            progress.setValue(2)
+            QCoreApplication.processEvents()
+            time.sleep(0.3)
+            
+            if progress.wasCanceled():
+                return
+            
+            # Step 3: Find client folder
+            progress.setLabelText("Locating client folder...")
+            progress.setValue(3)
+            QCoreApplication.processEvents()
+            time.sleep(0.3)
+            
+            if progress.wasCanceled():
+                return
+            
+            # Step 4: Search for invoice file
+            progress.setLabelText("Searching for invoice file...")
+            progress.setValue(4)
+            QCoreApplication.processEvents()
+            time.sleep(0.3)
+            
+            if progress.wasCanceled():
+                return
+            
+            # Step 5: Get share link (this is where the real work happens)
+            progress.setLabelText("Creating shareable link...")
+            progress.setValue(5)
+            QCoreApplication.processEvents()
+            
+            # Get the invoice file link from Google Drive
+            share_link = self._invoice_helper.get_invoice_share_link(
+                self._selected_client_id, 
+                client_name, 
+                self._selected_batch_number
+            )
+            
+            if progress.wasCanceled():
+                return
+            
+            # Step 6: Complete
+            progress.setLabelText("Copying to clipboard...")
+            progress.setValue(6)
+            QCoreApplication.processEvents()
+            time.sleep(0.2)
+            
+            # Close progress dialog
+            progress.close()
+            
+            if share_link:
+                # Copy to clipboard
+                clipboard = QApplication.clipboard()
+                clipboard.setText(share_link)
+                
+                # Get invoice filename to extract date
+                invoice_filename = self._invoice_helper.generate_invoice_filename(client_name, self._selected_batch_number, int(total_files))
+                
+                # Extract date from filename format: Invoice_LUTVIL_HAKIM_LVL007_2025_August_06_20
+                invoice_date = "Unknown Date"
+                try:
+                    parts = invoice_filename.split('_')
+                    if len(parts) >= 6:
+                        year = parts[-4]  # 2025
+                        month = parts[-3]  # August
+                        day = parts[-2]   # 06
+                        invoice_date = f"{day} {month} {year}"
+                except Exception as e:
+                    print(f"Error parsing date from filename: {e}")
+                
+                # Create custom dialog showing copy details
+                from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTextEdit
+                import webbrowser
+                
+                dialog = QDialog(self.parent)
+                dialog.setWindowTitle("Invoice Link Copied")
+                dialog.setModal(True)
+                dialog.resize(500, 300)
+                
+                layout = QVBoxLayout(dialog)
+                
+                # Title
+                title_label = QLabel("Invoice Share Link Copied Successfully!")
+                title_label.setStyleSheet("font-weight: bold; font-size: 14px; color: #2e7d32;")
+                layout.addWidget(title_label)
+                
+                # Details
+                details_layout = QVBoxLayout()
+                details_layout.addWidget(QLabel(f"<b>Client:</b> {client_name}"))
+                details_layout.addWidget(QLabel(f"<b>Batch Number:</b> {self._selected_batch_number}"))
+                details_layout.addWidget(QLabel(f"<b>Total Files:</b> {total_files}"))
+                details_layout.addWidget(QLabel(f"<b>Invoice Date:</b> {invoice_date}"))
+                layout.addLayout(details_layout)
+                
+                # Link display
+                layout.addWidget(QLabel("<b>Share Link:</b>"))
+                link_text = QTextEdit()
+                link_text.setPlainText(share_link)
+                link_text.setMaximumHeight(80)
+                link_text.setReadOnly(True)
+                layout.addWidget(link_text)
+                
+                # Buttons
+                button_layout = QHBoxLayout()
+                
+                open_btn = QPushButton("Open in Browser")
+                open_btn.setIcon(qta.icon("fa6s.arrow-up-right-from-square"))
+                open_btn.clicked.connect(lambda: webbrowser.open(share_link))
+                button_layout.addWidget(open_btn)
+                
+                button_layout.addStretch()
+                
+                close_btn = QPushButton("Close")
+                close_btn.setIcon(qta.icon("fa6s.check"))
+                close_btn.clicked.connect(dialog.accept)
+                close_btn.setDefault(True)
+                button_layout.addWidget(close_btn)
+                
+                layout.addLayout(button_layout)
+                
+                # Show dialog
+                dialog.exec()
+                
+                print(f"Invoice share link copied to clipboard: {share_link}")
+            else:
+                QMessageBox.warning(self.parent, "Link Not Found", "Invoice file not found or unable to get share link.")
+                
+        except Exception as e:
+            # Make sure to close progress dialog on error
+            try:
+                if 'progress' in locals():
+                    progress.close()
+            except:
+                pass
+            print(f"Error copying invoice share link: {e}")
+            QMessageBox.warning(self.parent, "Error", f"Failed to copy invoice share link: {str(e)}")
     
     def _connect_invoice_helper(self):
         """Connect sync button to invoice helper functionality"""
@@ -384,7 +573,7 @@ class ClientDataFileUrlsHelper:
         
         menu = QMenu(self.file_urls_table)
         icon_copy = qta.icon("fa6s.copy")
-        icon_open = qta.icon("fa6s.external-link-alt")
+        icon_open = qta.icon("fa6s.arrow-up-right-from-square")
         
         action_copy_filename = QAction(icon_copy, "Copy Filename", self.parent)
         action_copy_url = QAction(icon_copy, "Copy URL", self.parent)
