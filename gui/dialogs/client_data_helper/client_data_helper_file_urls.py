@@ -1,11 +1,14 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QTableWidget,
-    QTableWidgetItem, QSizePolicy, QHeaderView, QMessageBox, QMenu, QComboBox, QLabel, QApplication, QToolTip, QDialog
+    QTableWidgetItem, QSizePolicy, QHeaderView, QMessageBox, QMenu, QComboBox, QLabel, QApplication, QToolTip, QDialog, QFileDialog
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction, QCursor
 import qtawesome as qta
 import webbrowser
+import csv
+import os
+from datetime import datetime
 
 class ClientDataFileUrlsHelper:
     """Helper class for File URLs tab functionality"""
@@ -87,6 +90,18 @@ class ClientDataFileUrlsHelper:
         self.file_urls_table.setColumnWidth(4, 120)  # Fixed width for Actions column
         
         tab_layout.addWidget(self.file_urls_table)
+        
+        # Export CSV button
+        export_layout = QHBoxLayout()
+        export_layout.addStretch()
+        
+        self.export_csv_btn = QPushButton("Export CSV")
+        self.export_csv_btn.setIcon(qta.icon("fa6s.file-csv"))
+        self.export_csv_btn.setMinimumHeight(32)
+        self.export_csv_btn.clicked.connect(self.export_to_csv)
+        export_layout.addWidget(self.export_csv_btn)
+        
+        tab_layout.addLayout(export_layout)
         
         # Add tab to widget
         tab_widget.addTab(tab, qta.icon("fa6s.link"), "File URLs")
@@ -329,6 +344,120 @@ class ClientDataFileUrlsHelper:
             
             # Close the client data dialog
             self.parent.accept()
+    
+    def export_to_csv(self):
+        """Export file URLs data to CSV with detailed information"""
+        if not self._selected_client_id or not self._selected_batch_number:
+            QMessageBox.information(self.parent, "Export CSV", "No client or batch selected.")
+            return
+        
+        try:
+            # Get client name and batch number
+            client_name = self._client_name_label.text().replace("Client: ", "")
+            batch_number = self._selected_batch_number or "unknown"
+            
+            # Get ALL files in this batch with complete details using proper database helper
+            all_files_data = self.db_helper.get_all_files_by_batch_and_client_with_details(
+                batch_number, self._selected_client_id
+            )
+            
+            if not all_files_data:
+                QMessageBox.information(self.parent, "Export CSV", "No files found in this batch.")
+                return
+            
+            # Extract root from first file if available
+            root_folder = "unknown"
+            if all_files_data:
+                root_folder = all_files_data[0][3] or "unknown"  # root is at index 3
+            
+            # Generate filename: root_datetime_batch_totalfiles.csv
+            current_datetime = datetime.now().strftime("%Y_%B_%d_%H%M%S")
+            total_files = len(all_files_data)
+            filename = f"{root_folder}_{current_datetime}_{batch_number}_{total_files}.csv"
+            
+            # Set initial directory to the root folder path if available
+            initial_dir = ""
+            if all_files_data and all_files_data[0][4]:  # path is at index 4
+                full_path = all_files_data[0][4]
+                # Extract the drive and root folder
+                path_parts = full_path.replace('\\', '/').split('/')
+                if len(path_parts) >= 2:
+                    # Construct path like K:\SURYA_ALAN
+                    initial_dir = f"{path_parts[0]}\\{path_parts[1]}"
+            
+            # Open file dialog
+            file_path, _ = QFileDialog.getSaveFileName(
+                self.parent,
+                "Export File URLs to CSV",
+                os.path.join(initial_dir, filename),
+                "CSV Files (*.csv);;All Files (*)"
+            )
+            
+            if not file_path:
+                return
+            
+            # Prepare CSV data
+            csv_data = []
+            
+            for i, item in enumerate(all_files_data, 1):
+                file_id = item[0]
+                filename = item[1] or ""
+                date = item[2] or ""
+                root = item[3] or ""
+                path = item[4] or ""
+                status_id = item[5]
+                category_id = item[6]
+                subcategory_id = item[7]
+                category_name = item[8] or ""  # Already fetched from JOIN
+                subcategory_name = item[9] or ""  # Already fetched from JOIN
+                url_value = item[10] or ""  # URL from LEFT JOIN
+                provider_name = item[11] or ""  # Provider name from LEFT JOIN
+                price_value = item[12]  # Price from LEFT JOIN
+                currency = item[13] or ""  # Currency from LEFT JOIN
+                
+                # Format price
+                price = ""
+                if price_value is not None:
+                    # Format as integer if it's a whole number, otherwise keep decimal
+                    if isinstance(price_value, (int, float)) and price_value == int(price_value):
+                        price = str(int(price_value))
+                    else:
+                        price = str(price_value)
+                
+                # Add row to CSV data
+                csv_data.append([
+                    i,  # No
+                    date,  # Date
+                    filename,  # Filename
+                    category_name,  # Category
+                    subcategory_name,  # Subcategory
+                    batch_number,  # Batch Number
+                    url_value,  # URL
+                    price  # Price
+                ])
+            
+            # Write CSV file
+            with open(file_path, 'w', newline='', encoding='utf-8') as csvfile:
+                writer = csv.writer(csvfile, quoting=csv.QUOTE_ALL)
+                
+                # Write header
+                writer.writerow([
+                    "No", "Date", "Filename", "Category", "Subcategory", 
+                    "Batch Number", "URL", "Price"
+                ])
+                
+                # Write data
+                writer.writerows(csv_data)
+            
+            QMessageBox.information(
+                self.parent, 
+                "Export Complete", 
+                f"File URLs exported successfully to:\n{file_path}\n\nTotal records: {len(csv_data)}"
+            )
+            
+        except Exception as e:
+            print(f"Error exporting CSV: {e}")
+            QMessageBox.critical(self.parent, "Export Error", f"Failed to export CSV file:\n{str(e)}")
     
     def clear_file_urls_tab(self):
         """Clear the file URLs tab"""
