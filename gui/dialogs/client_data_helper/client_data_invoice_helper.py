@@ -270,8 +270,8 @@ class ClientDataInvoiceHelper:
             if existing_file_id:
                 # Check if count has changed and needs renaming
                 if existing_count != total_files:
-                    # Add rename step dynamically
-                    self.total_steps += 13  # Rename + Clear + Resize + Format + Insert + Special + Merge + Format Copy + Delete + EF Merge + Payment Highlight + Final Merge + Final Format
+                    # Add rename step dynamically - now 12 steps in update_invoice_sheet_data_with_progress
+                    self.total_steps += 12  # Clear + Resize + Format + Insert + Special + Merge + Format Copy + Delete + EF Merge + Payment Highlight + Final Merge + External Data Access
                     self.progress_dialog.setMaximum(self.total_steps)
                     
                     if not self.update_progress(f"Renaming file (count changed: {existing_count} → {total_files})..."):
@@ -303,8 +303,8 @@ class ClientDataInvoiceHelper:
                         self.close_progress()
                         QMessageBox.warning(self.parent, "Partial Success", f"File renamed successfully but failed to update sheet data.\n\nFile ID: {renamed_file_id}")
                 else:
-                    # Count is the same, just update data
-                    self.total_steps += 12  # Clear + Resize + Format + Insert + Special + Merge + Format Copy + Delete + EF Merge + Payment Highlight + Final Merge + Final Format
+                    # Count is the same, just update data - now 11 steps in update_invoice_sheet_data_with_progress  
+                    self.total_steps += 11  # Clear + Resize + Format + Insert + Special + Merge + Format Copy + Delete + EF Merge + Payment Highlight + External Data Access
                     self.progress_dialog.setMaximum(self.total_steps)
                     
                     # Update sheet data with detailed progress
@@ -322,8 +322,8 @@ class ClientDataInvoiceHelper:
                         self.close_progress()
                         QMessageBox.warning(self.parent, "Update Failed", f"Failed to update invoice sheet data.\n\nFile: {existing_filename}")
             else:
-                # Add create step dynamically
-                self.total_steps += 12  # Create + Clear + Resize + Format + Insert + Special + Merge + Format Copy + Delete + EF Merge + Payment Highlight + Final Merge + Final Format
+                # Add create step dynamically - now 11 steps in update_invoice_sheet_data_with_progress
+                self.total_steps += 11  # Clear + Resize + Format + Insert + Special + Merge + Format Copy + Delete + EF Merge + Payment Highlight + External Data Access
                 self.progress_dialog.setMaximum(self.total_steps)
                 
                 if not self.update_progress("Copying template and creating new invoice file..."):
@@ -1098,12 +1098,12 @@ class ClientDataInvoiceHelper:
             return False
 
     def merge_ef_cells(self, spreadsheet_id):
-        """Merge EF cells for rows 9, 10, 15, 16"""
+        """Merge EF cells for rows 9, 10, 14, 15, 16"""
         try:
             sheet_id = 0  # Assuming Invoice is the first sheet
             
             # Rows to merge EF cells (0-based indexing)
-            merge_rows = [8, 9, 14, 15]  # Rows 9, 10, 15, 16 in 0-based
+            merge_rows = [8, 9, 13, 14, 15]  # Rows 9, 10, 14, 15, 16 in 0-based
             
             requests = []
             for row_index in merge_rows:
@@ -1463,4 +1463,381 @@ class ClientDataInvoiceHelper:
             
         except Exception as e:
             print(f"Error ensuring sheet size: {e}")
+            return False
+
+    def upload_payment_proof(self, client_id, client_name, batch_number, image_file_path):
+        """Upload payment proof image to same folder as invoice and insert into K2:K24 merged cell"""
+        try:
+            print(f"Uploading payment proof for client {client_name}, batch {batch_number}")
+            print(f"Image file: {image_file_path}")
+            
+            # Show progress dialog with detailed steps
+            from PySide6.QtWidgets import QProgressDialog, QMessageBox
+            from PySide6.QtCore import QCoreApplication
+            
+            progress = QProgressDialog("Preparing upload...", "Cancel", 0, 9, self.parent)
+            progress.setWindowTitle("Upload Payment Proof")
+            progress.setModal(True)
+            progress.setValue(0)
+            progress.show()
+            QCoreApplication.processEvents()
+            
+            try:
+                # Step 1: Initialize Google Drive connection
+                progress.setLabelText("Connecting to Google Drive...")
+                progress.setValue(1)
+                QCoreApplication.processEvents()
+                
+                if progress.wasCanceled():
+                    return False
+                
+                if not self.drive_service or not self.sheets_service:
+                    if not self.init_google_drive_connection():
+                        progress.close()
+                        return False
+                
+                if not self.ensure_folders_exist():
+                    progress.close()
+                    return False
+                
+                # Step 2: Create folder structure
+                progress.setLabelText("Creating folder structure...")
+                progress.setValue(2)
+                QCoreApplication.processEvents()
+                
+                if progress.wasCanceled():
+                    progress.close()
+                    return False
+                
+                # Get the target folder (same as invoice location)
+                target_folder_id = self.create_folder_structure(client_id, client_name, batch_number)
+                if not target_folder_id:
+                    progress.close()
+                    print("Failed to determine target folder for payment proof")
+                    return False
+                
+                # Step 3: Upload image to Google Drive
+                progress.setLabelText("Uploading image to Google Drive...")
+                progress.setValue(3)
+                QCoreApplication.processEvents()
+                
+                if progress.wasCanceled():
+                    progress.close()
+                    return False
+                
+                # Upload image to Google Drive
+                image_file_id = self.upload_image_to_drive(image_file_path, target_folder_id, client_name, batch_number)
+                if not image_file_id:
+                    progress.close()
+                    print("Failed to upload image to Google Drive")
+                    return False
+                
+                # Step 4: Setting permissions
+                progress.setLabelText("Setting image permissions...")
+                progress.setValue(4)
+                QCoreApplication.processEvents()
+                
+                if progress.wasCanceled():
+                    progress.close()
+                    return False
+                
+                # Step 5: Finding invoice spreadsheet
+                progress.setLabelText("Locating invoice spreadsheet...")
+                progress.setValue(5)
+                QCoreApplication.processEvents()
+                
+                if progress.wasCanceled():
+                    progress.close()
+                    return False
+                
+                # Find the invoice spreadsheet with improved search
+                existing_file_id, existing_filename, existing_count = self.find_existing_invoice_for_payment_proof(target_folder_id, client_name, batch_number)
+                if not existing_file_id:
+                    progress.close()
+                    print("No invoice spreadsheet found for payment proof insertion")
+                    return False
+                
+                # Step 6: Preparing spreadsheet
+                progress.setLabelText("Preparing spreadsheet for image insertion...")
+                progress.setValue(6)
+                QCoreApplication.processEvents()
+                
+                if progress.wasCanceled():
+                    progress.close()
+                    return False
+                
+                # Step 7: Inserting image using IMAGE formula
+                progress.setLabelText("Inserting image using IMAGE formula...")
+                progress.setValue(7)
+                QCoreApplication.processEvents()
+                
+                if progress.wasCanceled():
+                    progress.close()
+                    return False
+                
+                # Insert image using IMAGE formula in K2 cell
+                if not self.insert_image_into_invoice_cell(existing_file_id, image_file_id):
+                    progress.close()
+                    print("Failed to insert image formula")
+                    return False
+                
+                # Step 8: Update payment proof upload date
+                progress.setLabelText("Updating payment proof date...")
+                progress.setValue(8)
+                QCoreApplication.processEvents()
+                
+                if progress.wasCanceled():
+                    progress.close()
+                    return False
+                
+                # Update E14:F14 merged cell with current date
+                if not self.update_payment_proof_date(existing_file_id):
+                    print("Warning: Failed to update payment proof date")
+                
+                # Step 9: Complete
+                progress.setLabelText("Upload complete!")
+                progress.setValue(9)
+                QCoreApplication.processEvents()
+                
+                progress.close()
+                
+                print(f"Successfully uploaded payment proof and inserted into invoice: {existing_filename}")
+                return True
+                
+            except Exception as e:
+                progress.close()
+                print(f"Error during upload process: {e}")
+                return False
+            
+        except Exception as e:
+            print(f"Error uploading payment proof: {e}")
+            return False
+
+    def find_existing_invoice_for_payment_proof(self, target_folder_id, client_name, batch_number):
+        """Find existing invoice file using the same logic as sync_to_drive() function"""
+        try:
+            print(f"Looking for invoice file in folder {target_folder_id} for batch {batch_number}")
+            
+            # Use the exact same search logic as find_existing_invoice() method
+            return self.find_existing_invoice(target_folder_id, client_name, batch_number)
+                
+        except Exception as e:
+            print(f"Error finding existing invoice for payment proof: {e}")
+            return (None, None, 0)
+
+    def upload_image_to_drive(self, image_file_path, target_folder_id, client_name, batch_number):
+        """Upload image file to Google Drive"""
+        try:
+            import os
+            from googleapiclient.http import MediaFileUpload
+            
+            # Generate image filename
+            image_filename = f"Payment_Proof_{client_name.replace(' ', '_')}_{batch_number}_{os.path.basename(image_file_path)}"
+            
+            print(f"Uploading image as: {image_filename}")
+            
+            # Prepare file metadata
+            file_metadata = {
+                'name': image_filename,
+                'parents': [target_folder_id]
+            }
+            
+            # Create media upload
+            media = MediaFileUpload(
+                image_file_path,
+                resumable=True
+            )
+            
+            # Upload file
+            file = self.drive_service.files().create(
+                body=file_metadata,
+                media_body=media,
+                fields='id,name'
+            ).execute()
+            
+            image_file_id = file.get('id')
+            uploaded_name = file.get('name')
+            
+            print(f"Successfully uploaded image: {uploaded_name} (ID: {image_file_id})")
+            
+            # Make image publicly viewable for embedding in sheets
+            permission = {
+                'type': 'anyone',
+                'role': 'reader'
+            }
+            
+            self.drive_service.permissions().create(
+                fileId=image_file_id,
+                body=permission
+            ).execute()
+            
+            print(f"Set public permissions for image: {image_file_id}")
+            
+            return image_file_id
+            
+        except Exception as e:
+            print(f"Error uploading image to Drive: {e}")
+            return None
+
+    def insert_image_into_invoice_cell(self, spreadsheet_id, image_file_id):
+        """Insert image using IMAGE formula in K2 cell (Google Sheets native approach)"""
+        try:
+            print(f"Inserting image {image_file_id} using IMAGE formula in K2")
+            
+            # Get the sheet name
+            sheet_name = self.get_invoice_sheet_name(spreadsheet_id)
+            if not sheet_name:
+                print("Could not determine sheet name for image insertion")
+                return False
+            
+            # Use IMAGE formula with publicly accessible URL
+            image_url = f"https://drive.google.com/uc?export=view&id={image_file_id}"
+            print(f"Using image URL: {image_url}")
+            
+            # Insert IMAGE formula in K2 cell
+            range_name = f"{sheet_name}!K2"
+            
+            # Use IMAGE function with mode 1 (fit to cell)
+            image_formula = f'=IMAGE("{image_url}", 1)'
+            
+            body = {
+                'values': [[image_formula]]
+            }
+            
+            result = self.sheets_service.spreadsheets().values().update(
+                spreadsheetId=spreadsheet_id,
+                range=range_name,
+                valueInputOption='USER_ENTERED',
+                body=body
+            ).execute()
+            
+            print(f"Successfully inserted IMAGE formula into K2: {result.get('updatedCells')} cells updated")
+            
+            # Merge K2:K24 to make image area larger
+            if not self.merge_image_display_area(spreadsheet_id):
+                print("Warning: Failed to merge K2:K24 for image display")
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error inserting image formula: {e}")
+            return False
+
+    def merge_image_display_area(self, spreadsheet_id):
+        """Merge K2:K24 cells for larger image display area"""
+        try:
+            print("Merging K2:K24 cells for image display")
+            
+            sheet_id = 0  # Assuming Invoice is the first sheet
+            
+            # Merge K2:K24 (column K = index 10, rows 2-24 = indices 1-23)
+            requests = [{
+                'mergeCells': {
+                    'range': {
+                        'sheetId': sheet_id,
+                        'startRowIndex': 1,   # Row 2 (0-based = 1)
+                        'endRowIndex': 24,    # Row 24 (exclusive, so 24 means up to row 24)
+                        'startColumnIndex': 10,  # Column K (0-based = 10)
+                        'endColumnIndex': 11     # Column K (exclusive, so 11 means just K)
+                    },
+                    'mergeType': 'MERGE_ALL'
+                }
+            }]
+            
+            # Execute merge request
+            body = {'requests': requests}
+            self.sheets_service.spreadsheets().batchUpdate(
+                spreadsheetId=spreadsheet_id,
+                body=body
+            ).execute()
+            
+            print("Successfully merged K2:K24 cells for image display")
+            return True
+            
+        except Exception as e:
+            print(f"Error merging image display area: {e}")
+            return False
+
+    def update_payment_proof_date(self, spreadsheet_id):
+        """Update E14:F14 merged cell with payment proof upload date"""
+        try:
+            from datetime import datetime
+            
+            # Get actual sheet name
+            sheet_name = self.get_invoice_sheet_name(spreadsheet_id)
+            if not sheet_name:
+                print("Could not determine sheet name for payment proof date update")
+                return False
+            
+            # Format current date same as other date cells (m/d/yyyy)
+            current_date = datetime.now()
+            date_formatted = current_date.strftime("%m/%d/%Y")  # e.g., 8/6/2025
+            
+            # Update E14:F14 merged cell with payment proof date
+            range_name = f"{sheet_name}!E14:F14"
+            body = {
+                'values': [[date_formatted, ""]]  # Second value empty because cells are merged
+            }
+            
+            result = self.sheets_service.spreadsheets().values().update(
+                spreadsheetId=spreadsheet_id,
+                range=range_name,
+                valueInputOption='USER_ENTERED',
+                body=body
+            ).execute()
+            
+            print(f"Updated payment proof date in E14:F14: {date_formatted}")
+            return True
+            
+        except Exception as e:
+            print(f"Error updating payment proof date: {e}")
+            return False
+
+    def get_payment_proof_upload_dialog(self, client_id, client_name, batch_number):
+        """Show file dialog to select payment proof image and upload it"""
+        try:
+            from PySide6.QtWidgets import QFileDialog, QMessageBox
+            
+            # Show file dialog to select image
+            import os
+            file_dialog = QFileDialog()
+            file_dialog.setFileMode(QFileDialog.ExistingFile)
+            file_dialog.setNameFilter("Image files (*.png *.jpg *.jpeg *.gif *.bmp)")
+            file_dialog.setWindowTitle("Select Payment Proof Image")
+            file_dialog.setDirectory(os.path.expanduser("~"))
+            
+            if file_dialog.exec() == QFileDialog.Accepted:
+                selected_files = file_dialog.selectedFiles()
+                if selected_files:
+                    image_file_path = selected_files[0]
+                    
+                    # Call the upload method with the selected file
+                    success = self.upload_payment_proof(client_id, client_name, batch_number, image_file_path)
+                    
+                    # Show result message and don't return True to avoid double dialog
+                    if success:
+                        QMessageBox.information(
+                            self.parent, 
+                            "Upload Successful", 
+                            "Payment proof has been successfully uploaded and inserted into the invoice."
+                        )
+                    else:
+                        QMessageBox.warning(
+                            self.parent, 
+                            "Upload Failed", 
+                            "Failed to upload payment proof. Please try again."
+                        )
+                    
+                    # Always return False to prevent dialog from being called again
+                    return False
+            
+            return False
+            
+        except Exception as e:
+            print(f"Error in payment proof upload dialog: {e}")
+            QMessageBox.critical(
+                self.parent, 
+                "Error", 
+                f"An error occurred during upload: {str(e)}"
+            )
             return False

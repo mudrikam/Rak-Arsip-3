@@ -190,29 +190,8 @@ class ClientDataFileUrlsHelper:
         
         # Connect upload button
         if self.upload_proof_btn:
-            self.upload_proof_btn.clicked.connect(self.upload_payment_proof)
-    
-    def upload_payment_proof(self):
-        """Upload payment proof file"""
-        try:
-            file_path, _ = QFileDialog.getOpenFileName(
-                self.parent,
-                "Select Payment Proof",
-                "",
-                "Image Files (*.png *.jpg *.jpeg *.gif *.bmp);;PDF Files (*.pdf);;All Files (*)"
-            )
-            
-            if file_path:
-                print(f"Payment proof selected: {file_path}")
-                QMessageBox.information(
-                    self.parent, 
-                    "Upload Payment Proof", 
-                    f"Payment proof file selected:\n{file_path}\n\nUpload functionality will be implemented later."
-                )
-            
-        except Exception as e:
-            print(f"Error selecting payment proof: {e}")
-            QMessageBox.warning(self.parent, "Error", f"Failed to select payment proof: {str(e)}")
+            # Note: Connection will be made in _connect_invoice_helper() when helper is available
+            pass
     
     def copy_invoice_share_link(self):
         """Copy invoice file share link to clipboard"""
@@ -392,7 +371,7 @@ class ClientDataFileUrlsHelper:
             QMessageBox.warning(self.parent, "Error", f"Failed to copy invoice share link: {str(e)}")
     
     def _connect_invoice_helper(self):
-        """Connect sync button to invoice helper functionality"""
+        """Connect sync button and upload button to invoice helper functionality"""
         try:
             # Get invoice helper from parent dialog
             if hasattr(self.parent, 'invoice_helper'):
@@ -400,8 +379,37 @@ class ClientDataFileUrlsHelper:
                 if self.sync_drive_btn and self._invoice_helper:
                     self.sync_drive_btn.clicked.connect(lambda: self._invoice_helper.sync_to_drive(self))
                     print("Sync to Drive button connected to invoice helper")
+                
+                if self.upload_proof_btn and self._invoice_helper:
+                    self.upload_proof_btn.clicked.connect(self.upload_payment_proof)
+                    print("Upload Payment Proof button connected to invoice helper")
         except Exception as e:
             print(f"Error connecting invoice helper: {e}")
+
+    def upload_payment_proof(self):
+        """Handle upload payment proof button click"""
+        try:
+            if not self._selected_client_id or not self._selected_batch_number:
+                QMessageBox.warning(self.parent, "No Selection", "Please select a client and batch first.")
+                return
+            
+            if not self._invoice_helper:
+                QMessageBox.warning(self.parent, "Service Unavailable", "Invoice helper service is not available.")
+                return
+            
+            # Get client name
+            client_name = self._client_name_label.text().replace("Client: ", "")
+            
+            # Call the upload dialog
+            self._invoice_helper.get_payment_proof_upload_dialog(
+                self._selected_client_id, 
+                client_name, 
+                self._selected_batch_number
+            )
+            
+        except Exception as e:
+            print(f"Error uploading payment proof: {e}")
+            QMessageBox.critical(self.parent, "Upload Error", f"Error uploading payment proof: {str(e)}")
     
     def load_file_urls_for_batch(self, client_id, batch_number, client_name=""):
         """Load file URLs for selected batch"""
