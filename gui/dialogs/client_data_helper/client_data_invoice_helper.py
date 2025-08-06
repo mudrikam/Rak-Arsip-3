@@ -8,6 +8,7 @@ from PySide6.QtGui import QAction, QCursor
 import qtawesome as qta
 from pathlib import Path
 import json
+import time
 
 
 class ClientDataInvoiceHelper:
@@ -270,7 +271,7 @@ class ClientDataInvoiceHelper:
                 # Check if count has changed and needs renaming
                 if existing_count != total_files:
                     # Add rename step dynamically
-                    self.total_steps += 1
+                    self.total_steps += 7  # Rename + Clear + Resize + Format + Merge + Copy Format + Delete Template
                     self.progress_dialog.setMaximum(self.total_steps)
                     
                     if not self.update_progress(f"Renaming file (count changed: {existing_count} → {total_files})..."):
@@ -282,39 +283,82 @@ class ClientDataInvoiceHelper:
                     # Rename the existing file
                     renamed_file_id = self.rename_existing_invoice(existing_file_id, new_filename)
                     
-                    if renamed_file_id:
-                        print(f"Successfully renamed existing invoice file for batch {batch_number}")
+                    if not renamed_file_id:
+                        self.close_progress()
+                        QMessageBox.critical(self.parent, "Rename Failed", "Failed to rename existing invoice file to update count.")
+                        return
+                    
+                    # Update sheet data with detailed progress
+                    if not self.update_progress("Clearing existing data..."):
+                        return
+                    
+                    if not self.update_progress("Ensuring sheet size..."):
+                        return
+                    
+                    if not self.update_progress("Inserting invoice data..."):
+                        return
+                    
+                    if not self.update_progress("Merging filename cells..."):
+                        return
+                    
+                    if not self.update_progress("Applying formatting..."):
+                        return
+                    
+                    if not self.update_progress("Finalizing spreadsheet..."):
+                        return
+                    
+                    if self.update_invoice_sheet_data_with_progress(renamed_file_id, client_id, batch_number):
+                        print(f"Successfully updated invoice file and data for batch {batch_number}")
                         self.close_progress()
                         
                         QMessageBox.information(
                             self.parent, 
-                            "File Renamed", 
-                            f"Invoice file for batch {batch_number} has been renamed to reflect updated count.\n\nOld: {existing_filename}\nNew: {new_filename}\n\nFile ID: {renamed_file_id}"
+                            "File Updated", 
+                            f"Invoice file for batch {batch_number} has been renamed and data updated.\n\nOld: {existing_filename}\nNew: {new_filename}\n\nTotal records: {total_files}"
                         )
-                        print(f"Invoice file renamed with ID: {renamed_file_id}")
+                        print(f"Invoice file renamed and updated with ID: {renamed_file_id}")
                     else:
                         self.close_progress()
-                        QMessageBox.critical(self.parent, "Rename Failed", "Failed to rename existing invoice file to update count.")
+                        QMessageBox.warning(self.parent, "Partial Success", f"File renamed successfully but failed to update sheet data.\n\nFile ID: {renamed_file_id}")
                 else:
-                    # Count is the same, just update
-                    self.total_steps += 1
+                    # Count is the same, just update data
+                    self.total_steps += 6  # Clear + Resize + Format + Merge + Copy Format + Delete Template
                     self.progress_dialog.setMaximum(self.total_steps)
                     
-                    if not self.update_progress("Updating existing invoice file (count unchanged)..."):
+                    if not self.update_progress("Clearing existing data..."):
                         return
                     
-                    print(f"Found existing invoice file for batch {batch_number}, count unchanged ({existing_count})")
-                    self.close_progress()
+                    if not self.update_progress("Ensuring sheet size..."):
+                        return
                     
-                    QMessageBox.information(
-                        self.parent, 
-                        "Update Mode", 
-                        f"Invoice file for batch {batch_number} already exists with correct count ({existing_count}).\n\nFile: {existing_filename}\nFile ID: {existing_file_id}"
-                    )
-                    print(f"Invoice file already up to date with ID: {existing_file_id}")
+                    if not self.update_progress("Inserting invoice data..."):
+                        return
+                    
+                    if not self.update_progress("Merging filename cells..."):
+                        return
+                    
+                    if not self.update_progress("Applying formatting..."):
+                        return
+                    
+                    if not self.update_progress("Finalizing spreadsheet..."):
+                        return
+                    
+                    if self.update_invoice_sheet_data_with_progress(existing_file_id, client_id, batch_number):
+                        print(f"Successfully updated invoice data for batch {batch_number}")
+                        self.close_progress()
+                        
+                        QMessageBox.information(
+                            self.parent, 
+                            "Data Updated", 
+                            f"Invoice data for batch {batch_number} has been updated successfully.\n\nFile: {existing_filename}\nTotal records: {existing_count}"
+                        )
+                        print(f"Invoice data updated for file ID: {existing_file_id}")
+                    else:
+                        self.close_progress()
+                        QMessageBox.warning(self.parent, "Update Failed", f"Failed to update invoice sheet data.\n\nFile: {existing_filename}")
             else:
                 # Add create step dynamically
-                self.total_steps += 1
+                self.total_steps += 6  # Create + Clear + Resize + Format + Merge + Copy Format + Delete Template
                 self.progress_dialog.setMaximum(self.total_steps)
                 
                 if not self.update_progress("Copying template and creating new invoice file..."):
@@ -322,17 +366,43 @@ class ClientDataInvoiceHelper:
                 
                 new_file_id = self.copy_template_to_target(template_file_id, target_folder_id, invoice_filename)
                 
-                self.close_progress()
+                if not new_file_id:
+                    self.close_progress()
+                    QMessageBox.critical(self.parent, "Copy Failed", "Failed to copy template and create invoice file.")
+                    return
                 
-                if new_file_id:
+                # Update sheet data for new file with detailed progress
+                if not self.update_progress("Clearing existing data..."):
+                    return
+                
+                if not self.update_progress("Ensuring sheet size..."):
+                    return
+                
+                if not self.update_progress("Inserting invoice data..."):
+                    return
+                
+                if not self.update_progress("Merging filename cells..."):
+                    return
+                
+                if not self.update_progress("Applying formatting..."):
+                    return
+                
+                if not self.update_progress("Finalizing spreadsheet..."):
+                    return
+                
+                if self.update_invoice_sheet_data_with_progress(new_file_id, client_id, batch_number):
+                    self.close_progress()
+                    
                     QMessageBox.information(
                         self.parent, 
                         "Success", 
-                        f"New invoice file created successfully:\n{invoice_filename}\n\nFile ID: {new_file_id}"
+                        f"New invoice file created and populated successfully:\n{invoice_filename}\n\nTotal records: {total_files}"
                     )
-                    print(f"New invoice file created with ID: {new_file_id}")
+                    print(f"New invoice file created and populated with ID: {new_file_id}")
                 else:
-                    QMessageBox.critical(self.parent, "Copy Failed", "Failed to copy template and create invoice file.")
+                    self.close_progress()
+                    QMessageBox.warning(self.parent, "Partial Success", f"Invoice file created but failed to populate data.\n\nFile: {invoice_filename}\nFile ID: {new_file_id}")
+            
             
         except Exception as e:
             self.close_progress()
@@ -677,3 +747,474 @@ class ClientDataInvoiceHelper:
         except Exception as e:
             print(f"Error getting invoice share link: {e}")
             return None
+
+    def update_invoice_sheet_data(self, file_id, client_id, batch_number):
+        """Update invoice sheet with batch data starting from B39"""
+        try:
+            print(f"Updating invoice sheet data for file ID: {file_id}")
+            
+            # Get all files data for this batch and client
+            batch_data = self.db_helper.get_all_files_by_batch_and_client_with_details(batch_number, client_id)
+            
+            if not batch_data:
+                print("No batch data found")
+                return False
+            
+            # Clear existing data from B39 downwards first
+            if not self.clear_invoice_data_range(file_id):
+                print("Failed to clear existing data")
+                return False
+            
+            # Ensure sheet has enough rows for the data
+            required_rows = 40 + len(batch_data)  # 40 for header + template + data rows start from 40
+            if not self.ensure_sheet_size(file_id, required_rows):
+                print("Failed to ensure adequate sheet size")
+                return False
+            
+            # Format data for sheet insertion
+            formatted_data = self.format_data_for_sheet(batch_data, batch_number)
+            
+            if not formatted_data:
+                print("No formatted data to insert")
+                return False
+            
+            # Get actual sheet name
+            sheet_name = self.get_invoice_sheet_name(file_id)
+            if not sheet_name:
+                print("Could not determine sheet name")
+                return False
+            
+            # Insert data starting from B40 (not B39, since B39 is template)
+            range_name = f"{sheet_name}!B40:J{39 + len(formatted_data)}"  # B40 to J(40+count-1)
+            
+            body = {
+                'values': formatted_data
+            }
+            
+            result = self.sheets_service.spreadsheets().values().update(
+                spreadsheetId=file_id,
+                range=range_name,
+                valueInputOption='USER_ENTERED',
+                body=body
+            ).execute()
+            
+            print(f"Updated {result.get('updatedCells')} cells in range {range_name}")
+            
+            # Merge cells for filename column (C-D-E) for each row
+            if not self.merge_filename_cells(file_id, len(formatted_data)):
+                print("Warning: Failed to merge filename cells")
+            
+            # Copy formatting from template row (39) to all data rows
+            if not self.copy_template_row_formatting(file_id, len(formatted_data)):
+                print("Warning: Failed to copy row formatting")
+            
+            # Delete template row (39) after all data and formatting is complete
+            if not self.delete_template_row(file_id):
+                print("Warning: Failed to delete template row 39")
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error updating invoice sheet data: {e}")
+            return False
+
+    def update_invoice_sheet_data_with_progress(self, file_id, client_id, batch_number):
+        """Update invoice sheet with batch data - progress handled externally"""
+        try:
+            print(f"Updating invoice sheet data for file ID: {file_id}")
+            
+            # Get all files data for this batch and client
+            batch_data = self.db_helper.get_all_files_by_batch_and_client_with_details(batch_number, client_id)
+            
+            if not batch_data:
+                print("No batch data found")
+                return False
+            
+            # Clear existing data from B39 downwards first
+            if not self.clear_invoice_data_range(file_id):
+                print("Failed to clear existing data")
+                return False
+            
+            # Ensure sheet has enough rows for the data
+            required_rows = 40 + len(batch_data)  # 40 for header + template + data rows start from 40
+            if not self.ensure_sheet_size(file_id, required_rows):
+                print("Failed to ensure adequate sheet size")
+                return False
+            
+            # Format data for sheet insertion
+            formatted_data = self.format_data_for_sheet(batch_data, batch_number)
+            
+            if not formatted_data:
+                print("No formatted data to insert")
+                return False
+            
+            # Get actual sheet name
+            sheet_name = self.get_invoice_sheet_name(file_id)
+            if not sheet_name:
+                print("Could not determine sheet name")
+                return False
+            
+            # Insert data starting from B40 (not B39, since B39 is template)
+            range_name = f"{sheet_name}!B40:J{39 + len(formatted_data)}"  # B40 to J(40+count-1)
+            
+            body = {
+                'values': formatted_data
+            }
+            
+            result = self.sheets_service.spreadsheets().values().update(
+                spreadsheetId=file_id,
+                range=range_name,
+                valueInputOption='USER_ENTERED',
+                body=body
+            ).execute()
+            
+            print(f"Updated {result.get('updatedCells')} cells in range {range_name}")
+            
+            # Merge cells for filename column (C-D-E) for each row
+            if not self.merge_filename_cells(file_id, len(formatted_data)):
+                print("Warning: Failed to merge filename cells")
+                return False
+            
+            # Copy formatting from template row (39) to all data rows
+            if not self.copy_template_row_formatting(file_id, len(formatted_data)):
+                print("Warning: Failed to copy row formatting")
+                return False
+            
+            # Delete template row (39) after all data and formatting is complete
+            if not self.delete_template_row(file_id):
+                print("Warning: Failed to delete template row 39")
+                return False
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error updating invoice sheet data: {e}")
+            return False
+
+    def get_invoice_sheet_name(self, spreadsheet_id):
+        """Get the name of the invoice sheet - check Invoice first, then use first sheet"""
+        try:
+            spreadsheet = self.sheets_service.spreadsheets().get(
+                spreadsheetId=spreadsheet_id,
+                fields='sheets.properties.title'
+            ).execute()
+            
+            # First try to find "Invoice" sheet
+            for sheet in spreadsheet.get('sheets', []):
+                if sheet['properties']['title'] == 'Invoice':
+                    return 'Invoice'
+            
+            # If not found, use first sheet
+            if spreadsheet.get('sheets'):
+                first_sheet_name = spreadsheet['sheets'][0]['properties']['title']
+                print(f"Invoice sheet not found, using first sheet: {first_sheet_name}")
+                return first_sheet_name
+                
+            return None
+            
+        except Exception as e:
+            print(f"Error getting sheet name: {e}")
+            return None
+
+    def clear_invoice_data_range(self, spreadsheet_id):
+        """Clear existing data from B40 downwards (preserve template row 39)"""
+        try:
+            print("Clearing existing invoice data from B40 downwards (preserving template row 39)...")
+            
+            # Get actual sheet name
+            sheet_name = self.get_invoice_sheet_name(spreadsheet_id)
+            if not sheet_name:
+                print("Could not determine sheet name")
+                return False
+            
+            # Clear from B40 downwards to preserve template row 39
+            clear_range = f"{sheet_name}!B40:J1000"  # Clear from row 40, preserve template at row 39
+            
+            self.sheets_service.spreadsheets().values().clear(
+                spreadsheetId=spreadsheet_id,
+                range=clear_range
+            ).execute()
+            
+            print(f"Cleared range: {clear_range}")
+            return True
+            
+        except Exception as e:
+            print(f"Error clearing invoice data range: {e}")
+            return False
+
+    def format_data_for_sheet(self, batch_data, batch_number):
+        """Format database data for sheet insertion"""
+        try:
+            print(f"Formatting {len(batch_data)} records for sheet insertion")
+            
+            formatted_rows = []
+            
+            for i, item in enumerate(batch_data, 1):
+                # Extract data from tuple
+                # item structure: (file_id, filename, date, root, path, status_id, category_id, subcategory_id, category_name, subcategory_name, url_value, provider_name, price_value, currency)
+                filename = item[1] or ""
+                date = item[2] or ""
+                category_name = item[8] or ""
+                subcategory_name = item[9] or ""
+                url_value = item[10] or ""
+                price_value = item[12]
+                
+                # Format price
+                price = ""
+                if price_value is not None:
+                    if isinstance(price_value, (int, float)) and price_value == int(price_value):
+                        price = str(int(price_value))
+                    else:
+                        price = str(price_value)
+                
+                # Create row: [No, Filename(C), Filename(D), Filename(E), Category, Subcategory, Batch, URL, Price]
+                # Filename will span C-D-E, so we put it in C and leave D-E empty for merging
+                row = [
+                    i,                    # B: No
+                    filename,             # C: Filename (will be merged across C-D-E)
+                    "",                   # D: Empty (will be merged)
+                    "",                   # E: Empty (will be merged)
+                    category_name,        # F: Category
+                    subcategory_name,     # G: Subcategory
+                    batch_number,         # H: Batch Number
+                    url_value,            # I: URL
+                    price                 # J: Price
+                ]
+                
+                formatted_rows.append(row)
+            
+            print(f"Formatted {len(formatted_rows)} rows for insertion")
+            return formatted_rows
+            
+        except Exception as e:
+            print(f"Error formatting data for sheet: {e}")
+            return []
+
+    def merge_filename_cells(self, spreadsheet_id, data_rows_count):
+        """Merge cells C-D-E for filename in each data row starting from row 40"""
+        try:
+            print(f"Merging filename cells for {data_rows_count} rows starting from row 40")
+            
+            # Prepare batch requests for merging
+            requests = []
+            
+            for i in range(data_rows_count):
+                row_index = 39 + i  # Start from row 40 (0-indexed = 39)
+                
+                # Merge C-D-E for this row (columns 2-3-4 in 0-indexed)
+                merge_request = {
+                    'mergeCells': {
+                        'range': {
+                            'sheetId': 0,  # Assuming Invoice is the first sheet
+                            'startRowIndex': row_index,
+                            'endRowIndex': row_index + 1,
+                            'startColumnIndex': 2,  # Column C
+                            'endColumnIndex': 5      # Column E (exclusive, so 5 means up to E)
+                        },
+                        'mergeType': 'MERGE_ALL'
+                    }
+                }
+                requests.append(merge_request)
+            
+            # Execute batch requests
+            if requests:
+                body = {
+                    'requests': requests
+                }
+                
+                self.sheets_service.spreadsheets().batchUpdate(
+                    spreadsheetId=spreadsheet_id,
+                    body=body
+                ).execute()
+                
+                print(f"Successfully merged {len(requests)} filename cell ranges")
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error merging filename cells: {e}")
+            return False
+
+    def copy_template_row_formatting(self, spreadsheet_id, data_rows_count):
+        """Copy formatting from template row (39) to all data rows (40+)"""
+        try:
+            print(f"Copying template row 39 formatting to {data_rows_count} data rows (40+)")
+            
+            if data_rows_count == 0:
+                print("No data rows to format")
+                return True
+            
+            # Prepare batch requests for copying formatting
+            requests = []
+            
+            # Source range: Row 39 (template row) from B to J
+            source_range = {
+                'sheetId': 0,  # Assuming Invoice is the first sheet
+                'startRowIndex': 38,  # Row 39 (0-indexed = 38)
+                'endRowIndex': 39,    # Exclusive, so just row 39
+                'startColumnIndex': 1,  # Column B
+                'endColumnIndex': 10    # Column J (exclusive, so up to J)
+            }
+            
+            # For each data row, copy formatting from template row (39)
+            for i in range(data_rows_count):
+                target_row_index = 39 + i  # Start from row 40 (0-indexed = 39)
+                
+                # Target range: Current data row from B to J
+                target_range = {
+                    'sheetId': 0,
+                    'startRowIndex': target_row_index,
+                    'endRowIndex': target_row_index + 1,
+                    'startColumnIndex': 1,  # Column B
+                    'endColumnIndex': 10    # Column J (exclusive, so up to J)
+                }
+                
+                # Copy format request
+                copy_format_request = {
+                    'copyPaste': {
+                        'source': source_range,
+                        'destination': target_range,
+                        'pasteType': 'PASTE_FORMAT',
+                        'pasteOrientation': 'NORMAL'
+                    }
+                }
+                
+                requests.append(copy_format_request)
+            
+            # Execute batch requests
+            if requests:
+                body = {
+                    'requests': requests
+                }
+                
+                self.sheets_service.spreadsheets().batchUpdate(
+                    spreadsheetId=spreadsheet_id,
+                    body=body
+                ).execute()
+                
+                print(f"Successfully copied formatting to {len(requests)} data rows")
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error copying template row formatting: {e}")
+            return False
+
+    def delete_template_row(self, spreadsheet_id):
+        """Delete template row (39) after data insertion and formatting is complete"""
+        try:
+            print("Deleting template row 39 after data insertion...")
+            
+            # Prepare delete request for row 39 (0-indexed = 38)
+            requests = [{
+                'deleteDimension': {
+                    'range': {
+                        'sheetId': 0,  # Assuming Invoice is the first sheet
+                        'dimension': 'ROWS',
+                        'startIndex': 38,  # Row 39 (0-indexed = 38)
+                        'endIndex': 39     # Exclusive, so just row 39
+                    }
+                }
+            }]
+            
+            # Execute delete request
+            body = {'requests': requests}
+            self.sheets_service.spreadsheets().batchUpdate(
+                spreadsheetId=spreadsheet_id,
+                body=body
+            ).execute()
+            
+            print("Successfully deleted template row 39")
+            return True
+            
+        except Exception as e:
+            print(f"Error deleting template row: {e}")
+            return False
+
+    def ensure_sheet_size(self, spreadsheet_id, required_rows, required_cols=11):
+        """Ensure the Invoice sheet has enough rows and columns"""
+        try:
+            print(f"Ensuring sheet has at least {required_rows} rows and {required_cols} columns")
+            
+            # Get current sheet properties
+            spreadsheet = self.sheets_service.spreadsheets().get(
+                spreadsheetId=spreadsheet_id,
+                fields='sheets.properties'
+            ).execute()
+            
+            # Debug: Print all available sheets
+            print("Available sheets in spreadsheet:")
+            for sheet in spreadsheet.get('sheets', []):
+                sheet_title = sheet['properties']['title']
+                print(f"  - {sheet_title}")
+            
+            # Find the Invoice sheet directly
+            invoice_sheet = None
+            for sheet in spreadsheet.get('sheets', []):
+                sheet_title = sheet['properties']['title']
+                if sheet_title == 'Invoice':
+                    invoice_sheet = sheet
+                    break
+            
+            if not invoice_sheet:
+                # Try with first sheet as fallback
+                if spreadsheet.get('sheets'):
+                    invoice_sheet = spreadsheet['sheets'][0]
+                    print(f"Invoice sheet not found, using first sheet: {invoice_sheet['properties']['title']}")
+                else:
+                    print("No sheets found in spreadsheet")
+                    return False
+            
+            sheet_id = invoice_sheet['properties']['sheetId']
+            current_rows = invoice_sheet['properties']['gridProperties']['rowCount']
+            current_cols = invoice_sheet['properties']['gridProperties']['columnCount']
+            
+            print(f"Current sheet size: {current_rows} rows, {current_cols} columns")
+            print(f"Required sheet size: {required_rows} rows, {required_cols} columns")
+            
+            # Check if we need to expand
+            needs_expansion = False
+            new_rows = current_rows
+            new_cols = current_cols
+            
+            if current_rows < required_rows:
+                new_rows = required_rows + 10  # Add some buffer
+                needs_expansion = True
+                print(f"Need to expand rows from {current_rows} to {new_rows}")
+            
+            if current_cols < required_cols:
+                new_cols = required_cols + 2  # Add some buffer
+                needs_expansion = True
+                print(f"Need to expand columns from {current_cols} to {new_cols}")
+            
+            if needs_expansion:
+                # Prepare resize request
+                requests = [{
+                    'updateSheetProperties': {
+                        'properties': {
+                            'sheetId': sheet_id,
+                            'gridProperties': {
+                                'rowCount': new_rows,
+                                'columnCount': new_cols
+                            }
+                        },
+                        'fields': 'gridProperties.rowCount,gridProperties.columnCount'
+                    }
+                }]
+                
+                # Execute resize
+                body = {'requests': requests}
+                self.sheets_service.spreadsheets().batchUpdate(
+                    spreadsheetId=spreadsheet_id,
+                    body=body
+                ).execute()
+                
+                print(f"Successfully resized sheet to {new_rows} rows and {new_cols} columns")
+            else:
+                print("Sheet size is adequate, no expansion needed")
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error ensuring sheet size: {e}")
+            return False
