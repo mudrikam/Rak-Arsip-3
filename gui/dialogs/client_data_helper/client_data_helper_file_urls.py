@@ -27,6 +27,18 @@ class ClientDataFileUrlsHelper:
         self._client_name_label = None
         self._total_files_label = None
         self._batch_number_label = None
+        
+        # Payment controls
+        self.payment_status_combo = None
+        self.payment_method_combo = None
+        
+        # Action buttons
+        self.upload_proof_btn = None
+        self.sync_drive_btn = None
+        self.export_csv_btn = None
+        
+        # Invoice helper reference (will be set after initialization)
+        self._invoice_helper = None
     
     def init_file_urls_tab(self, tab_widget):
         """Initialize the file URLs tab"""
@@ -91,17 +103,53 @@ class ClientDataFileUrlsHelper:
         
         tab_layout.addWidget(self.file_urls_table)
         
-        # Export CSV button
-        export_layout = QHBoxLayout()
-        export_layout.addStretch()
+        # Bottom controls row - payment controls and action buttons in one row
+        bottom_controls_layout = QHBoxLayout()
         
+        # Payment Status
+        bottom_controls_layout.addWidget(QLabel("Payment Status:"))
+        self.payment_status_combo = QComboBox()
+        self.payment_status_combo.addItems(["Pending", "Paid"])
+        self.payment_status_combo.setCurrentText("Pending")
+        self.payment_status_combo.setMinimumWidth(100)
+        bottom_controls_layout.addWidget(self.payment_status_combo)
+        
+        bottom_controls_layout.addSpacing(20)
+        
+        # Payment Method
+        bottom_controls_layout.addWidget(QLabel("Payment Method:"))
+        self.payment_method_combo = QComboBox()
+        self.payment_method_combo.addItems([
+            "GoPay", "DANA", "OVO", "LinkAja", "Bank Jago", 
+            "BCA", "BRI", "PayPal", "QRIS"
+        ])
+        self.payment_method_combo.setCurrentText("GoPay")
+        self.payment_method_combo.setMinimumWidth(120)
+        bottom_controls_layout.addWidget(self.payment_method_combo)
+        
+        bottom_controls_layout.addStretch()
+        
+        # Action buttons
+        # Upload Payment Proof button
+        self.upload_proof_btn = QPushButton("Upload Payment Proof")
+        self.upload_proof_btn.setIcon(qta.icon("fa6s.upload"))
+        self.upload_proof_btn.setMinimumHeight(32)
+        bottom_controls_layout.addWidget(self.upload_proof_btn)
+        
+        # Sync to Drive button
+        self.sync_drive_btn = QPushButton("Sync to Drive")
+        self.sync_drive_btn.setIcon(qta.icon("fa6b.google-drive"))
+        self.sync_drive_btn.setMinimumHeight(32)
+        bottom_controls_layout.addWidget(self.sync_drive_btn)
+        
+        # Export CSV button
         self.export_csv_btn = QPushButton("Export CSV")
         self.export_csv_btn.setIcon(qta.icon("fa6s.file-csv"))
         self.export_csv_btn.setMinimumHeight(32)
         self.export_csv_btn.clicked.connect(self.export_to_csv)
-        export_layout.addWidget(self.export_csv_btn)
+        bottom_controls_layout.addWidget(self.export_csv_btn)
         
-        tab_layout.addLayout(export_layout)
+        tab_layout.addLayout(bottom_controls_layout)
         
         # Add tab to widget
         tab_widget.addTab(tab, qta.icon("fa6s.link"), "File URLs")
@@ -113,6 +161,47 @@ class ClientDataFileUrlsHelper:
         self.file_urls_table.cellDoubleClicked.connect(self.on_file_urls_row_double_clicked)
         self.file_urls_table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.file_urls_table.customContextMenuRequested.connect(self.show_file_urls_context_menu)
+        
+        # Connect invoice helper if available
+        self._connect_invoice_helper()
+        
+        # Connect upload button
+        if self.upload_proof_btn:
+            self.upload_proof_btn.clicked.connect(self.upload_payment_proof)
+    
+    def upload_payment_proof(self):
+        """Upload payment proof file"""
+        try:
+            file_path, _ = QFileDialog.getOpenFileName(
+                self.parent,
+                "Select Payment Proof",
+                "",
+                "Image Files (*.png *.jpg *.jpeg *.gif *.bmp);;PDF Files (*.pdf);;All Files (*)"
+            )
+            
+            if file_path:
+                print(f"Payment proof selected: {file_path}")
+                QMessageBox.information(
+                    self.parent, 
+                    "Upload Payment Proof", 
+                    f"Payment proof file selected:\n{file_path}\n\nUpload functionality will be implemented later."
+                )
+            
+        except Exception as e:
+            print(f"Error selecting payment proof: {e}")
+            QMessageBox.warning(self.parent, "Error", f"Failed to select payment proof: {str(e)}")
+    
+    def _connect_invoice_helper(self):
+        """Connect sync button to invoice helper functionality"""
+        try:
+            # Get invoice helper from parent dialog
+            if hasattr(self.parent, 'invoice_helper'):
+                self._invoice_helper = self.parent.invoice_helper
+                if self.sync_drive_btn and self._invoice_helper:
+                    self.sync_drive_btn.clicked.connect(lambda: self._invoice_helper.sync_to_drive(self))
+                    print("Sync to Drive button connected to invoice helper")
+        except Exception as e:
+            print(f"Error connecting invoice helper: {e}")
     
     def load_file_urls_for_batch(self, client_id, batch_number, client_name=""):
         """Load file URLs for selected batch"""
@@ -471,3 +560,33 @@ class ClientDataFileUrlsHelper:
         self._client_name_label.setText("Client: -")
         self._total_files_label.setText("Total Files: 0")
         self._batch_number_label.setText("Batch Number: -")
+        
+        # Reset payment controls
+        if self.payment_status_combo:
+            self.payment_status_combo.setCurrentText("Pending")
+        if self.payment_method_combo:
+            self.payment_method_combo.setCurrentText("GoPay")
+    
+    def get_payment_status(self):
+        """Get current payment status"""
+        if self.payment_status_combo:
+            return self.payment_status_combo.currentText()
+        return "Pending"
+    
+    def get_payment_method(self):
+        """Get current payment method"""
+        if self.payment_method_combo:
+            return self.payment_method_combo.currentText()
+        return "GoPay"
+    
+    def set_payment_status(self, status):
+        """Set payment status"""
+        if self.payment_status_combo and status in ["Pending", "Paid"]:
+            self.payment_status_combo.setCurrentText(status)
+    
+    def set_payment_method(self, method):
+        """Set payment method"""
+        if self.payment_method_combo:
+            methods = ["GoPay", "DANA", "OVO", "LinkAja", "Bank Jago", "BCA", "BRI", "PayPal", "QRIS"]
+            if method in methods:
+                self.payment_method_combo.setCurrentText(method)
