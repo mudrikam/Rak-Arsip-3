@@ -301,7 +301,7 @@ class ClientDataFileUrlsHelper:
                         day = parts[-2]   # 06
                         invoice_date = f"{day} {month} {year}"
                 except Exception as e:
-                    print(f"Error parsing date from filename: {e}")
+                    pass
                 
                 # Create custom dialog showing copy details
                 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTextEdit
@@ -356,7 +356,6 @@ class ClientDataFileUrlsHelper:
                 # Show dialog
                 dialog.exec()
                 
-                print(f"Invoice share link copied to clipboard: {share_link}")
             else:
                 QMessageBox.warning(self.parent, "Link Not Found", "Invoice file not found or unable to get share link.")
                 
@@ -367,7 +366,6 @@ class ClientDataFileUrlsHelper:
                     progress.close()
             except:
                 pass
-            print(f"Error copying invoice share link: {e}")
             QMessageBox.warning(self.parent, "Error", f"Failed to copy invoice share link: {str(e)}")
     
     def _connect_invoice_helper(self):
@@ -378,13 +376,11 @@ class ClientDataFileUrlsHelper:
                 self._invoice_helper = self.parent.invoice_helper
                 if self.sync_drive_btn and self._invoice_helper:
                     self.sync_drive_btn.clicked.connect(lambda: self._invoice_helper.sync_to_drive(self))
-                    print("Sync to Drive button connected to invoice helper")
                 
                 if self.upload_proof_btn and self._invoice_helper:
                     self.upload_proof_btn.clicked.connect(self.upload_payment_proof)
-                    print("Upload Payment Proof button connected to invoice helper")
         except Exception as e:
-            print(f"Error connecting invoice helper: {e}")
+            pass
 
     def upload_payment_proof(self):
         """Handle upload payment proof button click"""
@@ -408,7 +404,6 @@ class ClientDataFileUrlsHelper:
             )
             
         except Exception as e:
-            print(f"Error uploading payment proof: {e}")
             QMessageBox.critical(self.parent, "Upload Error", f"Error uploading payment proof: {str(e)}")
     
     def load_file_urls_for_batch(self, client_id, batch_number, client_name=""):
@@ -431,7 +426,6 @@ class ClientDataFileUrlsHelper:
             
             self.update_file_urls_table()
         except Exception as e:
-            print(f"Error loading file URLs: {e}")
             self._file_urls_data_all = []
             self._total_files_label.setText("Total Files: 0")
             self.update_file_urls_table()
@@ -514,7 +508,7 @@ class ClientDataFileUrlsHelper:
                             url_item.setBackground(bg_color)
                             note_item.setBackground(bg_color)
             except Exception as e:
-                print(f"Error applying row color for status_id {item[8]}: {e}")
+                pass
             
             # Add action buttons widget
             self._create_action_buttons(row_idx, item)
@@ -584,7 +578,6 @@ class ClientDataFileUrlsHelper:
                                             self._client_name_label.text().replace("Client: ", ""))
                 
         except Exception as e:
-            print(f"Error editing file URL: {e}")
             QMessageBox.warning(self.parent, "Error", f"Failed to edit URL assignment: {str(e)}")
     
     def _copy_url(self, item, button):
@@ -597,7 +590,7 @@ class ClientDataFileUrlsHelper:
             else:
                 QToolTip.showText(QCursor.pos(), "No URL to copy", button)
         except Exception as e:
-            print(f"Error copying URL: {e}")
+            pass
     
     def _open_url(self, item):
         """Open URL in browser"""
@@ -608,7 +601,6 @@ class ClientDataFileUrlsHelper:
             else:
                 QMessageBox.information(self.parent, "Info", "No URL to open")
         except Exception as e:
-            print(f"Error opening URL: {e}")
             QMessageBox.warning(self.parent, "Error", f"Failed to open URL: {str(e)}")
     
     def show_file_urls_context_menu(self, pos):
@@ -784,7 +776,6 @@ class ClientDataFileUrlsHelper:
             )
             
         except Exception as e:
-            print(f"Error exporting CSV: {e}")
             QMessageBox.critical(self.parent, "Export Error", f"Failed to export CSV file:\n{str(e)}")
     
     def clear_file_urls_tab(self):
@@ -847,7 +838,6 @@ class ClientDataFileUrlsHelper:
             
             # Get status ID from database
             status_id = self.db_helper.get_status_id_by_name(payment_status)
-            print(f"Debug: Looking for status '{payment_status}', found ID: {status_id}")
             if status_id is None:  # Only check for None, not falsy values (to allow ID 0)
                 QMessageBox.critical(self.parent, "Status Not Found", 
                                    f"Status '{payment_status}' not found in database.")
@@ -910,9 +900,12 @@ class ClientDataFileUrlsHelper:
                 self._client_name_label.text().replace("Client: ", "")
             )
             
-            print(f"Batch update completed: {updated_count} files updated to '{payment_status}'")
-            
         except Exception as e:
-            print(f"Error updating batch records: {e}")
             QMessageBox.critical(self.parent, "Update Failed", 
                                f"Failed to update batch records: {str(e)}")
+            # Refresh the table
+            self.load_file_urls_for_batch(
+                self._selected_client_id, 
+                self._selected_batch_number, 
+                self._client_name_label.text().replace("Client: ", "")
+            )
