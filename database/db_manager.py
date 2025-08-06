@@ -266,6 +266,10 @@ class DatabaseManager(QObject):
         """Get batch numbers by client."""
         return self.clients_helper.get_batch_numbers_by_client(client_id)
 
+    def get_batch_creation_date(self, batch_number, client_id):
+        """Get batch creation date."""
+        return self.clients_helper.get_batch_created_date(batch_number, client_id)
+
     # Teams methods - delegate to teams helper
     def get_all_teams(self):
         """Get all teams."""
@@ -423,3 +427,11 @@ class DatabaseManager(QObject):
     def delete_file_url(self, file_url_id):
         """Delete file URL assignment."""
         return self.urls_helper.delete_file_url(file_url_id)
+
+    def get_batch_created_date(self, batch_number, client_id):
+        """Get batch creation date from batch_list table."""
+        return self.clients_helper.get_batch_created_date(batch_number, client_id)
+
+    def update_files_status_by_batch(self, batch_number, client_id, status_id):
+        """Update status of all files in a batch."""
+        return self.clients_helper.update_files_status_by_batch(batch_number, client_id, status_id)

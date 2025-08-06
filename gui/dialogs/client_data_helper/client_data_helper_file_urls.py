@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem, QSizePolicy, QHeaderView, QMessageBox, QMenu, QComboBox, QLabel, QApplication, QToolTip, QDialog, QFileDialog
 )
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QAction, QCursor
+from PySide6.QtGui import QAction, QCursor, QColor
 import qtawesome as qta
 import webbrowser
 import csv
@@ -27,6 +27,18 @@ class ClientDataFileUrlsHelper:
         self._client_name_label = None
         self._total_files_label = None
         self._batch_number_label = None
+        
+        # Payment controls
+        self.payment_status_combo = None
+        self.payment_method_combo = None
+        
+        # Action buttons
+        self.upload_proof_btn = None
+        self.sync_drive_btn = None
+        self.export_csv_btn = None
+        
+        # Invoice helper reference (will be set after initialization)
+        self._invoice_helper = None
     
     def init_file_urls_tab(self, tab_widget):
         """Initialize the file URLs tab"""
@@ -91,17 +103,76 @@ class ClientDataFileUrlsHelper:
         
         tab_layout.addWidget(self.file_urls_table)
         
-        # Export CSV button
-        export_layout = QHBoxLayout()
-        export_layout.addStretch()
+        # Bottom controls row - payment controls and action buttons in one row
+        bottom_controls_layout = QHBoxLayout()
         
+        # Payment Status (no label)
+        self.payment_status_combo = QComboBox()
+        self.payment_status_combo.addItems(["", "Pending", "Paid"])  # Empty first option
+        self.payment_status_combo.setCurrentText("")  # Initially empty
+        self.payment_status_combo.setMinimumWidth(100)
+        self.payment_status_combo.setToolTip("Payment Status")
+        bottom_controls_layout.addWidget(self.payment_status_combo)
+        
+        bottom_controls_layout.addStretch()
+        
+        # Payment Method (no label)
+        self.payment_method_combo = QComboBox()
+        self.payment_method_combo.addItems([
+            "", "GoPay", "DANA", "OVO", "LinkAja", "Bank Jago", 
+            "BCA", "BRI", "PayPal", "QRIS"
+        ])  # Empty first option
+        self.payment_method_combo.setCurrentText("")  # Initially empty
+        self.payment_method_combo.setMinimumWidth(120)
+        self.payment_method_combo.setToolTip("Payment Method")
+        bottom_controls_layout.addWidget(self.payment_method_combo)
+        
+        bottom_controls_layout.addStretch()
+        
+        # Update Record button
+        self.update_record_btn = QPushButton("Update Records")
+        self.update_record_btn.setIcon(qta.icon("fa6s.arrows-rotate"))
+        self.update_record_btn.setMinimumHeight(32)
+        self.update_record_btn.setMaximumWidth(140)
+        self.update_record_btn.setToolTip("Update All Records in Batch")
+        self.update_record_btn.clicked.connect(self.update_batch_records)
+        bottom_controls_layout.addWidget(self.update_record_btn)
+        
+        bottom_controls_layout.addStretch()
+        
+        # Action buttons
+        # Copy Invoice Link button
+        self.copy_invoice_link_btn = QPushButton("Invoice Link")
+        self.copy_invoice_link_btn.setIcon(qta.icon("fa6s.link"))
+        self.copy_invoice_link_btn.setMinimumHeight(32)
+        self.copy_invoice_link_btn.setMaximumWidth(120)
+        self.copy_invoice_link_btn.setToolTip("Copy Invoice Share Link")
+        self.copy_invoice_link_btn.clicked.connect(self.copy_invoice_share_link)
+        bottom_controls_layout.addWidget(self.copy_invoice_link_btn)
+        
+        # Upload Payment Proof button
+        self.upload_proof_btn = QPushButton("Upload Payment Proof")
+        self.upload_proof_btn.setIcon(qta.icon("fa6s.upload"))
+        self.upload_proof_btn.setMinimumHeight(32)
+        self.upload_proof_btn.setToolTip("Upload Payment Proof Document")
+        bottom_controls_layout.addWidget(self.upload_proof_btn)
+        
+        # Sync to Drive button
+        self.sync_drive_btn = QPushButton("Sync to Drive")
+        self.sync_drive_btn.setIcon(qta.icon("fa6b.google-drive"))
+        self.sync_drive_btn.setMinimumHeight(32)
+        self.sync_drive_btn.setToolTip("Sync Invoice to Google Drive")
+        bottom_controls_layout.addWidget(self.sync_drive_btn)
+        
+        # Export CSV button
         self.export_csv_btn = QPushButton("Export CSV")
         self.export_csv_btn.setIcon(qta.icon("fa6s.file-csv"))
         self.export_csv_btn.setMinimumHeight(32)
+        self.export_csv_btn.setToolTip("Export File URLs to CSV")
         self.export_csv_btn.clicked.connect(self.export_to_csv)
-        export_layout.addWidget(self.export_csv_btn)
+        bottom_controls_layout.addWidget(self.export_csv_btn)
         
-        tab_layout.addLayout(export_layout)
+        tab_layout.addLayout(bottom_controls_layout)
         
         # Add tab to widget
         tab_widget.addTab(tab, qta.icon("fa6s.link"), "File URLs")
@@ -113,6 +184,227 @@ class ClientDataFileUrlsHelper:
         self.file_urls_table.cellDoubleClicked.connect(self.on_file_urls_row_double_clicked)
         self.file_urls_table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.file_urls_table.customContextMenuRequested.connect(self.show_file_urls_context_menu)
+        
+        # Connect invoice helper if available
+        self._connect_invoice_helper()
+        
+        # Connect upload button
+        if self.upload_proof_btn:
+            # Note: Connection will be made in _connect_invoice_helper() when helper is available
+            pass
+    
+    def copy_invoice_share_link(self):
+        """Copy invoice file share link to clipboard"""
+        try:
+            if not self._selected_client_id or not self._selected_batch_number:
+                QMessageBox.warning(self.parent, "No Selection", "Please select a client and batch first.")
+                return
+            
+            if not self._invoice_helper:
+                QMessageBox.warning(self.parent, "No Invoice Helper", "Invoice helper not available.")
+                return
+            
+            # Get client name
+            client_name = self._client_name_label.text().replace("Client: ", "")
+            total_files = self._total_files_label.text().replace("Total Files: ", "")
+            
+            # Initialize progress dialog for copy link process
+            from PySide6.QtWidgets import QProgressDialog
+            from PySide6.QtCore import QCoreApplication
+            import time
+            
+            progress = QProgressDialog("Getting invoice share link...", "Cancel", 0, 6, self.parent)
+            progress.setWindowTitle("Copy Invoice Link")
+            progress.setModal(True)
+            progress.setValue(0)
+            progress.show()
+            QCoreApplication.processEvents()
+            
+            if progress.wasCanceled():
+                return
+            
+            # Step 1: Initialize connection
+            progress.setLabelText("Connecting to Google Drive...")
+            progress.setValue(1)
+            QCoreApplication.processEvents()
+            time.sleep(0.3)  # Give user time to see the step
+            
+            if progress.wasCanceled():
+                return
+            
+            # Step 2: Check folders
+            progress.setLabelText("Checking folder structure...")
+            progress.setValue(2)
+            QCoreApplication.processEvents()
+            time.sleep(0.3)
+            
+            if progress.wasCanceled():
+                return
+            
+            # Step 3: Find client folder
+            progress.setLabelText("Locating client folder...")
+            progress.setValue(3)
+            QCoreApplication.processEvents()
+            time.sleep(0.3)
+            
+            if progress.wasCanceled():
+                return
+            
+            # Step 4: Search for invoice file
+            progress.setLabelText("Searching for invoice file...")
+            progress.setValue(4)
+            QCoreApplication.processEvents()
+            time.sleep(0.3)
+            
+            if progress.wasCanceled():
+                return
+            
+            # Step 5: Get share link (this is where the real work happens)
+            progress.setLabelText("Creating shareable link...")
+            progress.setValue(5)
+            QCoreApplication.processEvents()
+            
+            # Get the invoice file link from Google Drive
+            share_link = self._invoice_helper.get_invoice_share_link(
+                self._selected_client_id, 
+                client_name, 
+                self._selected_batch_number
+            )
+            
+            if progress.wasCanceled():
+                return
+            
+            # Step 6: Complete
+            progress.setLabelText("Copying to clipboard...")
+            progress.setValue(6)
+            QCoreApplication.processEvents()
+            time.sleep(0.2)
+            
+            # Close progress dialog
+            progress.close()
+            
+            if share_link:
+                # Copy to clipboard
+                clipboard = QApplication.clipboard()
+                clipboard.setText(share_link)
+                
+                # Get invoice filename to extract date
+                invoice_filename = self._invoice_helper.generate_invoice_filename(client_name, self._selected_batch_number, int(total_files))
+                
+                # Extract date from filename format: Invoice_LUTVIL_HAKIM_LVL007_2025_August_06_20
+                invoice_date = "Unknown Date"
+                try:
+                    parts = invoice_filename.split('_')
+                    if len(parts) >= 6:
+                        year = parts[-4]  # 2025
+                        month = parts[-3]  # August
+                        day = parts[-2]   # 06
+                        invoice_date = f"{day} {month} {year}"
+                except Exception as e:
+                    pass
+                
+                # Create custom dialog showing copy details
+                from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTextEdit
+                import webbrowser
+                
+                dialog = QDialog(self.parent)
+                dialog.setWindowTitle("Invoice Link Copied")
+                dialog.setModal(True)
+                dialog.resize(500, 300)
+                
+                layout = QVBoxLayout(dialog)
+                
+                # Title
+                title_label = QLabel("Invoice Share Link Copied Successfully!")
+                title_label.setStyleSheet("font-weight: bold; font-size: 14px; color: #2e7d32;")
+                layout.addWidget(title_label)
+                
+                # Details
+                details_layout = QVBoxLayout()
+                details_layout.addWidget(QLabel(f"<b>Client:</b> {client_name}"))
+                details_layout.addWidget(QLabel(f"<b>Batch Number:</b> {self._selected_batch_number}"))
+                details_layout.addWidget(QLabel(f"<b>Total Files:</b> {total_files}"))
+                details_layout.addWidget(QLabel(f"<b>Invoice Date:</b> {invoice_date}"))
+                layout.addLayout(details_layout)
+                
+                # Link display
+                layout.addWidget(QLabel("<b>Share Link:</b>"))
+                link_text = QTextEdit()
+                link_text.setPlainText(share_link)
+                link_text.setMaximumHeight(80)
+                link_text.setReadOnly(True)
+                layout.addWidget(link_text)
+                
+                # Buttons
+                button_layout = QHBoxLayout()
+                
+                open_btn = QPushButton("Open in Browser")
+                open_btn.setIcon(qta.icon("fa6s.arrow-up-right-from-square"))
+                open_btn.clicked.connect(lambda: webbrowser.open(share_link))
+                button_layout.addWidget(open_btn)
+                
+                button_layout.addStretch()
+                
+                close_btn = QPushButton("Close")
+                close_btn.setIcon(qta.icon("fa6s.check"))
+                close_btn.clicked.connect(dialog.accept)
+                close_btn.setDefault(True)
+                button_layout.addWidget(close_btn)
+                
+                layout.addLayout(button_layout)
+                
+                # Show dialog
+                dialog.exec()
+                
+            else:
+                QMessageBox.warning(self.parent, "Link Not Found", "Invoice file not found or unable to get share link.")
+                
+        except Exception as e:
+            # Make sure to close progress dialog on error
+            try:
+                if 'progress' in locals():
+                    progress.close()
+            except:
+                pass
+            QMessageBox.warning(self.parent, "Error", f"Failed to copy invoice share link: {str(e)}")
+    
+    def _connect_invoice_helper(self):
+        """Connect sync button and upload button to invoice helper functionality"""
+        try:
+            # Get invoice helper from parent dialog
+            if hasattr(self.parent, 'invoice_helper'):
+                self._invoice_helper = self.parent.invoice_helper
+                if self.sync_drive_btn and self._invoice_helper:
+                    self.sync_drive_btn.clicked.connect(lambda: self._invoice_helper.sync_to_drive(self))
+                
+                if self.upload_proof_btn and self._invoice_helper:
+                    self.upload_proof_btn.clicked.connect(self.upload_payment_proof)
+        except Exception as e:
+            pass
+
+    def upload_payment_proof(self):
+        """Handle upload payment proof button click"""
+        try:
+            if not self._selected_client_id or not self._selected_batch_number:
+                QMessageBox.warning(self.parent, "No Selection", "Please select a client and batch first.")
+                return
+            
+            if not self._invoice_helper:
+                QMessageBox.warning(self.parent, "Service Unavailable", "Invoice helper service is not available.")
+                return
+            
+            # Get client name
+            client_name = self._client_name_label.text().replace("Client: ", "")
+            
+            # Call the upload dialog
+            self._invoice_helper.get_payment_proof_upload_dialog(
+                self._selected_client_id, 
+                client_name, 
+                self._selected_batch_number
+            )
+            
+        except Exception as e:
+            QMessageBox.critical(self.parent, "Upload Error", f"Error uploading payment proof: {str(e)}")
     
     def load_file_urls_for_batch(self, client_id, batch_number, client_name=""):
         """Load file URLs for selected batch"""
@@ -134,7 +426,6 @@ class ClientDataFileUrlsHelper:
             
             self.update_file_urls_table()
         except Exception as e:
-            print(f"Error loading file URLs: {e}")
             self._file_urls_data_all = []
             self._total_files_label.setText("Total Files: 0")
             self.update_file_urls_table()
@@ -183,10 +474,41 @@ class ClientDataFileUrlsHelper:
         # Update table
         self.file_urls_table.setRowCount(len(self._file_urls_data_filtered))
         for row_idx, item in enumerate(self._file_urls_data_filtered):
-            self.file_urls_table.setItem(row_idx, 0, QTableWidgetItem(str(item[1] or "")))  # filename
-            self.file_urls_table.setItem(row_idx, 1, QTableWidgetItem(str(item[2] or "")))  # provider
-            self.file_urls_table.setItem(row_idx, 2, QTableWidgetItem(str(item[3] or "")))  # url
-            self.file_urls_table.setItem(row_idx, 3, QTableWidgetItem(str(item[4] or "")))  # note
+            # Create table items
+            filename_item = QTableWidgetItem(str(item[1] or ""))  # filename
+            provider_item = QTableWidgetItem(str(item[2] or ""))  # provider
+            url_item = QTableWidgetItem(str(item[3] or ""))  # url
+            note_item = QTableWidgetItem(str(item[4] or ""))  # note
+            
+            # Set table items
+            self.file_urls_table.setItem(row_idx, 0, filename_item)
+            self.file_urls_table.setItem(row_idx, 1, provider_item)
+            self.file_urls_table.setItem(row_idx, 2, url_item)
+            self.file_urls_table.setItem(row_idx, 3, note_item)
+            
+            # Apply row coloring based on status
+            try:
+                status_id = item[8]  # status_id is at index 8
+                if status_id is not None:
+                    status_name = self.db_helper.get_status_name_by_id(status_id)
+                    if status_name:
+                        status_name = status_name.lower()
+                        if status_name == "pending":
+                            # Orange background for Pending: rgba(252, 161, 28, 0.47)
+                            bg_color = QColor(252, 161, 28, 120)  # Alpha 120 ≈ 0.47
+                            filename_item.setBackground(bg_color)
+                            provider_item.setBackground(bg_color)
+                            url_item.setBackground(bg_color)
+                            note_item.setBackground(bg_color)
+                        elif status_name == "paid":
+                            # Green background for Paid: rgba(103, 179, 16, 0.47)
+                            bg_color = QColor(103, 179, 16, 120)  # Alpha 120 ≈ 0.47
+                            filename_item.setBackground(bg_color)
+                            provider_item.setBackground(bg_color)
+                            url_item.setBackground(bg_color)
+                            note_item.setBackground(bg_color)
+            except Exception as e:
+                pass
             
             # Add action buttons widget
             self._create_action_buttons(row_idx, item)
@@ -256,7 +578,6 @@ class ClientDataFileUrlsHelper:
                                             self._client_name_label.text().replace("Client: ", ""))
                 
         except Exception as e:
-            print(f"Error editing file URL: {e}")
             QMessageBox.warning(self.parent, "Error", f"Failed to edit URL assignment: {str(e)}")
     
     def _copy_url(self, item, button):
@@ -269,7 +590,7 @@ class ClientDataFileUrlsHelper:
             else:
                 QToolTip.showText(QCursor.pos(), "No URL to copy", button)
         except Exception as e:
-            print(f"Error copying URL: {e}")
+            pass
     
     def _open_url(self, item):
         """Open URL in browser"""
@@ -280,7 +601,6 @@ class ClientDataFileUrlsHelper:
             else:
                 QMessageBox.information(self.parent, "Info", "No URL to open")
         except Exception as e:
-            print(f"Error opening URL: {e}")
             QMessageBox.warning(self.parent, "Error", f"Failed to open URL: {str(e)}")
     
     def show_file_urls_context_menu(self, pos):
@@ -295,7 +615,7 @@ class ClientDataFileUrlsHelper:
         
         menu = QMenu(self.file_urls_table)
         icon_copy = qta.icon("fa6s.copy")
-        icon_open = qta.icon("fa6s.external-link-alt")
+        icon_open = qta.icon("fa6s.arrow-up-right-from-square")
         
         action_copy_filename = QAction(icon_copy, "Copy Filename", self.parent)
         action_copy_url = QAction(icon_copy, "Copy URL", self.parent)
@@ -456,7 +776,6 @@ class ClientDataFileUrlsHelper:
             )
             
         except Exception as e:
-            print(f"Error exporting CSV: {e}")
             QMessageBox.critical(self.parent, "Export Error", f"Failed to export CSV file:\n{str(e)}")
     
     def clear_file_urls_tab(self):
@@ -471,3 +790,122 @@ class ClientDataFileUrlsHelper:
         self._client_name_label.setText("Client: -")
         self._total_files_label.setText("Total Files: 0")
         self._batch_number_label.setText("Batch Number: -")
+        
+        # Reset payment controls
+        if self.payment_status_combo:
+            self.payment_status_combo.setCurrentText("")  # Reset to empty
+        if self.payment_method_combo:
+            self.payment_method_combo.setCurrentText("")  # Reset to empty
+    
+    def get_payment_status(self):
+        """Get current payment status"""
+        if self.payment_status_combo:
+            return self.payment_status_combo.currentText()
+        return "Pending"
+    
+    def get_payment_method(self):
+        """Get current payment method"""
+        if self.payment_method_combo:
+            return self.payment_method_combo.currentText()
+        return "GoPay"
+    
+    def set_payment_status(self, status):
+        """Set payment status"""
+        if self.payment_status_combo and status in ["Pending", "Paid"]:
+            self.payment_status_combo.setCurrentText(status)
+    
+    def set_payment_method(self, method):
+        """Set payment method"""
+        if self.payment_method_combo:
+            methods = ["", "GoPay", "DANA", "OVO", "LinkAja", "Bank Jago", "BCA", "BRI", "PayPal", "QRIS"]
+            if method in methods:
+                self.payment_method_combo.setCurrentText(method)
+
+    def update_batch_records(self):
+        """Update all file records in current batch to selected status"""
+        try:
+            # Validate selections
+            if not self._selected_batch_number:
+                QMessageBox.warning(self.parent, "No Batch Selected", 
+                                  "Please select a batch first.")
+                return
+            
+            payment_status = self.payment_status_combo.currentText().strip()
+            if not payment_status:
+                QMessageBox.warning(self.parent, "No Status Selected", 
+                                  "Please select a payment status (Pending or Paid).")
+                return
+            
+            # Get status ID from database
+            status_id = self.db_helper.get_status_id_by_name(payment_status)
+            if status_id is None:  # Only check for None, not falsy values (to allow ID 0)
+                QMessageBox.critical(self.parent, "Status Not Found", 
+                                   f"Status '{payment_status}' not found in database.")
+                return
+            
+            # Get detailed information about files that will be updated
+            files_to_update = self.db_helper.get_all_files_by_batch_and_client_with_details(
+                self._selected_batch_number, self._selected_client_id
+            )
+            
+            if not files_to_update:
+                QMessageBox.information(self.parent, "No Files Found", 
+                                      f"No files found in batch {self._selected_batch_number}.")
+                return
+            
+            # Prepare detailed confirmation message
+            total_files = len(files_to_update)
+            file_list = []
+            for i, file_data in enumerate(files_to_update[:10]):  # Show first 10 files
+                filename = file_data[1] or "Unknown"
+                date = file_data[2] or "Unknown"
+                file_list.append(f"  {i+1}. {filename} ({date})")
+            
+            # Add "and X more..." if there are more than 10 files
+            if total_files > 10:
+                file_list.append(f"  ... and {total_files - 10} more files")
+            
+            file_details = "\n".join(file_list)
+            
+            # Confirm update with detailed information
+            reply = QMessageBox.question(self.parent, "Confirm Batch Update", 
+                                       f"Update all {total_files} files in batch '{self._selected_batch_number}' to status '{payment_status}'?\n\n"
+                                       f"Files to be updated:\n{file_details}\n\n"
+                                       f"This action will change the status of all these files.",
+                                       QMessageBox.Yes | QMessageBox.No, 
+                                       QMessageBox.No)
+            
+            if reply != QMessageBox.Yes:
+                return
+            
+            # Update all files in batch
+            updated_count = self.db_helper.update_files_status_by_batch(
+                self._selected_batch_number, 
+                self._selected_client_id, 
+                status_id
+            )
+            
+            # Show detailed success message
+            success_message = f"Successfully updated {updated_count} files to '{payment_status}' status.\n\n"
+            success_message += f"Batch: {self._selected_batch_number}\n"
+            success_message += f"Client: {self._client_name_label.text().replace('Client: ', '')}\n"
+            success_message += f"Status changed to: {payment_status}"
+            
+            QMessageBox.information(self.parent, "Batch Update Complete", success_message)
+            
+            # Refresh the table
+            self.load_file_urls_for_batch(
+                self._selected_client_id, 
+                self._selected_batch_number, 
+                self._client_name_label.text().replace("Client: ", "")
+            )
+            
+        except Exception as e:
+            QMessageBox.critical(self.parent, "Update Failed", 
+                               f"Failed to update batch records: {str(e)}")
+            # Refresh the table
+            self.load_file_urls_for_batch(
+                self._selected_client_id, 
+                self._selected_batch_number, 
+                self._client_name_label.text().replace("Client: ", "")
+            )

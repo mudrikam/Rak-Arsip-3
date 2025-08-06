@@ -11,6 +11,7 @@ from .client_data_helper.client_data_helper_details import ClientDataDetailsHelp
 from .client_data_helper.client_data_helper_files import ClientDataFilesHelper
 from .client_data_helper.client_data_helper_batch import ClientDataBatchHelper
 from .client_data_helper.client_data_helper_file_urls import ClientDataFileUrlsHelper
+from .client_data_helper.client_data_invoice_helper import ClientDataInvoiceHelper
 
 class BatchEditDialog(QDialog):
     """Dialog for editing batch information"""
@@ -87,6 +88,7 @@ class ClientDataDialog(QDialog):
         self.files_helper = ClientDataFilesHelper(self, self.db_helper)
         self.batch_helper = ClientDataBatchHelper(self, self.db_helper)
         self.file_urls_helper = ClientDataFileUrlsHelper(self, self.db_helper)
+        self.invoice_helper = ClientDataInvoiceHelper(self, self.db_helper)
         
         # Shared state variables
         self._selected_client_name = ""

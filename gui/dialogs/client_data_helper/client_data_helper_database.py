@@ -37,6 +37,25 @@ class ClientDataDatabaseHelper:
             client["_file_count"] = file_count
         return clients
     
+    def get_client_by_id(self, client_id):
+        """Get client by ID"""
+        db_manager = self.get_db_manager()
+        db_manager.connect(write=False)
+        cursor = db_manager.connection.cursor()
+        cursor.execute("SELECT id, client_name, contact, links, status, note FROM client WHERE id = ?", (client_id,))
+        row = cursor.fetchone()
+        db_manager.close()
+        if row:
+            return {
+                "id": row[0],
+                "client_name": row[1],
+                "contact": row[2],
+                "links": row[3],
+                "status": row[4],
+                "note": row[5]
+            }
+        return None
+    
     def add_client(self, client_name, contact, links, status, note):
         """Add new client to database"""
         db_manager = self.get_db_manager()
@@ -159,3 +178,24 @@ class ClientDataDatabaseHelper:
         """Get all files by batch and client with complete details"""
         db_manager = self.get_db_manager()
         return db_manager.get_all_files_by_batch_and_client_with_details(batch_id, client_id)
+
+    def get_batch_created_date(self, batch_number, client_id):
+        """Get batch creation date from batch_list table."""
+        db_manager = self.get_db_manager()
+        result = db_manager.get_batch_created_date(batch_number, client_id)
+        return result
+
+    def get_status_id_by_name(self, status_name):
+        """Get status ID by status name."""
+        db_manager = self.get_db_manager()
+        return db_manager.get_status_id(status_name)
+
+    def update_files_status_by_batch(self, batch_number, client_id, status_id):
+        """Update status of all files in a batch."""
+        db_manager = self.get_db_manager()
+        return db_manager.update_files_status_by_batch(batch_number, client_id, status_id)
+
+    def get_status_name_by_id(self, status_id):
+        """Get status name by status ID."""
+        db_manager = self.get_db_manager()
+        return db_manager.connection_helper.get_status_name_by_id(status_id)
