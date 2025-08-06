@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem, QSizePolicy, QHeaderView, QMessageBox, QMenu, QComboBox, QLabel, QApplication, QToolTip, QDialog, QFileDialog
 )
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QAction, QCursor
+from PySide6.QtGui import QAction, QCursor, QColor
 import qtawesome as qta
 import webbrowser
 import csv
@@ -472,10 +472,41 @@ class ClientDataFileUrlsHelper:
         # Update table
         self.file_urls_table.setRowCount(len(self._file_urls_data_filtered))
         for row_idx, item in enumerate(self._file_urls_data_filtered):
-            self.file_urls_table.setItem(row_idx, 0, QTableWidgetItem(str(item[1] or "")))  # filename
-            self.file_urls_table.setItem(row_idx, 1, QTableWidgetItem(str(item[2] or "")))  # provider
-            self.file_urls_table.setItem(row_idx, 2, QTableWidgetItem(str(item[3] or "")))  # url
-            self.file_urls_table.setItem(row_idx, 3, QTableWidgetItem(str(item[4] or "")))  # note
+            # Create table items
+            filename_item = QTableWidgetItem(str(item[1] or ""))  # filename
+            provider_item = QTableWidgetItem(str(item[2] or ""))  # provider
+            url_item = QTableWidgetItem(str(item[3] or ""))  # url
+            note_item = QTableWidgetItem(str(item[4] or ""))  # note
+            
+            # Set table items
+            self.file_urls_table.setItem(row_idx, 0, filename_item)
+            self.file_urls_table.setItem(row_idx, 1, provider_item)
+            self.file_urls_table.setItem(row_idx, 2, url_item)
+            self.file_urls_table.setItem(row_idx, 3, note_item)
+            
+            # Apply row coloring based on status
+            try:
+                status_id = item[8]  # status_id is at index 8
+                if status_id is not None:
+                    status_name = self.db_helper.get_status_name_by_id(status_id)
+                    if status_name:
+                        status_name = status_name.lower()
+                        if status_name == "pending":
+                            # Orange background for Pending: rgba(252, 161, 28, 0.47)
+                            bg_color = QColor(252, 161, 28, 120)  # Alpha 120 ≈ 0.47
+                            filename_item.setBackground(bg_color)
+                            provider_item.setBackground(bg_color)
+                            url_item.setBackground(bg_color)
+                            note_item.setBackground(bg_color)
+                        elif status_name == "paid":
+                            # Green background for Paid: rgba(103, 179, 16, 0.47)
+                            bg_color = QColor(103, 179, 16, 120)  # Alpha 120 ≈ 0.47
+                            filename_item.setBackground(bg_color)
+                            provider_item.setBackground(bg_color)
+                            url_item.setBackground(bg_color)
+                            note_item.setBackground(bg_color)
+            except Exception as e:
+                print(f"Error applying row color for status_id {item[8]}: {e}")
             
             # Add action buttons widget
             self._create_action_buttons(row_idx, item)

@@ -174,3 +174,8 @@ class ClientDataDatabaseHelper:
         """Update status of all files in a batch."""
         db_manager = self.get_db_manager()
         return db_manager.update_files_status_by_batch(batch_number, client_id, status_id)
+
+    def get_status_name_by_id(self, status_id):
+        """Get status name by status ID."""
+        db_manager = self.get_db_manager()
+        return db_manager.connection_helper.get_status_name_by_id(status_id)
