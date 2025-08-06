@@ -154,3 +154,8 @@ class ClientDataDatabaseHelper:
         """Get file URLs for files in specific batch and client"""
         db_manager = self.get_db_manager()
         return db_manager.get_file_urls_by_batch_and_client(batch_id, client_id)
+
+    def get_all_files_by_batch_and_client_with_details(self, batch_id, client_id):
+        """Get all files by batch and client with complete details"""
+        db_manager = self.get_db_manager()
+        return db_manager.get_all_files_by_batch_and_client_with_details(batch_id, client_id)

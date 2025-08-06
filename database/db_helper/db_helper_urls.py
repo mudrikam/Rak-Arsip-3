@@ -158,6 +158,34 @@ class DatabaseUrlsHelper:
         self.db_manager.close()
         return urls
 
+    def get_all_files_by_batch_and_client_with_details(self, batch_id, client_id):
+        """Get all files in a specific batch and client with complete details including categories, URLs, and prices"""
+        self.db_manager.connect(write=False)
+        cursor = self.db_manager.connection.cursor()
+        
+        cursor.execute("""
+            SELECT 
+                f.id, f.name, f.date, f.root, f.path, f.status_id, f.category_id, f.subcategory_id,
+                c.name as category_name, 
+                sc.name as subcategory_name,
+                fu.url_value,
+                up.name as provider_name,
+                ip.price, ip.currency
+            FROM files f
+            JOIN file_client_batch fcb ON f.id = fcb.file_id
+            LEFT JOIN categories c ON f.category_id = c.id
+            LEFT JOIN subcategories sc ON f.subcategory_id = sc.id
+            LEFT JOIN file_url fu ON f.id = fu.file_id
+            LEFT JOIN url_provider up ON fu.provider_id = up.id
+            LEFT JOIN item_price ip ON f.id = ip.file_id
+            WHERE fcb.batch_number = ? AND fcb.client_id = ?
+            ORDER BY f.name
+        """, (batch_id, client_id))
+        
+        files = cursor.fetchall()
+        self.db_manager.close()
+        return files
+
     def delete_file_url(self, file_url_id):
         """Delete file URL assignment from database"""
         self.db_manager.connect()
