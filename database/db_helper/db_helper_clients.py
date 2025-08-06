@@ -537,10 +537,8 @@ class DatabaseClientsHelper:
         """Get batch creation date from batch_list table."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute(
-            "SELECT created_at FROM batch_list WHERE batch_number = ? AND client_id = ?", 
-            (batch_number, client_id)
-        )
+        query = "SELECT created_at FROM batch_list WHERE batch_number = ? AND client_id = ?"
+        cursor.execute(query, (batch_number, client_id))
         row = cursor.fetchone()
         self.db_manager.close()
         if row:

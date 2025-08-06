@@ -266,6 +266,10 @@ class DatabaseManager(QObject):
         """Get batch numbers by client."""
         return self.clients_helper.get_batch_numbers_by_client(client_id)
 
+    def get_batch_creation_date(self, batch_number, client_id):
+        """Get batch creation date."""
+        return self.clients_helper.get_batch_created_date(batch_number, client_id)
+
     # Teams methods - delegate to teams helper
     def get_all_teams(self):
         """Get all teams."""

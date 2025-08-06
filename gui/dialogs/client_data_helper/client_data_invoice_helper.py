@@ -924,9 +924,31 @@ class ClientDataInvoiceHelper:
                 'values': [[client_name, ""]]  # Second value empty because cells are merged
             })
             
-            # 3. Cell E10:F10 merged - Creation date (only set for new files)
+            # 3. Cell E10:F10 merged - Creation date (only set for new files, use batch creation date)
             if is_new_file:
-                creation_date = current_date.strftime("%m/%d/%Y")  # e.g., 8/6/2025
+                # Get batch creation date from database
+                print(f"DEBUG: Getting batch creation date for batch_number='{batch_number}', client_id='{client_id}'")
+                batch_creation_date = self.db_helper.get_batch_created_date(batch_number, client_id)
+                print(f"DEBUG: Raw batch_creation_date from database: {batch_creation_date} (type: {type(batch_creation_date)})")
+                
+                if batch_creation_date:
+                    # Parse the datetime string and format it properly
+                    from datetime import datetime
+                    try:
+                        print(f"DEBUG: Attempting to parse datetime: '{batch_creation_date}'")
+                        # Parse the database datetime format
+                        created_datetime = datetime.fromisoformat(batch_creation_date.replace("Z", "+00:00") if batch_creation_date.endswith("Z") else batch_creation_date)
+                        creation_date = created_datetime.strftime("%m/%d/%Y")  # e.g., 8/6/2025
+                        print(f"DEBUG: Successfully parsed and formatted date: '{creation_date}'")
+                    except (ValueError, AttributeError) as e:
+                        # Don't use fallback - let the error be visible
+                        print(f"ERROR: Failed to parse batch creation date '{batch_creation_date}': {e}")
+                        raise e
+                else:
+                    # Don't use fallback - show the actual problem
+                    print(f"ERROR: No batch creation date found for batch_number='{batch_number}', client_id='{client_id}'")
+                    raise ValueError(f"Batch creation date not found for batch {batch_number} and client {client_id}")
+                
                 cell_updates.append({
                     'range': f"{sheet_name}!E10:F10",
                     'values': [[creation_date, ""]]  # Second value empty because cells are merged
@@ -1150,13 +1172,13 @@ class ClientDataInvoiceHelper:
                 if sheet['properties']['title'] == 'Invoice':
                     return 'Invoice'
             
-            # If not found, use first sheet
+            # If not found, use first sheet or default to "invoice"
             if spreadsheet.get('sheets'):
                 first_sheet_name = spreadsheet['sheets'][0]['properties']['title']
-                print(f"Invoice sheet not found, using first sheet: {first_sheet_name}")
                 return first_sheet_name
-                
-            return None
+            else:
+                # Default to "invoice" if no sheets found
+                return "invoice"
             
         except Exception as e:
             print(f"Error getting sheet name: {e}")
