@@ -39,8 +39,13 @@ class NameFieldWidget(QFrame):
                 border-radius: 6px;
                 font-weight: bold;
             }
-            QPushButton:hover {
+            QPushButton:hover:enabled {
                 background-color: #388e3c;
+            }
+            QPushButton:disabled {
+                background-color: rgba(118, 118, 118, 0.27);
+                color: #888888;
+                border: none;
             }
         """)
         input_row.addWidget(self.make_btn)
@@ -88,6 +93,16 @@ class NameFieldWidget(QFrame):
         self.make_btn.clicked.connect(self._on_make_clicked)
         self.star_btn.clicked.connect(self._on_star_clicked)
         self._block_signal = False
+
+        # Initial state: disable make_btn
+        self.make_btn.setEnabled(False)
+    def _update_make_btn_state(self):
+        name_filled = bool(self.line_edit.text().strip())
+        path_valid = self.sanitize_label.text() != "-" and self.sanitize_label.text().strip() != ""
+        # Check disk and folder from _current_path_data
+        disk_selected = bool(self._current_path_data and self._current_path_data.get('disk'))
+        folder_selected = bool(self._current_path_data and self._current_path_data.get('folder'))
+        self.make_btn.setEnabled(name_filled and path_valid and disk_selected and folder_selected)
 
     def _show_statusbar_message(self, message):
         show_statusbar_message(self, message)
@@ -198,6 +213,7 @@ class NameFieldWidget(QFrame):
                 self.line_edit.setText(sanitized)
                 self._block_signal = False
                 self._show_statusbar_message(f"Sanitized name: {sanitized}")
+        self._update_make_btn_state()
 
     def _on_sanitize_check_changed(self, state):
         if self.sanitize_check.isChecked():
@@ -399,11 +415,11 @@ class NameFieldWidget(QFrame):
             self.sanitize_label.setText(disk)
         else:
             self.sanitize_label.setText("-")
-        
         self._current_path_data = {
             'disk': disk,
             'folder': folder
         }
+        self._update_make_btn_state()
 
     def set_disk_and_folder_with_date(self, disk, folder, date_path, name_input):
         disk = (disk or "")
@@ -430,19 +446,18 @@ class NameFieldWidget(QFrame):
                 self.sanitize_label.setText(disk)
         else:
             self.sanitize_label.setText("-")
-            
         self._current_path_data = {
             'disk': disk,
             'folder': folder,
             'date': date_path,
             'name': name_input
         }
+        self._update_make_btn_state()
 
     def set_disk_and_folder_with_date_category(self, disk, folder, category, subcategory, date_path, name_input):
         disk = (disk or "")
         if disk and ":\\" in disk:
             disk = disk.split(" ")[0]
-        
         path_parts = []
         if disk:
             path_parts.append(disk.rstrip("\\"))
@@ -456,13 +471,11 @@ class NameFieldWidget(QFrame):
             path_parts.append(date_path)
         if name_input:
             path_parts.append(name_input)
-        
         if path_parts:
             path = "\\".join(path_parts)
             self.sanitize_label.setText(path)
         else:
             self.sanitize_label.setText("-")
-            
         self._current_path_data = {
             'disk': disk,
             'folder': folder,
@@ -471,3 +484,4 @@ class NameFieldWidget(QFrame):
             'date': date_path,
             'name': name_input
         }
+        self._update_make_btn_state()

@@ -21,6 +21,93 @@ from gui.dialogs.edit_record_dialog import EditRecordDialog
 from gui.dialogs.assign_price_dialog import AssignPriceDialog
 from gui.dialogs.assign_file_url_dialog import AssignFileUrlDialog
 
+class DeleteRecordConfirmDialog(QDialog):
+    """Dialog to show record details before deletion"""
+    
+    def __init__(self, parent, record_data, related_info):
+        super().__init__(parent)
+        self.record_data = record_data
+        self.related_info = related_info
+        
+        self.setWindowTitle(f"Delete Record - {record_data.get('name', 'Unknown')}")
+        self.setModal(True)
+        self.resize(700, 500)
+        
+        self.init_ui()
+    
+    def init_ui(self):
+        """Initialize the dialog UI"""
+        layout = QVBoxLayout(self)
+        
+        # Header information
+        header_layout = QVBoxLayout()
+        file_name_label = QLabel(f"File Name: {self.record_data.get('name', '-')}" )
+        file_name_label.setStyleSheet("font-weight: bold;")
+        header_layout.addWidget(file_name_label)
+        header_layout.addWidget(QLabel(f"Path: {self.record_data.get('path', '-')}"))
+        header_layout.addWidget(QLabel(f"Date: {self.record_data.get('date', '-')}"))
+        header_layout.addWidget(QLabel(f"Status: {self.record_data.get('status', '-')}"))
+        layout.addLayout(header_layout)
+        
+        # Related data table
+        related_table = QTableWidget()
+        related_table.setColumnCount(3)
+        related_table.setHorizontalHeaderLabels([
+            "Data Type", "Count", "Details"
+        ])
+        related_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        related_table.setSelectionBehavior(QTableWidget.SelectRows)
+        related_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        related_table.setWordWrap(True)
+        # Populate related data table
+        related_data = [
+            ("Project Price", len(self.related_info["item_price"]), 
+             ", ".join([f"{ip['price']} {ip['currency']}" for ip in self.related_info["item_price"]]) if self.related_info["item_price"] else "None"),
+            ("Team Earnings", len(self.related_info["earnings"]), 
+             ", ".join([f"Team {e['team_id']}: {e['amount']}" for e in self.related_info["earnings"]]) if self.related_info["earnings"] else "None"),
+            ("Client Assignments", len(self.related_info["file_client_price"]), 
+             ", ".join([f"Client {fcp['client_id']}" for fcp in self.related_info["file_client_price"]]) if self.related_info["file_client_price"] else "None"),
+            ("Batch Assignments", len(self.related_info["file_client_batch"]), 
+             ", ".join([f"Batch {fcb['batch_number']}" for fcb in self.related_info["file_client_batch"]]) if self.related_info["file_client_batch"] else "None"),
+            ("URL Assignments", len(self.related_info.get("file_url", [])), 
+             ", ".join([f"{fu['provider_name']}: {fu['url_value']}" for fu in self.related_info.get("file_url", [])]) if self.related_info.get("file_url") else "None")
+        ]
+        related_table.setRowCount(len(related_data))
+        for row_idx, (data_type, count, details) in enumerate(related_data):
+            related_table.setItem(row_idx, 0, QTableWidgetItem(data_type))
+            related_table.setItem(row_idx, 1, QTableWidgetItem(str(count)))
+            details_item = QTableWidgetItem(details)
+            details_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            details_item.setFlags(details_item.flags() | Qt.ItemIsSelectable)
+            details_item.setToolTip(details)
+            details_item.setData(Qt.TextWordWrap, True)
+            related_table.setItem(row_idx, 2, details_item)
+        # Enable word wrap for details column
+        related_table.resizeRowsToContents()
+        layout.addWidget(QLabel("Related data that will also be deleted:"))
+        layout.addWidget(related_table)
+        
+        # Warning message
+        warning_label = QLabel("⚠️ This action cannot be undone. The project folder will also be deleted.")
+        warning_label.setStyleSheet("color: red; font-weight: bold; margin: 10px 0;")
+        layout.addWidget(warning_label)
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        button_layout.addWidget(cancel_btn)
+        
+        delete_btn = QPushButton("Delete Record")
+        delete_btn.clicked.connect(self.accept)
+        delete_btn.setDefault(True)
+        delete_btn.setStyleSheet("QPushButton { background-color: #d32f2f; color: white; }")
+        button_layout.addWidget(delete_btn)
+        
+        layout.addLayout(button_layout)
+
 class NoWheelComboBox(QComboBox):
     def wheelEvent(self, event):
         event.ignore()
@@ -861,64 +948,28 @@ class CentralWidget(QWidget):
         def do_delete_record():
             name = row_data.get('name', '-')
             path = row_data.get('path', '-')
-            date = row_data.get('date', '-')
-            category = row_data.get('category', '-')
-            subcategory = row_data.get('subcategory', '-')
-            status = row_data.get('status', '-')
             file_id = row_data.get('id', None)
-            related_info = self.db_manager.get_file_related_delete_info(file_id)
-            item_price_info = [
-                f"ID: {ip['id']}, Price: {ip['price']} {ip['currency']}, Note: {ip['note']}"
-                for ip in related_info["item_price"]
-            ]
-            earnings_info = [
-                f"ID: {e['id']}, TeamID: {e['team_id']}, Amount: {e['amount']}, Note: {e['note']}"
-                for e in related_info["earnings"]
-            ]
-            file_client_price_info = [
-                f"ID: {fcp['id']}, ClientID: {fcp['client_id']}"
-                for fcp in related_info["file_client_price"]
-            ]
-            file_client_batch_info = [
-                f"ID: {fcb['id']}, ClientID: {fcb['client_id']}, Batch: {fcb['batch_number']}"
-                for fcb in related_info["file_client_batch"]
-            ]
-            details = (
-                f"• Name: {name}\n"
-                f"• Path: {path}\n"
-                f"• Date: {date}\n"
-                f"• Category: {category}\n"
-                f"• Subcategory: {subcategory}\n"
-                f"• Status: {status}\n"
-                "\nThe following related data will also be deleted:\n"
-                f"• Project Price:\n"
-                + ("\n".join(f"   - {item}" for item in item_price_info) if item_price_info else "   - None") + "\n\n"
-                f"• Team Earnings:\n"
-                + ("\n".join(f"   - {item}" for item in earnings_info) if earnings_info else "   - None") + "\n\n"
-                f"• Client Assignments:\n"
-                + ("\n".join(f"   - {item}" for item in file_client_price_info) if file_client_price_info else "   - None") + "\n\n"
-                f"• Batch Assignments:\n"
-                + ("\n".join(f"   - {item}" for item in file_client_batch_info) if file_client_batch_info else "   - None")
-            )
-            confirm1 = QMessageBox.warning(
-                self,
-                "Delete Record",
-                f"Delete this record?\n\n"
-                f"Details:\n{details}\n\n"
-                "This action cannot be undone.",
-                QMessageBox.Yes | QMessageBox.No
-            )
-            if confirm1 == QMessageBox.Yes:
+            
+            try:
+                self.db_manager.connect()
+                related_info = self.db_manager.get_file_related_delete_info(file_id)
+                
+                # Show detailed confirmation dialog
+                dialog = DeleteRecordConfirmDialog(self, row_data, related_info)
+                if dialog.exec() != QDialog.Accepted:
+                    return
+                
+                # Second confirmation
                 confirm2 = QMessageBox.warning(
                     self,
-                    "Are you sure?",
-                    f"Are you sure you want to permanently delete this record and its project folder?\n\n"
-                    f"Details:\n{details}",
+                    "Final Confirmation",
+                    f"Are you absolutely sure you want to permanently delete '{name}' and its project folder?\n\n"
+                    "This action cannot be undone.",
                     QMessageBox.Yes | QMessageBox.No
                 )
+                
                 if confirm2 == QMessageBox.Yes:
                     try:
-                        self.db_manager.connect()
                         self.db_manager.delete_file(row_data['id'])
                         project_path = str(row_data['path'])
                         if os.path.isdir(project_path):
@@ -932,8 +983,11 @@ class CentralWidget(QWidget):
                     except Exception as e:
                         QMessageBox.critical(self, "Error", f"Failed to delete record: {e}")
                         show_statusbar_message(self, f"Failed to delete record: {e}")
-                    finally:
-                        self.db_manager.close()
+                        
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to get record information: {e}")
+            finally:
+                self.db_manager.close()
         def do_edit_record():
             dialog = EditRecordDialog(
                 row_data,

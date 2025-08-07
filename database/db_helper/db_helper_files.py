@@ -68,6 +68,9 @@ class DatabaseFilesHelper:
         # Delete from file_client_batch
         cursor.execute("DELETE FROM file_client_batch WHERE file_id = ?", (file_id,))
         
+        # Delete from file_url
+        cursor.execute("DELETE FROM file_url WHERE file_id = ?", (file_id,))
+        
         # Finally, delete from files
         cursor.execute("DELETE FROM files WHERE id = ?", (file_id,))
         
@@ -389,10 +392,28 @@ class DatabaseFilesHelper:
                 "batch_number": fcb["batch_number"]
             })
         
+        # Get file URL assignments
+        cursor.execute("""
+            SELECT fu.id, fu.provider_id, fu.url_value, fu.note, up.name as provider_name 
+            FROM file_url fu 
+            LEFT JOIN url_provider up ON fu.provider_id = up.id 
+            WHERE fu.file_id = ?
+        """, (file_id,))
+        file_url_info = []
+        for fu in cursor.fetchall():
+            file_url_info.append({
+                "id": fu["id"],
+                "provider_id": fu["provider_id"],
+                "provider_name": fu["provider_name"] or "Unknown",
+                "url_value": fu["url_value"],
+                "note": fu["note"]
+            })
+        
         self.db_manager.close()
         return {
             "item_price": item_price_info,
             "earnings": earnings_info,
             "file_client_price": file_client_price_info,
-            "file_client_batch": file_client_batch_info
+            "file_client_batch": file_client_batch_info,
+            "file_url": file_url_info
         }
