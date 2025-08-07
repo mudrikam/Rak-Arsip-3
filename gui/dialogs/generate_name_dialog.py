@@ -21,8 +21,8 @@ class ImageDropLabel(QLabel):
         super().__init__(parent)
         self.setAcceptDrops(True)
         self.setAlignment(Qt.AlignCenter)
-        self.setMinimumSize(300, 120)
-        self.setMaximumHeight(150)
+        self.setMinimumSize(400, 200)
+        self.setMaximumHeight(16777215)
         self.setText("Drop image here or click to select")
         self.setWordWrap(True)
         
@@ -100,8 +100,8 @@ class GenerateNameDialog(QDialog):
             self.setWindowIcon(QIcon(str(icon_path)))
         else:
             self.setWindowIcon(qta.icon("fa6s.folder-tree"))
-        self.setMinimumSize(400, 280)
-        self.setMaximumHeight(320)
+        self.setMinimumSize(400, 360)
+        self.setMaximumHeight(400)
         self.setModal(True)
         
         self.temp_image_path = None
@@ -259,7 +259,10 @@ class GenerateNameDialog(QDialog):
             shutil.copy2(file_path, self.temp_image_path)
             pixmap = QPixmap(str(self.temp_image_path))
             if not pixmap.isNull():
-                scaled_pixmap = pixmap.scaled(280, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                label_width = self.image_label.width()
+                if label_width < 10:
+                    label_width = 400
+                scaled_pixmap = pixmap.scaledToWidth(label_width, Qt.SmoothTransformation)
                 self.image_label.setPixmap(scaled_pixmap)
                 self.image_label.setText("")
                 self.generate_btn.setEnabled(True)
@@ -281,7 +284,10 @@ class GenerateNameDialog(QDialog):
             self.temp_image_path = temp_path
             pixmap = QPixmap.fromImage(image)
             if not pixmap.isNull():
-                scaled_pixmap = pixmap.scaled(280, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                label_width = self.image_label.width()
+                if label_width < 10:
+                    label_width = 400
+                scaled_pixmap = pixmap.scaledToWidth(label_width, Qt.SmoothTransformation)
                 self.image_label.setPixmap(scaled_pixmap)
                 self.image_label.setText("")
                 self.generate_btn.setEnabled(True)
