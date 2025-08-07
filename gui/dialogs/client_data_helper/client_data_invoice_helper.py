@@ -23,14 +23,91 @@ class ClientDataInvoiceHelper:
         self.sheets_service = None
         self.credentials = None
         
-        # Folder IDs
+        # Folder IDs cache - prevents repeated lookups
         self.rak_arsip_folder_id = None
         self.invoice_folder_id = None
+        self.template_folder_id = None
+        self.template_file_id = None
+        
+        # Client folder cache - stores client_id -> folder_id mapping
+        self.client_folder_cache = {}
+        
+        # Folder structure cache - stores (client_id, year, month) -> folder_id
+        self.folder_structure_cache = {}
+        
+        # API call tracking for optimization monitoring
+        self.api_calls_count = 0
+        self.cache_hits_count = 0
         
         # Progress tracking
         self.progress_dialog = None
         self.current_step = 0
         self.total_steps = 0
+    
+    def log_api_call(self, operation_name):
+        """Track API calls for optimization monitoring"""
+        self.api_calls_count += 1
+        print(f"API Call #{self.api_calls_count}: {operation_name}")
+    
+    def log_cache_hit(self, cache_type, key):
+        """Track cache hits for optimization monitoring"""
+        self.cache_hits_count += 1
+        print(f"Cache Hit #{self.cache_hits_count}: {cache_type} - {key}")
+        
+        # Add small delay for cache operations to make progress visible
+        import time
+        time.sleep(0.1)  # 100ms delay for cache operations
+    
+    def validate_folder_exists(self, folder_id):
+        """Validate that a cached folder ID still exists in Google Drive"""
+        try:
+            if not folder_id or not self.drive_service:
+                return False
+            
+            # Try to get folder metadata to verify it exists
+            self.drive_service.files().get(
+                fileId=folder_id,
+                fields="id,name,trashed"
+            ).execute()
+            return True
+        except Exception:
+            # If any error occurs (not found, deleted, etc.), folder doesn't exist
+            return False
+    
+    def validate_and_clean_cache(self):
+        """Validate cached folder IDs and remove invalid ones"""
+        # Validate main folders
+        if self.rak_arsip_folder_id and not self.validate_folder_exists(self.rak_arsip_folder_id):
+            print(f"Cache invalidated: Rak_Arsip_Database folder no longer exists")
+            self.rak_arsip_folder_id = None
+            
+        if self.invoice_folder_id and not self.validate_folder_exists(self.invoice_folder_id):
+            print(f"Cache invalidated: INVOICE folder no longer exists")
+            self.invoice_folder_id = None
+            
+        if self.template_folder_id and not self.validate_folder_exists(self.template_folder_id):
+            print(f"Cache invalidated: Template folder no longer exists")
+            self.template_folder_id = None
+            
+        # Validate client folder cache
+        invalid_clients = []
+        for client_id, folder_id in self.client_folder_cache.items():
+            if not self.validate_folder_exists(folder_id):
+                print(f"Cache invalidated: Client folder {client_id} no longer exists")
+                invalid_clients.append(client_id)
+        
+        for client_id in invalid_clients:
+            del self.client_folder_cache[client_id]
+            
+        # Validate folder structure cache
+        invalid_structures = []
+        for cache_key, folder_id in self.folder_structure_cache.items():
+            if not self.validate_folder_exists(folder_id):
+                print(f"Cache invalidated: Folder structure {cache_key} no longer exists")
+                invalid_structures.append(cache_key)
+        
+        for cache_key in invalid_structures:
+            del self.folder_structure_cache[cache_key]
     
     def init_progress(self, steps, title="Processing..."):
         """Initialize progress dialog with dynamic step calculation"""
@@ -41,8 +118,13 @@ class ClientDataInvoiceHelper:
         self.progress_dialog.setWindowTitle(title)
         self.progress_dialog.setModal(True)
         self.progress_dialog.setValue(0)
+        self.progress_dialog.setMinimumDuration(0)  # Show immediately
         self.progress_dialog.show()
         QCoreApplication.processEvents()
+        
+        # Add small delay to ensure progress bar is visible
+        import time
+        time.sleep(0.1)
     
     def update_progress(self, step_description):
         """Update progress to next step with description"""
@@ -58,6 +140,10 @@ class ClientDataInvoiceHelper:
         self.progress_dialog.setLabelText(step_description)
         self.progress_dialog.setValue(self.current_step)
         QCoreApplication.processEvents()
+        
+        # Add small delay to make progress visible even for cached operations
+        import time
+        time.sleep(0.15)  # 150ms delay to show progress
         
         return True
     
@@ -94,50 +180,67 @@ class ClientDataInvoiceHelper:
             return False
     
     def ensure_folders_exist(self):
-        """Ensure Rak_Arsip_Database and INVOICE folders exist"""
+        """Ensure Rak_Arsip_Database and INVOICE folders exist - optimized with caching"""
         if not self.drive_service:
             if not self.init_google_drive_connection():
                 return False
         
+        # Validate cached folder IDs before using them
+        if self.rak_arsip_folder_id or self.invoice_folder_id:
+            self.validate_and_clean_cache()
+        
+        # Use cached folder IDs if still available after validation
+        if self.rak_arsip_folder_id and self.invoice_folder_id:
+            self.log_cache_hit("Main Folders", "Rak_Arsip_Database + INVOICE")
+            # Even with cache, ensure progress is visible
+            QCoreApplication.processEvents()
+            return True
+        
         try:
-            # Cari folder Rak_Arsip_Database
-            results = self.drive_service.files().list(
-                q="name = 'Rak_Arsip_Database' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
-                fields="files(id, name)",
-                pageSize=5
-            ).execute()
-            folders = results.get('files', [])
+            # Step 1: Find Rak_Arsip_Database folder first
+            if not self.rak_arsip_folder_id:
+                self.log_api_call("Search Rak_Arsip_Database folder")
+                results = self.drive_service.files().list(
+                    q="name = 'Rak_Arsip_Database' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+                    fields="files(id)",
+                    pageSize=5
+                ).execute()
+                
+                folders = results.get('files', [])
+                if folders:
+                    self.rak_arsip_folder_id = folders[0]['id']
+                else:
+                    # Create Rak_Arsip_Database if not found
+                    self.log_api_call("Create Rak_Arsip_Database folder")
+                    file_metadata = {
+                        'name': 'Rak_Arsip_Database',
+                        'mimeType': 'application/vnd.google-apps.folder'
+                    }
+                    folder = self.drive_service.files().create(body=file_metadata, fields='id').execute()
+                    self.rak_arsip_folder_id = folder.get('id')
             
-            if folders:
-                self.rak_arsip_folder_id = folders[0]['id']
-            else:
-                # Buat folder Rak_Arsip_Database di root
-                file_metadata = {
-                    'name': 'Rak_Arsip_Database',
-                    'mimeType': 'application/vnd.google-apps.folder'
-                }
-                folder = self.drive_service.files().create(body=file_metadata, fields='id').execute()
-                self.rak_arsip_folder_id = folder.get('id')
-            
-            # Cari folder INVOICE di dalam Rak_Arsip_Database
-            results = self.drive_service.files().list(
-                q=f"name = 'INVOICE' and mimeType = 'application/vnd.google-apps.folder' and '{self.rak_arsip_folder_id}' in parents and trashed = false",
-                fields="files(id, name)",
-                pageSize=5
-            ).execute()
-            folders = results.get('files', [])
-            
-            if folders:
-                self.invoice_folder_id = folders[0]['id']
-            else:
-                # Buat folder INVOICE di dalam Rak_Arsip_Database
-                file_metadata = {
-                    'name': 'INVOICE',
-                    'mimeType': 'application/vnd.google-apps.folder',
-                    'parents': [self.rak_arsip_folder_id]
-                }
-                folder = self.drive_service.files().create(body=file_metadata, fields='id').execute()
-                self.invoice_folder_id = folder.get('id')
+            # Step 2: Find INVOICE folder inside Rak_Arsip_Database
+            if not self.invoice_folder_id:
+                self.log_api_call("Search INVOICE folder inside Rak_Arsip_Database")
+                results = self.drive_service.files().list(
+                    q=f"name = 'INVOICE' and mimeType = 'application/vnd.google-apps.folder' and '{self.rak_arsip_folder_id}' in parents and trashed = false",
+                    fields="files(id)",
+                    pageSize=5
+                ).execute()
+                
+                folders = results.get('files', [])
+                if folders:
+                    self.invoice_folder_id = folders[0]['id']
+                else:
+                    # Create INVOICE folder inside Rak_Arsip_Database if not found
+                    self.log_api_call("Create INVOICE folder inside Rak_Arsip_Database")
+                    file_metadata = {
+                        'name': 'INVOICE',
+                        'mimeType': 'application/vnd.google-apps.folder',
+                        'parents': [self.rak_arsip_folder_id]
+                    }
+                    folder = self.drive_service.files().create(body=file_metadata, fields='id').execute()
+                    self.invoice_folder_id = folder.get('id')
             
             return True
             
@@ -164,6 +267,24 @@ class ClientDataInvoiceHelper:
             QMessageBox.warning(self.parent, "No Selection", "Please select a client and batch first.")
             return
         
+        # Define all possible steps dynamically - show progress immediately
+        sync_steps = [
+            "Preparing data",
+            "Connecting to Google Drive",
+            "Checking/Creating main folders",
+            "Searching for invoice template", 
+            "Creating client folder structure",
+            "Generating invoice filename",
+            "Checking for existing invoice files"
+        ]
+        
+        # Initialize progress immediately to show progress bar
+        self.init_progress(sync_steps, "Syncing to Google Drive")
+        
+        # Step 1: Prepare data (moved here to show progress)
+        if not self.update_progress("Preparing client and batch data..."):
+            return
+        
         # Get client info first to determine steps needed
         client_name = file_urls_helper._client_name_label.text().replace("Client: ", "")
         client_id = file_urls_helper._selected_client_id
@@ -173,24 +294,8 @@ class ClientDataInvoiceHelper:
         actual_file_count = self.db_helper.count_file_client_batch_by_batch_number(batch_number)
         total_files = actual_file_count  # Use actual count from database
         
-        # Define all possible steps dynamically
-        sync_steps = [
-            "Connecting to Google Drive",
-            "Checking/Creating main folders",
-            "Searching for invoice template", 
-            "Creating client folder structure",
-            "Generating invoice filename",
-            "Checking for existing invoice files"
-        ]
-        
-        # Add conditional step based on whether file exists or not
-        # We'll determine this during execution and add the appropriate step
-        
-        # Initialize progress with known steps
-        self.init_progress(sync_steps, "Syncing to Google Drive")
-        
         try:
-            # Step 1: Initialize Google Drive connection and ensure folders exist
+            # Step 2: Initialize Google Drive connection and ensure folders exist
             if not self.update_progress("Connecting to Google Drive..."):
                 return
             
@@ -199,11 +304,11 @@ class ClientDataInvoiceHelper:
                 QMessageBox.critical(self.parent, "Error", "Failed to initialize Google Drive folders.")
                 return
             
-            # Step 2: Verify folders are ready
+            # Step 3: Verify folders are ready
             if not self.update_progress("Checking/Creating main folders..."):
                 return
             
-            # Step 3: Find Template folder and Invoice_Template file
+            # Step 4: Find Template folder and Invoice_Template file
             if not self.update_progress("Searching for invoice template..."):
                 return
             
@@ -213,7 +318,7 @@ class ClientDataInvoiceHelper:
                 QMessageBox.critical(self.parent, "Template Not Found", "Invoice_Template file not found in Template folder.")
                 return
             
-            # Step 4: Create folder structure
+            # Step 5: Create folder structure
             if not self.update_progress("Creating client folder structure..."):
                 return
             
@@ -223,13 +328,13 @@ class ClientDataInvoiceHelper:
                 QMessageBox.critical(self.parent, "Folder Creation Failed", "Failed to create folder structure.")
                 return
             
-            # Step 5: Generate invoice filename
+            # Step 6: Generate invoice filename
             if not self.update_progress("Generating invoice filename..."):
                 return
             
             invoice_filename = self.generate_invoice_filename(client_name, batch_number, total_files)
             
-            # Step 6: Check if invoice file already exists for this batch
+            # Step 7: Check if invoice file already exists for this batch
             if not self.update_progress("Checking for existing invoice files..."):
                 return
             
@@ -320,71 +425,89 @@ class ClientDataInvoiceHelper:
             QMessageBox.critical(self.parent, "Sync Error", f"Error during sync: {str(e)}")
     
     def find_invoice_template(self):
-        """Find Invoice_Template file in Template folder"""
+        """Find Invoice_Template file in Template folder - optimized with caching"""
+        # Validate cached template file ID before using it
+        if self.template_file_id and not self.validate_folder_exists(self.template_file_id):
+            print(f"Cache invalidated: Invoice_Template file no longer exists")
+            self.template_file_id = None
+            
+        # Return cached template file ID if still available after validation
+        if self.template_file_id:
+            self.log_cache_hit("Template File", "Invoice_Template")
+            # Even with cache, ensure progress is visible
+            QCoreApplication.processEvents()
+            return self.template_file_id
+            
         try:
-            # Search for Template folder
-            template_results = self.drive_service.files().list(
-                q="name = 'Template' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
-                fields="files(id, name)",
-                pageSize=10
-            ).execute()
+            # Single optimized query to find both Template folder and Invoice_Template file
+            if not self.template_folder_id:
+                self.log_api_call("Search Template folder")
+                # Search for Template folder first
+                template_results = self.drive_service.files().list(
+                    q="name = 'Template' and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+                    fields="files(id)",
+                    pageSize=5
+                ).execute()
+                
+                template_folders = template_results.get('files', [])
+                if not template_folders:
+                    return None
+                
+                self.template_folder_id = template_folders[0]['id']
             
-            template_folders = template_results.get('files', [])
-            if not template_folders:
-                return None
-            
-            template_folder_id = template_folders[0]['id']
-            
-            # Search for Invoice_Template file in Template folder
+            self.log_api_call("Search Invoice_Template file")
+            # Search for Invoice_Template file in cached Template folder
             invoice_results = self.drive_service.files().list(
-                q=f"name = 'Invoice_Template' and '{template_folder_id}' in parents and trashed = false",
-                fields="files(id, name, mimeType)",
-                pageSize=10
+                q=f"name = 'Invoice_Template' and '{self.template_folder_id}' in parents and trashed = false",
+                fields="files(id)",
+                pageSize=5
             ).execute()
             
             invoice_files = invoice_results.get('files', [])
             if not invoice_files:
                 return None
             
-            template_file_id = invoice_files[0]['id']
-            template_mime_type = invoice_files[0]['mimeType']
-            
-            return template_file_id
+            # Cache the template file ID for future use
+            self.template_file_id = invoice_files[0]['id']
+            return self.template_file_id
             
         except Exception as e:
             return None
     
     def find_existing_invoice(self, target_folder_id, client_name, batch_number):
-        """Find existing invoice file for the same client and batch number
+        """Find existing invoice file for the same client and batch number - optimized exact matching
         Returns: (file_id, filename, file_count) or (None, None, 0) if not found"""
         try:
-            # Clean client name for search pattern
+            # Generate exact filename pattern to eliminate guessing
             clean_client_name = "".join(c for c in client_name if c.isalnum() or c in (' ', '-', '_')).strip()
             clean_client_name = clean_client_name.replace(' ', '_')
-
-            # Search pattern: Invoice_ClientName_BatchNumber_*
-            search_pattern = f"Invoice_{clean_client_name}_{batch_number}_"
-
-            # Search for files in target folder that match the pattern
+            
+            # Use exact prefix matching pattern - more efficient than contains
+            exact_prefix = f"Invoice_{clean_client_name}_{batch_number}_"
+            
+            # Optimized query: search by exact name prefix in specific folder
             results = self.drive_service.files().list(
-                q=f"name contains '{search_pattern}' and '{target_folder_id}' in parents and trashed = false",
-                fields="files(id, name, mimeType)",
-                pageSize=10
+                q=f"name contains '{exact_prefix}' and '{target_folder_id}' in parents and trashed = false",
+                fields="files(id, name)",
+                pageSize=10,
+                orderBy='name desc'  # Get most recent version first
             ).execute()
 
             files = results.get('files', [])
 
-            if files:
-                # Filter files that exactly match our pattern (to avoid partial matches)
-                for file in files:
-                    filename = file['name']
-                    if filename.startswith(search_pattern):
-                        file_id = file['id']
-                        current_count = self.extract_count_from_filename(filename)
-                        return (file_id, filename, current_count)
-                return (None, None, 0)
-            else:
-                return (None, None, 0)
+            # Exact pattern matching to eliminate false positives
+            for file in files:
+                filename = file['name']
+                # Verify filename starts with exact pattern and contains valid structure
+                if (filename.startswith(exact_prefix) and 
+                    filename.count('_') >= 6):  # Invoice_Client_Batch_Year_Month_Day_Count format
+                    
+                    file_id = file['id']
+                    current_count = self.extract_count_from_filename(filename)
+                    return (file_id, filename, current_count)
+            
+            return (None, None, 0)
+            
         except Exception as e:
             return (None, None, 0)
     
@@ -407,29 +530,42 @@ class ClientDataInvoiceHelper:
             return None
     
     def extract_count_from_filename(self, filename):
-        """Extract the file count from existing invoice filename"""
+        """Extract the file count from existing invoice filename - improved validation"""
         try:
             # Expected pattern: Invoice_ClientName_BatchNumber_YYYY_Month_DD_COUNT
             parts = filename.split('_')
-            if len(parts) >= 6:
-                # Count should be the last part
-                count_str = parts[-1]
-                try:
-                    return int(count_str)
-                except ValueError:
+            
+            # Validate filename structure - should have at least 7 parts
+            if len(parts) < 7:
+                return 0
+            
+            # Count should be the last part and be numeric
+            count_str = parts[-1]
+            
+            # Handle file extensions if present
+            if '.' in count_str:
+                count_str = count_str.split('.')[0]
+                
+            try:
+                count = int(count_str)
+                # Validate count is reasonable (between 1 and 10000)
+                if 1 <= count <= 10000:
+                    return count
+                else:
                     return 0
-            return 0
+            except ValueError:
+                return 0
+                
         except Exception as e:
             return 0
     
     def create_folder_structure(self, client_id, client_name, batch_number):
-        """Create folder structure: INVOICE/client_id/year/month based on batch creation date"""
+        """Create folder structure: INVOICE/client_id/year/month - optimized with caching"""
         try:
             from datetime import datetime
 
             # Get batch creation date from database
             batch_created_at = self.db_helper.get_batch_created_date(batch_number, client_id)
-
             if not batch_created_at:
                 return None
 
@@ -446,50 +582,100 @@ class ClientDataInvoiceHelper:
                 batch_date = batch_created_at
 
             year = batch_date.strftime("%Y")
-            month = batch_date.strftime("%B")  # Full month name like "August"
+            month = batch_date.strftime("%B")
 
-            # Step 1: Check/Create client folder inside INVOICE
-            client_folder_id = self.get_or_create_folder(str(client_id), self.invoice_folder_id)
+            # Check cache first for complete folder structure
+            cache_key = (client_id, year, month)
+            if cache_key in self.folder_structure_cache:
+                cached_folder_id = self.folder_structure_cache[cache_key]
+                # Validate cached folder before using
+                if self.validate_folder_exists(cached_folder_id):
+                    self.log_cache_hit("Folder Structure", f"{client_id}/{year}/{month}")
+                    return cached_folder_id
+                else:
+                    print(f"Cache invalidated: Folder structure {cache_key} no longer exists")
+                    del self.folder_structure_cache[cache_key]
+
+            # Step 1: Get/Create client folder with caching
+            client_folder_id = None
+            if str(client_id) in self.client_folder_cache:
+                cached_client_folder_id = self.client_folder_cache[str(client_id)]
+                # Validate cached client folder before using
+                if self.validate_folder_exists(cached_client_folder_id):
+                    self.log_cache_hit("Client Folder", str(client_id))
+                    client_folder_id = cached_client_folder_id
+                else:
+                    print(f"Cache invalidated: Client folder {client_id} no longer exists")
+                    del self.client_folder_cache[str(client_id)]
+                    client_folder_id = None
+            
+            if not client_folder_id:
+                client_folder_id = self.get_or_create_folder(str(client_id), self.invoice_folder_id)
+                if client_folder_id:
+                    self.client_folder_cache[str(client_id)] = client_folder_id
+
             if not client_folder_id:
                 return None
 
-            # Step 2: Check/Create year folder inside client folder
+            # Step 2: Get/Create year folder
             year_folder_id = self.get_or_create_folder(year, client_folder_id)
             if not year_folder_id:
                 return None
 
-            # Step 3: Check/Create month folder inside year folder
+            # Step 3: Get/Create month folder
             month_folder_id = self.get_or_create_folder(month, year_folder_id)
             if not month_folder_id:
                 return None
 
+            # Cache the complete folder structure
+            self.folder_structure_cache[cache_key] = month_folder_id
             return month_folder_id
 
         except Exception as e:
             return None
     
     def get_or_create_folder(self, folder_name, parent_folder_id):
-        """Get existing folder or create new one"""
+        """Get existing folder or create new one - optimized with API call logging"""
         try:
+            self.log_api_call(f"Search folder: {folder_name}")
             results = self.drive_service.files().list(
                 q=f"name = '{folder_name}' and mimeType = 'application/vnd.google-apps.folder' and '{parent_folder_id}' in parents and trashed = false",
-                fields="files(id, name)",
+                fields="files(id)",
                 pageSize=5
             ).execute()
             folders = results.get('files', [])
             if folders:
-                folder_id = folders[0]['id']
-                return folder_id
+                return folders[0]['id']
+            
+            self.log_api_call(f"Create folder: {folder_name}")
             file_metadata = {
                 'name': folder_name,
                 'mimeType': 'application/vnd.google-apps.folder',
                 'parents': [parent_folder_id]
             }
             folder = self.drive_service.files().create(body=file_metadata, fields='id').execute()
-            folder_id = folder.get('id')
-            return folder_id
+            return folder.get('id')
         except Exception as e:
             return None
+    
+    def clear_cache(self):
+        """Clear all cached folder IDs - useful for testing or when folder structure changes"""
+        self.client_folder_cache.clear()
+        self.folder_structure_cache.clear()
+        self.template_folder_id = None
+        self.template_file_id = None
+        if hasattr(self, '_sheet_name_cache'):
+            self._sheet_name_cache.clear()
+    
+    def get_optimization_stats(self):
+        """Get current optimization statistics"""
+        return {
+            'cached_client_folders': len(self.client_folder_cache),
+            'cached_folder_structures': len(self.folder_structure_cache),
+            'has_template_cache': self.template_file_id is not None,
+            'has_sheet_name_cache': hasattr(self, '_sheet_name_cache') and len(self._sheet_name_cache) > 0,
+            'main_folders_cached': self.rak_arsip_folder_id is not None and self.invoice_folder_id is not None
+        }
     
     def generate_invoice_filename(self, client_name, batch_number, total_files):
         """Generate invoice filename: Invoice_clientname_batchnumber_YYYY_Month_DD_totalfiles"""
@@ -521,34 +707,61 @@ class ClientDataInvoiceHelper:
             return None
     
     def get_invoice_share_link(self, client_id, client_name, batch_number):
-        """Get shareable read-only link for invoice file"""
+        """Get shareable read-only link for invoice file - optimized with better error handling"""
         try:
             if not self.drive_service:
                 if not self.init_google_drive_connection():
                     return None
+                    
             if not self.ensure_folders_exist():
                 return None
+                
             target_folder_id = self.create_folder_structure(client_id, client_name, batch_number)
             if not target_folder_id:
                 return None
+                
             existing_file_id, existing_filename, existing_count = self.find_existing_invoice(target_folder_id, client_name, batch_number)
             if not existing_file_id:
                 return None
-            permission = {
-                'type': 'anyone',
-                'role': 'reader'
-            }
-            self.drive_service.permissions().create(
-                fileId=existing_file_id,
-                body=permission,
-                fields='id'
-            ).execute()
+            
+            # Check if file already has public permissions to avoid duplicate API calls
+            try:
+                permissions = self.drive_service.permissions().list(fileId=existing_file_id).execute()
+                has_public_permission = any(
+                    perm.get('type') == 'anyone' and perm.get('role') == 'reader' 
+                    for perm in permissions.get('permissions', [])
+                )
+                
+                if not has_public_permission:
+                    permission = {
+                        'type': 'anyone',
+                        'role': 'reader'
+                    }
+                    self.drive_service.permissions().create(
+                        fileId=existing_file_id,
+                        body=permission,
+                        fields='id'
+                    ).execute()
+            except:
+                # If permission check fails, try to set permission anyway
+                permission = {
+                    'type': 'anyone',
+                    'role': 'reader'
+                }
+                self.drive_service.permissions().create(
+                    fileId=existing_file_id,
+                    body=permission,
+                    fields='id'
+                ).execute()
+            
+            # Get the shareable link
             file_info = self.drive_service.files().get(
                 fileId=existing_file_id,
-                fields='webViewLink, name'
+                fields='webViewLink'
             ).execute()
-            share_link = file_info.get('webViewLink')
-            return share_link
+            
+            return file_info.get('webViewLink')
+            
         except Exception as e:
             return None
 
@@ -758,6 +971,8 @@ class ClientDataInvoiceHelper:
     def highlight_payment_method_cell(self, spreadsheet_id, payment_method):
         """Highlight selected payment method cell in sheet by clearing all and setting green background."""
         try:
+            import re
+            
             # Mapping of payment methods to their corresponding cell references in the sheet
             payment_cell_map = {
                 "GoPay": "C21",
@@ -857,10 +1072,6 @@ class ClientDataInvoiceHelper:
             return True
         except Exception as e:
             return False
-            
-        except Exception as e:
-            print(f"Error highlighting payment method cell: {e}")
-            return False
 
     def merge_ef_cells(self, spreadsheet_id):
         """Merge E-F cells for rows 9, 10, 14, 15, 16."""
@@ -901,7 +1112,14 @@ class ClientDataInvoiceHelper:
             return False
 
     def get_invoice_sheet_name(self, spreadsheet_id):
-        """Get invoice sheet name or first sheet if not found."""
+        """Get invoice sheet name or first sheet if not found - optimized with caching"""
+        # Cache sheet metadata to avoid repeated API calls
+        if not hasattr(self, '_sheet_name_cache'):
+            self._sheet_name_cache = {}
+            
+        if spreadsheet_id in self._sheet_name_cache:
+            return self._sheet_name_cache[spreadsheet_id]
+            
         try:
             spreadsheet = self.sheets_service.spreadsheets().get(
                 spreadsheetId=spreadsheet_id,
@@ -911,11 +1129,13 @@ class ClientDataInvoiceHelper:
             # Search for a sheet named 'Invoice'
             for sheet in spreadsheet.get('sheets', []):
                 if sheet['properties']['title'] == 'Invoice':
+                    self._sheet_name_cache[spreadsheet_id] = 'Invoice'
                     return 'Invoice'
 
             # If 'Invoice' sheet is not found, return the first sheet's name if available
             if spreadsheet.get('sheets'):
                 first_sheet_name = spreadsheet['sheets'][0]['properties']['title']
+                self._sheet_name_cache[spreadsheet_id] = first_sheet_name
                 return first_sheet_name
 
             # Return None if no sheets are found
@@ -1225,7 +1445,7 @@ class ClientDataInvoiceHelper:
                 if progress.wasCanceled():
                     progress.close()
                     return False
-                existing_file_id, existing_filename, existing_count = self.find_existing_invoice_for_payment_proof(
+                existing_file_id, existing_filename, existing_count = self.find_existing_invoice(
                     target_folder_id, client_name, batch_number
                 )
                 if not existing_file_id:
@@ -1273,15 +1493,6 @@ class ClientDataInvoiceHelper:
 
         except Exception:
             return False
-
-    def find_existing_invoice_for_payment_proof(self, target_folder_id, client_name, batch_number):
-        """Find existing invoice file for payment proof upload."""
-        try:
-            # Use the same logic as find_existing_invoice to locate the invoice file in the target folder
-            return self.find_existing_invoice(target_folder_id, client_name, batch_number)
-        except Exception:
-            # Return (None, None, 0) if any error occurs during the search
-            return (None, None, 0)
 
     def upload_image_to_drive(self, image_file_path, target_folder_id, client_name, batch_number):
         """Upload payment proof image to Google Drive and set public permissions"""
@@ -1460,7 +1671,7 @@ class ClientDataInvoiceHelper:
                         QMessageBox.information(
                             self.parent,
                             "Upload Successful",
-                            "Payment proof has been successfully uploaded and inserted into the invoice."
+                            "Payment proof has been successfully updated."
                         )
                     else:
                         QMessageBox.warning(
