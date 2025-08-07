@@ -190,6 +190,7 @@ class EditRecordDialog(QDialog):
         self.subcategory_combo.addItems(subcategories)
 
     def _on_accept(self):
+        import re
         data = self.get_data()
         disk = self.disk_combo.currentText()
         folder = self.root_combo.currentText().strip()
@@ -197,6 +198,25 @@ class EditRecordDialog(QDialog):
         subcategory = data['subcategory']
         date = data['date']
         name = data['name']
+        # Normalize date to YYYY_MM_DD
+        def normalize_date(date_str):
+            # Accepts DD_MM_YYYY, MM_DD_YYYY, YYYY_MM_DD, etc. Returns YYYY_MM_DD
+            if not date_str:
+                return ""
+            # Try to extract 3 numbers
+            parts = re.split(r'[_\-]', date_str)
+            nums = [p for p in parts if p.isdigit() and len(p) == 4 or (p.isdigit() and len(p) <= 2)]
+            if len(nums) == 3:
+                # If first is 4 digits, assume YYYY_MM_DD
+                if len(nums[0]) == 4:
+                    return f"{nums[0]}_{nums[1].zfill(2)}_{nums[2].zfill(2)}"
+                # If last is 4 digits, assume DD_MM_YYYY or MM_DD_YYYY
+                elif len(nums[2]) == 4:
+                    return f"{nums[2]}_{nums[1].zfill(2)}_{nums[0].zfill(2)}"
+            # Fallback: just return as is
+            return date_str
+
+        date_norm = normalize_date(date)
         path_parts = []
         if disk and not disk.endswith("\\"):
             disk = disk + "\\"
@@ -208,8 +228,8 @@ class EditRecordDialog(QDialog):
             path_parts.append(category)
         if subcategory:
             path_parts.append(subcategory)
-        if date:
-            path_parts.append(date)
+        if date_norm:
+            path_parts.append(date_norm)
         if name:
             path_parts.append(name)
         new_path = "\\".join(path_parts)
@@ -235,7 +255,7 @@ class EditRecordDialog(QDialog):
                     root=folder,
                     category=category,
                     subcategory=subcategory,
-                    date_path=date,
+                    date_path=date_norm,
                     full_path=new_path,
                     color=color
                 )
