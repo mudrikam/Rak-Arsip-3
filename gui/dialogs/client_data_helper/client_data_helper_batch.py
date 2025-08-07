@@ -473,22 +473,22 @@ class ClientDataBatchHelper:
                 )
                 
                 # Refresh file URLs tab if it's currently loaded for this batch
-                if (hasattr(self.parent, '_file_urls_helper') and 
-                    hasattr(self.parent._file_urls_helper, '_selected_batch_number') and
-                    self.parent._file_urls_helper._selected_batch_number == batch_number):
+                if (hasattr(self.parent, 'file_urls_helper') and 
+                    hasattr(self.parent.file_urls_helper, '_selected_batch_number') and
+                    self.parent.file_urls_helper._selected_batch_number == batch_number):
                     
-                    self.parent._file_urls_helper.load_file_urls_for_batch(
+                    self.parent.file_urls_helper.load_file_urls_for_batch(
                         self._selected_client_id, batch_number, client_name
                     )
                 
                 # Refresh files tab if it exists and is using this client/batch
-                if (hasattr(self.parent, '_files_helper') and 
-                    hasattr(self.parent._files_helper, '_selected_client_id') and
-                    self.parent._files_helper._selected_client_id == self._selected_client_id):
+                if (hasattr(self.parent, 'files_helper') and 
+                    hasattr(self.parent.files_helper, '_selected_client_id') and
+                    self.parent.files_helper._selected_client_id == self._selected_client_id):
                     
                     # Refresh files tab data
-                    if hasattr(self.parent._files_helper, 'fetch_files_page_and_summary'):
-                        self.parent._files_helper.fetch_files_page_and_summary()
+                    if hasattr(self.parent.files_helper, 'fetch_files_page_and_summary'):
+                        self.parent.files_helper.fetch_files_page_and_summary()
                 
                 # Refresh batch table to update colors
                 self.update_batch_table()

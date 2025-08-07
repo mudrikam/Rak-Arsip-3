@@ -73,6 +73,14 @@ class DatabaseManager(QObject):
         """Get status ID by name."""
         return self.connection_helper.get_status_id(status_name)
 
+    def get_status_id_by_name(self, status_name):
+        """Get status ID by name (alias for compatibility)."""
+        return self.connection_helper.get_status_id(status_name)
+
+    def get_status_name_by_id(self, status_id):
+        """Get status name by ID."""
+        return self.connection_helper.get_status_name_by_id(status_id)
+
     # Categories methods - delegate to categories helper
     def get_all_categories(self):
         """Get all categories."""

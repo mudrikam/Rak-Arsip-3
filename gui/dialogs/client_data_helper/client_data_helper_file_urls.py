@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QTableWidget,
-    QTableWidgetItem, QSizePolicy, QHeaderView, QMessageBox, QMenu, QComboBox, QLabel, QApplication, QToolTip, QDialog, QFileDialog
+    QTableWidgetItem, QSizePolicy, QHeaderView, QMessageBox, QMenu, QComboBox, QLabel, QApplication, QToolTip, QDialog, QFileDialog,
+    QFrame
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction, QCursor, QColor
@@ -8,7 +9,71 @@ import qtawesome as qta
 import webbrowser
 import csv
 import os
+import time
 from datetime import datetime
+
+class BatchStatusUpdateDialog(QDialog):
+    """Dialog to show files in a batch before status update operations"""
+    
+    def __init__(self, parent, files_data, batch_number, client_name, new_status):
+        super().__init__(parent)
+        self.files_data = files_data
+        self.batch_number = batch_number
+        self.client_name = client_name
+        self.new_status = new_status
+        
+        self.setWindowTitle(f"Update Status to '{new_status}' - Batch {batch_number}")
+        self.setModal(True)
+        self.resize(600, 400)
+        
+        self.init_ui()
+    
+    def init_ui(self):
+        """Initialize the dialog UI"""
+        layout = QVBoxLayout(self)
+        
+        # Header information
+        header_layout = QVBoxLayout()
+        header_layout.addWidget(QLabel(f"Client: {self.client_name}"))
+        header_layout.addWidget(QLabel(f"Batch Number: {self.batch_number}"))
+        header_layout.addWidget(QLabel(f"Total Files: {len(self.files_data)}"))
+        header_layout.addWidget(QLabel(f"New Status: {self.new_status}"))
+        layout.addLayout(header_layout)
+        
+        # Files table
+        files_table = QTableWidget()
+        files_table.setColumnCount(2)
+        files_table.setHorizontalHeaderLabels([
+            "File Name", "New Status"
+        ])
+        files_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        files_table.setSelectionBehavior(QTableWidget.SelectRows)
+        files_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        
+        # Populate table
+        files_table.setRowCount(len(self.files_data))
+        for row_idx, file_data in enumerate(self.files_data):
+            filename = file_data[1]
+            
+            files_table.setItem(row_idx, 0, QTableWidgetItem(filename))
+            files_table.setItem(row_idx, 1, QTableWidgetItem(self.new_status))
+        
+        layout.addWidget(files_table)
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        button_layout.addWidget(cancel_btn)
+        
+        confirm_btn = QPushButton(f"Update to '{self.new_status}'")
+        confirm_btn.clicked.connect(self.accept)
+        confirm_btn.setDefault(True)
+        button_layout.addWidget(confirm_btn)
+        
+        layout.addLayout(button_layout)
 
 class ClientDataFileUrlsHelper:
     """Helper class for File URLs tab functionality"""
@@ -853,29 +918,17 @@ class ClientDataFileUrlsHelper:
                                       f"No files found in batch {self._selected_batch_number}.")
                 return
             
-            # Prepare detailed confirmation message
-            total_files = len(files_to_update)
-            file_list = []
-            for i, file_data in enumerate(files_to_update[:10]):  # Show first 10 files
-                filename = file_data[1] or "Unknown"
-                date = file_data[2] or "Unknown"
-                file_list.append(f"  {i+1}. {filename} ({date})")
+            # Show detailed confirmation dialog
+            client_name = self._client_name_label.text().replace("Client: ", "")
+            dialog = BatchStatusUpdateDialog(
+                parent=self.parent,
+                files_data=files_to_update,
+                batch_number=self._selected_batch_number,
+                client_name=client_name,
+                new_status=payment_status
+            )
             
-            # Add "and X more..." if there are more than 10 files
-            if total_files > 10:
-                file_list.append(f"  ... and {total_files - 10} more files")
-            
-            file_details = "\n".join(file_list)
-            
-            # Confirm update with detailed information
-            reply = QMessageBox.question(self.parent, "Confirm Batch Update", 
-                                       f"Update all {total_files} files in batch '{self._selected_batch_number}' to status '{payment_status}'?\n\n"
-                                       f"Files to be updated:\n{file_details}\n\n"
-                                       f"This action will change the status of all these files.",
-                                       QMessageBox.Yes | QMessageBox.No, 
-                                       QMessageBox.No)
-            
-            if reply != QMessageBox.Yes:
+            if dialog.exec() != QDialog.Accepted:
                 return
             
             # Update all files in batch
@@ -885,13 +938,12 @@ class ClientDataFileUrlsHelper:
                 status_id
             )
             
-            # Show detailed success message
-            success_message = f"Successfully updated {updated_count} files to '{payment_status}' status.\n\n"
-            success_message += f"Batch: {self._selected_batch_number}\n"
-            success_message += f"Client: {self._client_name_label.text().replace('Client: ', '')}\n"
-            success_message += f"Status changed to: {payment_status}"
-            
-            QMessageBox.information(self.parent, "Batch Update Complete", success_message)
+            # Show success message
+            QMessageBox.information(
+                self.parent, 
+                "Update Complete", 
+                f"Successfully updated {updated_count} files to '{payment_status}' status in batch '{self._selected_batch_number}'."
+            )
             
             # Refresh the table
             self.load_file_urls_for_batch(
@@ -903,6 +955,10 @@ class ClientDataFileUrlsHelper:
             # Trigger batch refresh to update colors and data
             if hasattr(self.parent, 'batch_helper') and self.parent.batch_helper:
                 self.parent.batch_helper.update_batch_table()
+            
+            # Trigger files refresh to update the files tab
+            if hasattr(self.parent, 'files_helper') and self.parent.files_helper:
+                self.parent.files_helper.load_files_for_client(self._selected_client_id)
             
         except Exception as e:
             QMessageBox.critical(self.parent, "Update Failed", 
@@ -918,3 +974,8 @@ class ClientDataFileUrlsHelper:
             if hasattr(self.parent, 'batch_helper') and self.parent.batch_helper:
                 self.parent.batch_helper.update_batch_table()
                 print("Triggered batch list refresh after update error")
+            
+            # Trigger files refresh even on error to ensure data consistency
+            if hasattr(self.parent, 'files_helper') and self.parent.files_helper:
+                self.parent.files_helper.load_files_for_client(self._selected_client_id)
+                print("Triggered files tab refresh after update error")
