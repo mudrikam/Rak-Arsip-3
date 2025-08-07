@@ -276,6 +276,73 @@ class DatabaseFilesHelper:
         self.db_manager.close()
         return roots
 
+    def get_files_by_batch_and_client(self, batch_number, client_id):
+        """Get all files in a specific batch and client with details."""
+        self.db_manager.connect(write=False)
+        cursor = self.db_manager.connection.cursor()
+        
+        cursor.execute("""
+            SELECT 
+                f.id, f.name, f.date, f.root, f.path, f.status_id, 
+                s.name as status_name,
+                c.name as category_name, 
+                sc.name as subcategory_name
+            FROM files f
+            JOIN file_client_batch fcb ON f.id = fcb.file_id
+            LEFT JOIN statuses s ON f.status_id = s.id
+            LEFT JOIN categories c ON f.category_id = c.id
+            LEFT JOIN subcategories sc ON f.subcategory_id = sc.id
+            WHERE fcb.batch_number = ? AND fcb.client_id = ?
+            ORDER BY f.name
+        """, (batch_number, client_id))
+        
+        files = []
+        for row in cursor.fetchall():
+            files.append({
+                "id": row["id"],
+                "name": row["name"],
+                "date": row["date"],
+                "root": row["root"],
+                "path": row["path"],
+                "status_id": row["status_id"],
+                "status_name": row["status_name"],
+                "category_name": row["category_name"],
+                "subcategory_name": row["subcategory_name"]
+            })
+        
+        self.db_manager.close()
+        return files
+
+    def update_files_status_by_batch(self, batch_number, client_id, status_id):
+        """Update status for all files in a specific batch and client."""
+        self.db_manager.connect()
+        cursor = self.db_manager.connection.cursor()
+        
+        # Get all file IDs in the batch first
+        cursor.execute("""
+            SELECT f.id 
+            FROM files f
+            JOIN file_client_batch fcb ON f.id = fcb.file_id
+            WHERE fcb.batch_number = ? AND fcb.client_id = ?
+        """, (batch_number, client_id))
+        
+        file_ids = [row["id"] for row in cursor.fetchall()]
+        
+        if file_ids:
+            # Update status for all files in the batch
+            placeholders = ",".join(["?"] * len(file_ids))
+            cursor.execute(f"""
+                UPDATE files 
+                SET status_id = ?, updated_at = CURRENT_TIMESTAMP 
+                WHERE id IN ({placeholders})
+            """, [status_id] + file_ids)
+            
+            self.db_manager.connection.commit()
+        
+        self.db_manager.close()
+        self.db_manager.create_temp_file()
+        return len(file_ids)
+
     def get_file_related_delete_info(self, file_id):
         """Get all related information for file deletion."""
         self.db_manager.connect(write=False)

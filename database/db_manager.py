@@ -162,6 +162,14 @@ class DatabaseManager(QObject):
         """Get file related delete info."""
         return self.files_helper.get_file_related_delete_info(file_id)
 
+    def get_files_by_batch_and_client(self, batch_number, client_id):
+        """Get files by batch and client."""
+        return self.files_helper.get_files_by_batch_and_client(batch_number, client_id)
+
+    def update_files_status_by_batch(self, batch_number, client_id, status_id):
+        """Update files status by batch."""
+        return self.files_helper.update_files_status_by_batch(batch_number, client_id, status_id)
+
     # Clients methods - delegate to clients helper
     def get_all_clients(self):
         """Get all clients."""

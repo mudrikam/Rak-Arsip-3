@@ -1,12 +1,86 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QTableWidget,
-    QTableWidgetItem, QSizePolicy, QHeaderView, QMessageBox, QMenu, QDialog
+    QTableWidgetItem, QSizePolicy, QHeaderView, QMessageBox, QMenu, QDialog,
+    QLabel, QScrollArea, QFrame
 )
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QColor
 import qtawesome as qta
 
 # BatchEditDialog will be imported when needed to avoid circular imports
+
+class BatchFilesDetailDialog(QDialog):
+    """Dialog to show files in a batch before batch update operations"""
+    
+    def __init__(self, parent, files_data, batch_number, client_name, operation_title="Batch Operation"):
+        super().__init__(parent)
+        self.files_data = files_data
+        self.batch_number = batch_number
+        self.client_name = client_name
+        self.operation_title = operation_title
+        
+        self.setWindowTitle(f"{operation_title} - Batch {batch_number}")
+        self.setModal(True)
+        self.resize(800, 600)
+        
+        self.init_ui()
+    
+    def init_ui(self):
+        """Initialize the dialog UI"""
+        layout = QVBoxLayout(self)
+        
+        # Header information
+        header_frame = QFrame()
+        header_frame.setFrameStyle(QFrame.StyledPanel)
+        header_layout = QVBoxLayout(header_frame)
+        
+        title_label = QLabel(f"<h3>{self.operation_title}</h3>")
+        client_label = QLabel(f"<b>Client:</b> {self.client_name}")
+        batch_label = QLabel(f"<b>Batch Number:</b> {self.batch_number}")
+        count_label = QLabel(f"<b>Total Files:</b> {len(self.files_data)}")
+        
+        header_layout.addWidget(title_label)
+        header_layout.addWidget(client_label)
+        header_layout.addWidget(batch_label)
+        header_layout.addWidget(count_label)
+        layout.addWidget(header_frame)
+        
+        # Files table
+        files_table = QTableWidget()
+        files_table.setColumnCount(6)
+        files_table.setHorizontalHeaderLabels([
+            "File Name", "Date", "Root", "Current Status", "Category", "Subcategory"
+        ])
+        files_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        files_table.setSelectionBehavior(QTableWidget.SelectRows)
+        files_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        
+        # Populate table
+        files_table.setRowCount(len(self.files_data))
+        for row_idx, file_data in enumerate(self.files_data):
+            files_table.setItem(row_idx, 0, QTableWidgetItem(file_data.get("name", "")))
+            files_table.setItem(row_idx, 1, QTableWidgetItem(file_data.get("date", "")))
+            files_table.setItem(row_idx, 2, QTableWidgetItem(file_data.get("root", "")))
+            files_table.setItem(row_idx, 3, QTableWidgetItem(file_data.get("status_name", "")))
+            files_table.setItem(row_idx, 4, QTableWidgetItem(file_data.get("category_name", "") or ""))
+            files_table.setItem(row_idx, 5, QTableWidgetItem(file_data.get("subcategory_name", "") or ""))
+        
+        layout.addWidget(files_table)
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        button_layout.addWidget(cancel_btn)
+        
+        confirm_btn = QPushButton(f"Confirm {self.operation_title}")
+        confirm_btn.clicked.connect(self.accept)
+        confirm_btn.setDefault(True)
+        button_layout.addWidget(confirm_btn)
+        
+        layout.addLayout(button_layout)
 
 class ClientDataBatchHelper:
     """Helper class for Batch List tab functionality"""
@@ -19,6 +93,38 @@ class ClientDataBatchHelper:
         self._batch_data_all = []
         self._batch_data_filtered = []
         self._selected_client_id = None
+    
+    def get_finished_color_from_config(self):
+        """Get the finished status color from window config"""
+        try:
+            # Get window config manager
+            if hasattr(self.parent, 'db_helper'):
+                config_manager = self.parent.db_helper.get_config_manager("window")
+                finished_color = config_manager.get("status_options.Finished.color")
+                return finished_color
+            return "#43a047"  # Default green color
+        except Exception as e:
+            print(f"Error getting finished color from config: {e}")
+            return "#43a047"  # Default green color
+    
+    def check_batch_all_finished(self, batch_number, client_id):
+        """Check if all files in a batch have 'Finished' status"""
+        try:
+            # Get all files in this batch
+            files_data = self.db_helper.get_files_by_batch_and_client(batch_number, client_id)
+            
+            if not files_data:
+                return False  # No files means not finished
+            
+            # Check if all files have "Finished" status
+            for file_data in files_data:
+                if file_data.get("status_name", "").lower() != "finished":
+                    return False
+            
+            return True  # All files are finished
+        except Exception as e:
+            print(f"Error checking batch finished status: {e}")
+            return False
     
     def init_batch_list_tab(self, tab_widget):
         """Initialize the batch list tab"""
@@ -35,9 +141,11 @@ class ClientDataBatchHelper:
         row.addStretch()
         
         # Action buttons
+        self.batch_refresh_btn = QPushButton(qta.icon("fa6s.arrows-rotate"), "Refresh")
         self.batch_add_btn = QPushButton(qta.icon("fa6s.plus"), "Add Batch")
         self.batch_edit_btn = QPushButton(qta.icon("fa6s.pen-to-square"), "Edit Batch")
         self.batch_delete_btn = QPushButton(qta.icon("fa6s.trash"), "Delete Batch")
+        row.addWidget(self.batch_refresh_btn)
         row.addWidget(self.batch_add_btn)
         row.addWidget(self.batch_edit_btn)
         row.addWidget(self.batch_delete_btn)
@@ -59,6 +167,7 @@ class ClientDataBatchHelper:
         tab_widget.addTab(tab, qta.icon("fa6s.layer-group"), "Batch List")
         
         # Connect signals
+        self.batch_refresh_btn.clicked.connect(self.on_batch_refresh)
         self.batch_add_btn.clicked.connect(self.on_batch_add)
         self.batch_edit_btn.clicked.connect(self.on_batch_edit)
         self.batch_delete_btn.clicked.connect(self.on_batch_delete)
@@ -78,9 +187,13 @@ class ClientDataBatchHelper:
         menu = QMenu(self.batch_table)
         icon_edit = qta.icon("fa6s.pen-to-square")
         icon_delete = qta.icon("fa6s.trash")
+        icon_finished = qta.icon("fa6s.circle-check")
+        icon_refresh = qta.icon("fa6s.arrows-rotate")
         
         action_edit = QAction(icon_edit, "Edit Batch", self.parent)
         action_delete = QAction(icon_delete, "Delete Batch", self.parent)
+        action_mark_finished = QAction(icon_finished, "Mark as Finished", self.parent)
+        action_refresh = QAction(icon_refresh, "Refresh", self.parent)
         
         def do_edit():
             self.batch_table.selectRow(row)
@@ -90,11 +203,24 @@ class ClientDataBatchHelper:
             self.batch_table.selectRow(row)
             self.on_batch_delete()
         
+        def do_mark_finished():
+            self.batch_table.selectRow(row)
+            self.on_batch_mark_finished(row)
+        
+        def do_refresh():
+            self.on_batch_refresh()
+        
         action_edit.triggered.connect(do_edit)
         action_delete.triggered.connect(do_delete)
+        action_mark_finished.triggered.connect(do_mark_finished)
+        action_refresh.triggered.connect(do_refresh)
         
         menu.addAction(action_edit)
         menu.addAction(action_delete)
+        menu.addSeparator()
+        menu.addAction(action_mark_finished)
+        menu.addSeparator()
+        menu.addAction(action_refresh)
         menu.exec(self.batch_table.viewport().mapToGlobal(pos))
     
     def load_batch_list_for_client(self, client_id):
@@ -110,6 +236,13 @@ class ClientDataBatchHelper:
         
         self._batch_data_all = batch_data
         self.update_batch_table()
+    
+    def on_batch_refresh(self):
+        """Handle refresh button click - reload batch data"""
+        if self._selected_client_id:
+            self.load_batch_list_for_client(self._selected_client_id)
+        else:
+            print("No client selected for batch refresh")
     
     def on_batch_search_changed(self):
         """Handle batch search text change"""
@@ -128,11 +261,30 @@ class ClientDataBatchHelper:
         else:
             self._batch_data_filtered = list(self._batch_data_all)
         
+        # Get finished color from config
+        finished_color = self.get_finished_color_from_config()
+        
         self.batch_table.setRowCount(len(self._batch_data_filtered))
         for row_idx, (batch_number, note, file_count) in enumerate(self._batch_data_filtered):
-            self.batch_table.setItem(row_idx, 0, QTableWidgetItem(str(batch_number)))
-            self.batch_table.setItem(row_idx, 1, QTableWidgetItem(str(note)))
-            self.batch_table.setItem(row_idx, 2, QTableWidgetItem(str(file_count)))
+            # Create table items
+            batch_item = QTableWidgetItem(str(batch_number))
+            note_item = QTableWidgetItem(str(note))
+            count_item = QTableWidgetItem(str(file_count))
+            
+            # Check if all files in this batch are finished
+            if self._selected_client_id and self.check_batch_all_finished(batch_number, self._selected_client_id):
+                # Apply green background color to all cells in the row
+                green_color = QColor(finished_color)
+                green_color.setAlpha(80)  # Make it semi-transparent for better readability
+                
+                batch_item.setBackground(green_color)
+                note_item.setBackground(green_color)
+                count_item.setBackground(green_color)
+            
+            # Set items in table
+            self.batch_table.setItem(row_idx, 0, batch_item)
+            self.batch_table.setItem(row_idx, 1, note_item)
+            self.batch_table.setItem(row_idx, 2, count_item)
     
     def on_batch_add(self):
         """Handle add batch button click"""
@@ -272,3 +424,77 @@ class ClientDataBatchHelper:
                 if "File URLs" in tab_text:
                     self.parent.tab_widget.setCurrentIndex(i)
                     break
+
+    def on_batch_mark_finished(self, row):
+        """Handle mark as finished for all files in batch"""
+        if row >= len(self._batch_data_filtered):
+            return
+        
+        batch_number = self._batch_data_filtered[row][0]
+        client_name = self.parent._selected_client_name
+        
+        try:
+            # Get all files in this batch
+            files_data = self.db_helper.get_files_by_batch_and_client(batch_number, self._selected_client_id)
+            
+            if not files_data:
+                QMessageBox.information(self.parent, "No Files", f"No files found in batch '{batch_number}'.")
+                return
+            
+            # Show detailed confirmation dialog
+            dialog = BatchFilesDetailDialog(
+                parent=self.parent,
+                files_data=files_data,
+                batch_number=batch_number,
+                client_name=client_name,
+                operation_title="Mark as Finished"
+            )
+            
+            if dialog.exec() != QDialog.Accepted:
+                return
+            
+            # Get the "Finished" status ID
+            finished_status_id = self.db_helper.get_status_id("Finished")
+            if not finished_status_id:
+                QMessageBox.warning(self.parent, "Status Not Found", 
+                                   "Could not find 'Finished' status in database. Please ensure the status exists.")
+                return
+            
+            # Update all files in the batch to "Finished" status
+            updated_count = self.db_helper.update_files_status_by_batch(
+                batch_number, self._selected_client_id, finished_status_id
+            )
+            
+            if updated_count > 0:
+                QMessageBox.information(
+                    self.parent, 
+                    "Success", 
+                    f"Successfully marked {updated_count} files as 'Finished' in batch '{batch_number}'."
+                )
+                
+                # Refresh file URLs tab if it's currently loaded for this batch
+                if (hasattr(self.parent, '_file_urls_helper') and 
+                    hasattr(self.parent._file_urls_helper, '_selected_batch_number') and
+                    self.parent._file_urls_helper._selected_batch_number == batch_number):
+                    
+                    self.parent._file_urls_helper.load_file_urls_for_batch(
+                        self._selected_client_id, batch_number, client_name
+                    )
+                
+                # Refresh files tab if it exists and is using this client/batch
+                if (hasattr(self.parent, '_files_helper') and 
+                    hasattr(self.parent._files_helper, '_selected_client_id') and
+                    self.parent._files_helper._selected_client_id == self._selected_client_id):
+                    
+                    # Refresh files tab data
+                    if hasattr(self.parent._files_helper, 'fetch_files_page_and_summary'):
+                        self.parent._files_helper.fetch_files_page_and_summary()
+                
+                # Refresh batch table to update colors
+                self.update_batch_table()
+            else:
+                QMessageBox.information(self.parent, "No Updates", "No files were updated.")
+                
+        except Exception as e:
+            QMessageBox.critical(self.parent, "Error", f"An error occurred while marking files as finished:\n{str(e)}")
+            print(f"Error in on_batch_mark_finished: {e}")

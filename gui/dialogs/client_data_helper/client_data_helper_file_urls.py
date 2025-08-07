@@ -900,6 +900,10 @@ class ClientDataFileUrlsHelper:
                 self._client_name_label.text().replace("Client: ", "")
             )
             
+            # Trigger batch refresh to update colors and data
+            if hasattr(self.parent, 'batch_helper') and self.parent.batch_helper:
+                self.parent.batch_helper.update_batch_table()
+            
         except Exception as e:
             QMessageBox.critical(self.parent, "Update Failed", 
                                f"Failed to update batch records: {str(e)}")
@@ -909,3 +913,8 @@ class ClientDataFileUrlsHelper:
                 self._selected_batch_number, 
                 self._client_name_label.text().replace("Client: ", "")
             )
+            
+            # Trigger batch refresh even on error to ensure data consistency
+            if hasattr(self.parent, 'batch_helper') and self.parent.batch_helper:
+                self.parent.batch_helper.update_batch_table()
+                print("Triggered batch list refresh after update error")
