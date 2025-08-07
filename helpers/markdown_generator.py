@@ -124,8 +124,6 @@ class MarkdownGenerator:
             
             with open(markdown_filepath, 'w', encoding='utf-8') as f:
                 f.write(markdown_content)
-            
-            print(f"Created markdown file: {markdown_filepath}")
             return markdown_filepath
             
         except Exception as e:

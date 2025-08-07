@@ -6,6 +6,7 @@ import os
 import sys
 import subprocess
 from pathlib import Path
+from PySide6.QtCore import QTimer
 from helpers.markdown_generator import MarkdownGenerator
 from gui.dialogs.generate_name_dialog import GenerateNameDialog
 from helpers.show_statusbar_helper import show_statusbar_message
@@ -143,12 +144,11 @@ class NameFieldWidget(QFrame):
                         subprocess.Popen(f'explorer "{path}"')
                     else:
                         subprocess.Popen(["xdg-open", path])
-                    print(f"Opened explorer for: {path}")
         except Exception as e:
             print(f"Error opening explorer: {e}")
 
     def get_color_from_parent(self):
-        """Get current color from color picker in main action"""
+        """Get current color from color picker in main action. Raises error if not found."""
         try:
             main_window = self.window()
             if hasattr(main_window, 'main_action_dock'):
@@ -162,41 +162,33 @@ class NameFieldWidget(QFrame):
                         if color_end == -1:
                             color_end = style.find("}", color_start)
                         color = style[color_start:color_end].strip()
-                        print(f"Retrieved color from picker: {color}")
                         return color
+            raise RuntimeError("Color picker button or style not found in parent window.")
         except Exception as e:
             print(f"Error getting color from parent: {e}")
-        return "#7bb205"  # Default color
+            raise
 
     def _create_markdown_file(self, folder_path, name, actual_path):
-        """Create markdown file if markdown option is enabled"""
+        """Create markdown file if markdown option is enabled. Raises error if config or color is missing."""
         try:
             config_manager = self.config_manager or self.get_config_manager_from_parent()
-            if config_manager:
-                markdown_enabled = config_manager.get("action_options.markdown")
-                print(f"Markdown enabled: {markdown_enabled}")
-                if markdown_enabled:
-                    current_color = self.get_color_from_parent()
-                    print(f"Creating markdown file in: {folder_path}")
-                    print(f"With name: {name}")
-                    print(f"Using color: {current_color}")
-                    
-                    result = self.markdown_generator.create_markdown_file(
-                        folder_path=folder_path,
-                        name=name,
-                        root=self._current_path_data.get('folder', ''),
-                        category=self._current_path_data.get('category', ''),
-                        subcategory=self._current_path_data.get('subcategory', ''),
-                        date_path=self._current_path_data.get('date', ''),
-                        full_path=actual_path,
-                        color=current_color
-                    )
-                    if result:
-                        print(f"Successfully created markdown file: {result}")
-                    else:
-                        print("Failed to create markdown file")
-                else:
-                    print("Markdown creation disabled in config")
+            if not config_manager:
+                raise RuntimeError("Configuration manager not available for markdown creation.")
+            markdown_enabled = config_manager.get("action_options.markdown")
+            if markdown_enabled:
+                current_color = self.get_color_from_parent()
+                result = self.markdown_generator.create_markdown_file(
+                    folder_path=folder_path,
+                    name=name,
+                    root=self._current_path_data.get('folder', ''),
+                    category=self._current_path_data.get('category', ''),
+                    subcategory=self._current_path_data.get('subcategory', ''),
+                    date_path=self._current_path_data.get('date', ''),
+                    full_path=actual_path,
+                    color=current_color
+                )
+                if not result:
+                    raise RuntimeError("Failed to create markdown file.")
         except Exception as e:
             print(f"Error creating markdown file: {e}")
 
@@ -226,22 +218,21 @@ class NameFieldWidget(QFrame):
                 self._show_statusbar_message(f"Sanitized name: {sanitized}")
 
     def _on_star_clicked(self):
-        config_manager = self.config_manager or self.get_config_manager_from_parent()
-        if not config_manager:
-            QMessageBox.warning(self, "Error", "Configuration manager not available")
-            self._show_statusbar_message("Configuration manager not available")
-            return
-            
-        dialog = GenerateNameDialog(config_manager, self)
-        
-        if dialog.exec() == QDialog.Accepted:
-            generated_name = dialog.get_generated_name()
-            if generated_name:
-                self.line_edit.setText(generated_name)
-                self.pending_image_path = dialog.get_temp_image_path()
-                self._show_statusbar_message(f"Generated name from image: {generated_name}")
-                print(f"Generated name: {generated_name}")
-                print(f"Pending image: {self.pending_image_path}")
+        try:
+            config_manager = self.config_manager or self.get_config_manager_from_parent()
+            if not config_manager:
+                raise RuntimeError("Configuration manager not available")
+            dialog = GenerateNameDialog(config_manager, self)
+            if dialog.exec() == QDialog.Accepted:
+                generated_name = dialog.get_generated_name()
+                if generated_name:
+                    self.line_edit.setText(generated_name)
+                    self.pending_image_path = dialog.get_temp_image_path()
+                    self._show_statusbar_message(f"Generated name from image: {generated_name}")
+        except Exception as e:
+            print(f"Error in _on_star_clicked: {e}")
+            QMessageBox.warning(self, "Error", str(e))
+            self._show_statusbar_message(str(e))
 
     def _on_clear_clicked(self):
         self.line_edit.clear()
@@ -252,7 +243,6 @@ class NameFieldWidget(QFrame):
             if temp_path.exists() and temp_path.is_dir():
                 for file in temp_path.iterdir():
                     if file.is_file() and file.suffix.lower() in [".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tiff", ".webp"]:
-                        print(f"Deleting temp image: {file}")
                         try:
                             file.unlink()
                         except Exception as e:
@@ -261,7 +251,6 @@ class NameFieldWidget(QFrame):
                     if sub.is_dir():
                         for subfile in sub.iterdir():
                             if subfile.is_file() and subfile.suffix.lower() in [".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tiff", ".webp"]:
-                                print(f"Deleting temp image in subdir: {subfile}")
                                 try:
                                     subfile.unlink()
                                 except Exception as e:
@@ -275,7 +264,6 @@ class NameFieldWidget(QFrame):
         if self.pending_image_path:
             try:
                 if os.path.exists(self.pending_image_path):
-                    print(f"Deleting pending image: {self.pending_image_path}")
                     os.remove(self.pending_image_path)
             except Exception as e:
                 print(f"Failed to delete pending image: {e}")
@@ -284,116 +272,85 @@ class NameFieldWidget(QFrame):
     def _on_make_clicked(self):
         if not self.db_manager:
             self.db_manager = self.get_db_manager_from_parent()
-            
         if not self.db_manager:
             print("Error: Database manager not found in parent hierarchy")
             QMessageBox.warning(self, "Error", "Database manager not set!")
             self._show_statusbar_message("Database manager not set!")
             return
-            
         if not self._current_path_data:
             print("Error: Path data not available")
             QMessageBox.warning(self, "Error", "Path data not available!")
             self._show_statusbar_message("Path data not available!")
             return
-            
         name = self.line_edit.text().strip()
         if not name:
             print("Error: No name entered")
             QMessageBox.warning(self, "Error", "Please enter a name!")
             self._show_statusbar_message("Please enter a name!")
             return
-            
         path = self.sanitize_label.text()
         if path == "-":
             print("Error: Path not available")
             QMessageBox.warning(self, "Error", "Path not available!")
             self._show_statusbar_message("Path not available!")
             return
-
-        print(f"Attempting to create project with path: {path}")
-        print(f"Template ID: {self.selected_template_id}")
-        print(f"Path data: {self._current_path_data}")
-
         try:
             self.db_manager.connect()
-            
             template_content = None
             if self.selected_template_id:
                 template = self.db_manager.get_template_by_id(self.selected_template_id)
                 if template:
                     template_content = template['content']
-                    print(f"Using template: {template['name']}")
-            
             actual_path = self.db_manager.create_folder_structure(path, template_content)
-            
-            # Move pending image to project folder if exists
             if self.pending_image_path and os.path.exists(self.pending_image_path):
                 try:
                     from pathlib import Path
                     import shutil
-                    
                     preview_folder = Path(actual_path) / "Preview"
                     preview_folder.mkdir(exist_ok=True)
-                    
                     file_extension = Path(self.pending_image_path).suffix
                     final_image_path = preview_folder / f"{name}{file_extension}"
-                    
                     shutil.move(self.pending_image_path, str(final_image_path))
-                    print(f"Moved image to: {final_image_path}")
                     self.pending_image_path = None
-                    
                 except Exception as e:
                     print(f"Error moving image to project: {e}")
-            
             draft_status_id = self.db_manager.get_status_id("Draft")
             if not draft_status_id:
                 print("Error: Draft status not found")
                 QMessageBox.warning(self, "Error", "Draft status not found in database!")
                 self._show_statusbar_message("Draft status not found in database!")
                 return
-            
             category_id = None
             subcategory_id = None
-            
             if self._current_path_data.get('category'):
                 category_id = self.db_manager.get_or_create_category(self._current_path_data['category'])
-                
             if self._current_path_data.get('subcategory') and category_id:
                 subcategory_id = self.db_manager.get_or_create_subcategory(category_id, self._current_path_data['subcategory'])
-            
             file_id = self.db_manager.insert_file(
-                date=self._current_path_data.get('date', ''),
+                date=self._current_path_data.get('date'),
                 name=name,
-                root=self._current_path_data.get('folder', ''),
+                root=self._current_path_data.get('folder'),
                 path=actual_path,
                 status_id=draft_status_id,
                 category_id=category_id,
                 subcategory_id=subcategory_id,
                 template_id=self.selected_template_id
             )
-            
-            print(f"Created project: ID={file_id}, Path={actual_path}")
-            
             self._create_markdown_file(actual_path, name, actual_path)
             self._open_explorer_if_enabled(actual_path)
-            
             QApplication.clipboard().setText(name)
             self._show_statusbar_message(f"Project created and name copied: {name}")
-            print(f"Copied project name to clipboard: {name}")
-            
             self.folder_created.emit(
-                self._current_path_data.get('date', ''),
+                self._current_path_data.get('date'),
                 name,
-                self._current_path_data.get('folder', ''),
+                self._current_path_data.get('folder'),
                 actual_path,
-                self._current_path_data.get('category', ''),
-                self._current_path_data.get('subcategory', ''),
+                self._current_path_data.get('category'),
+                self._current_path_data.get('subcategory'),
                 self.selected_template_id or 0
             )
-            
             self.project_created.emit()
-            
+            QTimer.singleShot(1000, self._on_clear_clicked)
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to create project: {str(e)}")
             print(f"Error creating project: {e}")
