@@ -142,7 +142,7 @@ class EditRecordDialog(QDialog):
         self.subcategory_combo.addItems([""] + subcategories)
         self.subcategory_combo.setCurrentText(sanitize_category_subcategory(record.get('subcategory') or ""))
         self.date_edit = QLineEdit(record['date'])
-        self.date_edit.setEnabled(False)
+        self.date_edit.setEnabled(True)
         self.full_path_edit = QLineEdit(record.get('path', ''))
         self.full_path_edit.setEnabled(False)
         layout.addRow("Date", self.date_edit)
