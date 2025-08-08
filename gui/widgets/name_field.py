@@ -5,6 +5,7 @@ import qtawesome as qta
 import os
 import sys
 import subprocess
+import datetime
 from pathlib import Path
 from PySide6.QtCore import QTimer
 from helpers.markdown_generator import MarkdownGenerator
@@ -335,7 +336,7 @@ class NameFieldWidget(QFrame):
             if self._current_path_data.get('subcategory') and category_id:
                 subcategory_id = self.db_manager.get_or_create_subcategory(category_id, self._current_path_data['subcategory'])
             file_id = self.db_manager.insert_file(
-                date=self._current_path_data.get('date'),
+                date=datetime.datetime.now().strftime("%Y\\%B\\%d"),  # Format: 2025\August\08
                 name=name,
                 root=self._current_path_data.get('folder'),
                 path=actual_path,
@@ -349,7 +350,7 @@ class NameFieldWidget(QFrame):
             QApplication.clipboard().setText(name)
             self._show_statusbar_message(f"Project created and name copied: {name}")
             self.folder_created.emit(
-                self._current_path_data.get('date'),
+                datetime.datetime.now().strftime("%Y\\%B\\%d"),  # Format: 2025\August\08
                 name,
                 self._current_path_data.get('folder'),
                 actual_path,
