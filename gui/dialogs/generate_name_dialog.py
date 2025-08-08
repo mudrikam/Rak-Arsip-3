@@ -86,6 +86,30 @@ class NameGenerationThread(QThread):
             self.error_occurred.emit(f"Failed to generate name: {e}")
 
 class GenerateNameDialog(QDialog):
+    def start_api_btn_blink(self):
+        from PySide6.QtCore import QTimer
+        self._api_blink_state = False
+        if hasattr(self, '_api_blink_timer') and self._api_blink_timer:
+            self._api_blink_timer.stop()
+        self._api_blink_timer = QTimer(self)
+        self._api_blink_timer.timeout.connect(self._toggle_api_btn_blink)
+        self._api_blink_timer.start(350)
+
+    def stop_api_btn_blink(self):
+        if hasattr(self, '_api_blink_timer') and self._api_blink_timer:
+            self._api_blink_timer.stop()
+            self._api_blink_timer = None
+        self.test_api_btn.setStyleSheet("")
+        self._api_blink_state = False
+
+    def _toggle_api_btn_blink(self):
+        if not hasattr(self, '_api_blink_state'):
+            self._api_blink_state = False
+        self._api_blink_state = not self._api_blink_state
+        if self._api_blink_state:
+            self.test_api_btn.setStyleSheet("background-color: rgba(255, 207, 36, 0.4);")
+        else:
+            self.test_api_btn.setStyleSheet("")
     name_generated = Signal(str)
     
     def __init__(self, config_manager, parent=None):
@@ -124,13 +148,13 @@ class GenerateNameDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(8)
         layout.setContentsMargins(12, 12, 12, 12)
-    
+
         self.image_frame = QFrame()
         self.image_frame.setFrameShape(QFrame.StyledPanel)
         image_layout = QVBoxLayout(self.image_frame)
         image_layout.setContentsMargins(0, 0, 0, 0)
         image_layout.setSpacing(4)
-        
+
         self.image_label = ImageDropLabel()
         self.image_label.image_dropped.connect(self.load_image)
         self.image_label.image_pasted.connect(self.paste_image)
@@ -145,34 +169,33 @@ class GenerateNameDialog(QDialog):
         self.result_label.setMaximumHeight(40)
         layout.addWidget(self.result_label)
 
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setMinimum(0)
-        self.progress_bar.setMaximum(0)
-        self.progress_bar.setVisible(False)
-        self.progress_bar.setMaximumHeight(18)
-        layout.addWidget(self.progress_bar)
+        self.char_count_label = QLabel("")
+        self.char_count_label.setAlignment(Qt.AlignCenter)
+        self.char_count_label.setStyleSheet("font-size: 12px; color: #1976d2;")
+        self.char_count_label.setMaximumHeight(20)
+        layout.addWidget(self.char_count_label)
 
         button_layout = QHBoxLayout()
         button_layout.setSpacing(6)
-        
+
         self.generate_btn = QPushButton("Generate Name from Image")
         self.generate_btn.setIcon(qta.icon("fa6s.wand-magic-sparkles"))
         self.generate_btn.setEnabled(False)
         self.generate_btn.clicked.connect(self.generate_name)
-        
+
         self.paste_btn = QPushButton("Paste")
         self.paste_btn.setIcon(qta.icon("fa6s.paste"))
         self.paste_btn.clicked.connect(self.on_paste_clicked)
-        
+
         self.clear_btn = QPushButton("Clear")
         self.clear_btn.setIcon(qta.icon("fa6s.xmark"))
         self.clear_btn.clicked.connect(self.clear_image)
-        
+
         button_layout.addWidget(self.generate_btn)
         button_layout.addWidget(self.paste_btn)
         button_layout.addWidget(self.clear_btn)
         layout.addLayout(button_layout)
-        
+
         dialog_buttons = QHBoxLayout()
         self.test_api_btn = QPushButton()
         self.test_api_btn.setIcon(qta.icon("fa6s.plug-circle-check"))
@@ -182,21 +205,29 @@ class GenerateNameDialog(QDialog):
         self.api_status_label.setStyleSheet("color: #1976d2; font-weight: bold;")
         dialog_buttons.addWidget(self.test_api_btn)
         dialog_buttons.addWidget(self.api_status_label)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setMinimum(0)
+        self.progress_bar.setMaximum(0)
+        self.progress_bar.setVisible(False)
+        self.progress_bar.setMaximumHeight(18)
+        dialog_buttons.addWidget(self.progress_bar)
+
         dialog_buttons.addStretch()
-        
+
         self.ok_btn = QPushButton("OK")
         self.ok_btn.setIcon(qta.icon("fa6s.check"))
         self.ok_btn.setEnabled(False)
         self.ok_btn.clicked.connect(self.accept)
-        
+
         self.cancel_btn = QPushButton("Cancel")
         self.cancel_btn.setIcon(qta.icon("fa6s.xmark"))
         self.cancel_btn.clicked.connect(self.reject)
-        
+
         dialog_buttons.addWidget(self.ok_btn)
         dialog_buttons.addWidget(self.cancel_btn)
         layout.addLayout(dialog_buttons)
-        
+
         self.generated_name = ""
         self.setLayout(layout)
 
@@ -292,6 +323,7 @@ class GenerateNameDialog(QDialog):
                 self.image_label.setText("")
                 self.generate_btn.setEnabled(True)
                 show_statusbar_message(self, "Image pasted and loaded.")
+                self.generate_name()
             else:
                 QMessageBox.warning(self, "Error", "Failed to paste image")
                 self.clear_image()
@@ -325,6 +357,7 @@ class GenerateNameDialog(QDialog):
         self.generate_btn.setText("Generating...")
         self.progress_bar.setVisible(True)
         self.result_label.setText("")
+        self.start_api_btn_blink()
         self.generation_thread = NameGenerationThread(str(self.temp_image_path), self.gemini_helper)
         self.generation_thread.name_generated.connect(self.on_name_generated)
         self.generation_thread.error_occurred.connect(self.on_generation_error)
@@ -332,21 +365,32 @@ class GenerateNameDialog(QDialog):
         show_statusbar_message(self, "Generating name from image...")
 
     def on_name_generated(self, name):
+        self.stop_api_btn_blink()
         self.generated_name = name
+        char_count = len(name)
         self.generate_btn.setEnabled(True)
         self.generate_btn.setText("Generate Name from Image")
         self.ok_btn.setEnabled(True)
         self.progress_bar.setVisible(False)
         self.result_label.setStyleSheet("font-size: 15px; color: #1976d2;")
         self.result_label.setText(self._wrap_text(name, 32))
-        show_statusbar_message(self, f"Name generated: {name}")
+        if 40 <= char_count <= 50:
+            self.char_count_label.setStyleSheet("font-size: 12px; color: white;")
+        elif char_count > 50:
+            self.char_count_label.setStyleSheet("font-size: 12px; color: yellow;")
+        else:
+            self.char_count_label.setStyleSheet("font-size: 12px; color: #1976d2;")
+        self.char_count_label.setText(f"Character count: {char_count}")
+        show_statusbar_message(self, f"Name generated: {name} ({char_count} chars)")
 
     def on_generation_error(self, error):
+        self.stop_api_btn_blink()
         self.generate_btn.setEnabled(True)
         self.generate_btn.setText("Generate Name from Image")
         self.progress_bar.setVisible(False)
         self.result_label.setStyleSheet("font-size: 12px; color: #d32f2f;")
         self.result_label.setText(error)
+        self.char_count_label.setText("")
         show_statusbar_message(self, f"Name generation error: {error}")
 
     def _wrap_text(self, text, width):

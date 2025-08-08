@@ -200,22 +200,30 @@ class NameFieldWidget(QFrame):
     def _on_text_changed(self, text):
         if self.sanitize_check.isChecked() and not self._block_signal:
             sanitized = self._sanitize_text(text)
+            char_count = len(sanitized)
+            self.sanitize_check.setText(f"Sanitize Name ({char_count})")
             if sanitized != text:
                 self._block_signal = True
                 self.line_edit.setText(sanitized)
                 self._block_signal = False
-                self._show_statusbar_message(f"Sanitized name: {sanitized}")
+                self._show_statusbar_message(f"Sanitized name: {sanitized} ({char_count})")
+        else:
+            sanitized = self._sanitize_text(text)
+            char_count = len(sanitized)
+            self.sanitize_check.setText(f"Sanitize Name ({char_count})")
         self._update_make_btn_state()
 
     def _on_sanitize_check_changed(self, state):
+        text = self.line_edit.text()
+        sanitized = self._sanitize_text(text)
+        char_count = len(sanitized)
+        self.sanitize_check.setText(f"Sanitize Name ({char_count})")
         if self.sanitize_check.isChecked():
-            text = self.line_edit.text()
-            sanitized = self._sanitize_text(text)
             if sanitized != text:
                 self._block_signal = True
                 self.line_edit.setText(sanitized)
                 self._block_signal = False
-                self._show_statusbar_message(f"Sanitized name: {sanitized}")
+                self._show_statusbar_message(f"Sanitized name: {sanitized} ({char_count})")
 
     def _on_star_clicked(self):
         try:
