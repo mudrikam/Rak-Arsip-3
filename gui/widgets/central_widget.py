@@ -434,7 +434,8 @@ class CentralWidget(QWidget):
                     path=new_data['full_path'],
                     status_id=status_id,
                     category_id=category_id,
-                    subcategory_id=subcategory_id
+                    subcategory_id=subcategory_id,
+                    date=new_data['date']
                 )
             finally:
                 self.db_manager.close()
@@ -1014,7 +1015,8 @@ class CentralWidget(QWidget):
                         path=new_data['full_path'],
                         status_id=status_id,
                         category_id=category_id,
-                        subcategory_id=subcategory_id
+                        subcategory_id=subcategory_id,
+                        date=new_data['date']
                     )
                 finally:
                     self.db_manager.close()
@@ -1105,7 +1107,8 @@ class CentralWidget(QWidget):
                     path=new_data['full_path'],
                     status_id=status_id,
                     category_id=category_id,
-                    subcategory_id=subcategory_id
+                    subcategory_id=subcategory_id,
+                    date=new_data['date']
                 )
             finally:
                 self.db_manager.close()

@@ -33,14 +33,14 @@ class DatabaseFilesHelper:
         self.db_manager.close()
         self.db_manager.create_temp_file()
 
-    def update_file_record(self, file_id, name, root, path, status_id, category_id, subcategory_id):
+    def update_file_record(self, file_id, name, root, path, status_id, category_id, subcategory_id, date=None):
         """Update complete file record."""
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute("""
-            UPDATE files SET name = ?, root = ?, path = ?, status_id = ?, category_id = ?, subcategory_id = ?, updated_at = CURRENT_TIMESTAMP
+            UPDATE files SET name = ?, root = ?, path = ?, status_id = ?, category_id = ?, subcategory_id = ?, date = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
-        """, (name, root, path, status_id, category_id, subcategory_id, file_id))
+        """, (name, root, path, status_id, category_id, subcategory_id, date, file_id))
         self.db_manager.connection.commit()
         self.db_manager.close()
         self.db_manager.create_temp_file()

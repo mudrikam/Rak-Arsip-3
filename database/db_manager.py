@@ -140,9 +140,9 @@ class DatabaseManager(QObject):
         """Update file status."""
         return self.files_helper.update_file_status(file_id, status_id)
 
-    def update_file_record(self, file_id, name, root, path, status_id, category_id, subcategory_id):
+    def update_file_record(self, file_id, name, root, path, status_id, category_id, subcategory_id, date=None):
         """Update file record."""
-        return self.files_helper.update_file_record(file_id, name, root, path, status_id, category_id, subcategory_id)
+        return self.files_helper.update_file_record(file_id, name, root, path, status_id, category_id, subcategory_id, date)
 
     def delete_file(self, file_id):
         """Delete file."""
