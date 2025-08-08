@@ -298,6 +298,8 @@ class GenerateNameDialog(QDialog):
                 self.image_label.setText("")
                 self.generate_btn.setEnabled(True)
                 show_statusbar_message(self, f"Image loaded: {file_path}")
+                # Auto-generate name after image loaded
+                self.generate_name()
             else:
                 QMessageBox.warning(self, "Error", "Failed to load image")
                 self.clear_image()

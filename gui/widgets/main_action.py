@@ -119,6 +119,10 @@ class MainActionDock(QDockWidget):
         self.config_manager = config_manager
         self.db_manager = db_manager
         
+        # Blinking timer for combo disk
+        self._disk_blink_timer = None
+        self._disk_blink_state = False
+        
         container = QWidget(self)
         main_vlayout = QVBoxLayout(container)
 
@@ -634,6 +638,8 @@ class MainActionDock(QDockWidget):
 
         self._disk_thread = DiskScanThread()
         self._disk_thread.disks_found.connect(self._on_disks_ready)
+        # Start blinking combo disk during scan
+        self.start_disk_combo_blink()
         self._disk_thread.start()
 
         self._on_disk_changed = on_disk_changed
@@ -659,8 +665,41 @@ class MainActionDock(QDockWidget):
             return False
         color_picker_btn.eventFilter = color_btn_event_filter
 
+    def start_disk_combo_blink(self):
+        """Start blinking the disk combo box"""
+        from PySide6.QtCore import QTimer
+        self._disk_blink_state = False
+        if hasattr(self, '_disk_blink_timer') and self._disk_blink_timer:
+            self._disk_blink_timer.stop()
+        self._disk_blink_timer = QTimer(self)
+        self._disk_blink_timer.timeout.connect(self._toggle_disk_combo_blink)
+        self._disk_blink_timer.start(350)
+
+    def stop_disk_combo_blink(self):
+        """Stop blinking the disk combo box"""
+        if hasattr(self, '_disk_blink_timer') and self._disk_blink_timer:
+            self._disk_blink_timer.stop()
+            self._disk_blink_timer = None
+        if hasattr(self, '_combo_disk') and self._combo_disk:
+            self._combo_disk.setStyleSheet("")
+        self._disk_blink_state = False
+
+    def _toggle_disk_combo_blink(self):
+        """Toggle disk combo box blink state"""
+        if not hasattr(self, '_disk_blink_state'):
+            self._disk_blink_state = False
+        self._disk_blink_state = not self._disk_blink_state
+        if hasattr(self, '_combo_disk') and self._combo_disk:
+            if self._disk_blink_state:
+                self._combo_disk.setStyleSheet("background-color: rgba(255, 207, 36, 0.4);")
+            else:
+                self._combo_disk.setStyleSheet("")
+
     @Slot(list)
     def _on_disks_ready(self, disks):
+        # Stop blinking when disks are ready
+        self.stop_disk_combo_blink()
+        
         self._combo_disk.blockSignals(True)
         self._combo_disk.clear()
         self._combo_disk.addItem("")  # Always empty initial
@@ -672,6 +711,8 @@ class MainActionDock(QDockWidget):
             # self._combo_disk.setCurrentIndex(0)
             # self._on_disk_changed(0)
         else:
+            # Start blinking again if no disks found
+            self.start_disk_combo_blink()
             self._combo_disk.setEnabled(False)
             self._combo_folder.clear()
             self._combo_folder.addItem("")
