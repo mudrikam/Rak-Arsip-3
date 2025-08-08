@@ -88,6 +88,11 @@ class ClientDataFileUrlsHelper:
         self._selected_client_id = None
         self._selected_batch_number = None
         
+        # Blinking timer references
+        self._blink_timer = None
+        self._blink_state = False
+        self._blinking_buttons = []
+        
         # Stats labels
         self._client_name_label = None
         self._total_files_label = None
@@ -104,6 +109,84 @@ class ClientDataFileUrlsHelper:
         
         # Invoice helper reference (will be set after initialization)
         self._invoice_helper = None
+    
+    def start_button_blink(self, button):
+        """Start blinking a button"""
+        from PySide6.QtCore import QTimer
+        if not button:
+            return
+        
+        # Add button to blinking list if not already there
+        if button not in self._blinking_buttons:
+            self._blinking_buttons.append(button)
+        
+        # Start timer if not already running
+        if not self._blink_timer:
+            self._blink_state = False
+            self._blink_timer = QTimer(self.parent)
+            self._blink_timer.timeout.connect(self._toggle_button_blink)
+            self._blink_timer.start(350)
+
+    def stop_button_blink(self, button):
+        """Stop blinking a specific button"""
+        if not button:
+            return
+        
+        # Remove button from blinking list
+        if button in self._blinking_buttons:
+            self._blinking_buttons.remove(button)
+            # Reset button style
+            button.setStyleSheet("")
+        
+        # Stop timer if no buttons are blinking
+        if not self._blinking_buttons and self._blink_timer:
+            self._blink_timer.stop()
+            self._blink_timer = None
+            self._blink_state = False
+
+    def stop_all_button_blink(self):
+        """Stop blinking all buttons"""
+        # Reset all button styles
+        for button in self._blinking_buttons:
+            if button:
+                button.setStyleSheet("")
+        
+        # Clear list and stop timer
+        self._blinking_buttons.clear()
+        if self._blink_timer:
+            self._blink_timer.stop()
+            self._blink_timer = None
+        self._blink_state = False
+
+    def _toggle_button_blink(self):
+        """Toggle blink state for all blinking buttons"""
+        if not hasattr(self, '_blink_state'):
+            self._blink_state = False
+        self._blink_state = not self._blink_state
+        
+        # Apply blink state to all buttons in the list
+        for button in self._blinking_buttons:
+            if button:
+                if self._blink_state:
+                    button.setStyleSheet("background-color: rgba(255, 207, 36, 0.4);")
+                else:
+                    button.setStyleSheet("")
+
+    def start_sync_btn_blink(self):
+        """Start blinking the sync to drive button"""
+        self.start_button_blink(self.sync_drive_btn)
+
+    def stop_sync_btn_blink(self):
+        """Stop blinking the sync to drive button"""
+        self.stop_button_blink(self.sync_drive_btn)
+
+    def start_upload_btn_blink(self):
+        """Start blinking the upload proof button"""
+        self.start_button_blink(self.upload_proof_btn)
+
+    def stop_upload_btn_blink(self):
+        """Stop blinking the upload proof button"""
+        self.stop_button_blink(self.upload_proof_btn)
     
     def init_file_urls_tab(self, tab_widget):
         """Initialize the file URLs tab"""
@@ -440,7 +523,7 @@ class ClientDataFileUrlsHelper:
             if hasattr(self.parent, 'invoice_helper'):
                 self._invoice_helper = self.parent.invoice_helper
                 if self.sync_drive_btn and self._invoice_helper:
-                    self.sync_drive_btn.clicked.connect(lambda: self._invoice_helper.sync_to_drive(self))
+                    self.sync_drive_btn.clicked.connect(self.sync_to_drive_with_blinking)
                 
                 if self.upload_proof_btn and self._invoice_helper:
                     self.upload_proof_btn.clicked.connect(self.upload_payment_proof)
@@ -458,18 +541,53 @@ class ClientDataFileUrlsHelper:
                 QMessageBox.warning(self.parent, "Service Unavailable", "Invoice helper service is not available.")
                 return
             
+            # Start blinking upload button
+            self.start_upload_btn_blink()
+            
             # Get client name
             client_name = self._client_name_label.text().replace("Client: ", "")
             
-            # Call the upload dialog
-            self._invoice_helper.get_payment_proof_upload_dialog(
-                self._selected_client_id, 
-                client_name, 
-                self._selected_batch_number
-            )
+            try:
+                # Call the upload dialog
+                self._invoice_helper.get_payment_proof_upload_dialog(
+                    self._selected_client_id, 
+                    client_name, 
+                    self._selected_batch_number
+                )
+            finally:
+                # Stop blinking upload button when done
+                self.stop_upload_btn_blink()
             
         except Exception as e:
+            # Make sure to stop blinking on error
+            self.stop_upload_btn_blink()
             QMessageBox.critical(self.parent, "Upload Error", f"Error uploading payment proof: {str(e)}")
+
+    def sync_to_drive_with_blinking(self):
+        """Handle sync to drive button click with blinking"""
+        try:
+            if not self._selected_client_id or not self._selected_batch_number:
+                QMessageBox.warning(self.parent, "No Selection", "Please select a client and batch first.")
+                return
+            
+            if not self._invoice_helper:
+                QMessageBox.warning(self.parent, "Service Unavailable", "Invoice helper service is not available.")
+                return
+            
+            # Start blinking sync button
+            self.start_sync_btn_blink()
+            
+            try:
+                # Call the sync function
+                self._invoice_helper.sync_to_drive(self)
+            finally:
+                # Stop blinking sync button when done
+                self.stop_sync_btn_blink()
+                
+        except Exception as e:
+            # Make sure to stop blinking on error
+            self.stop_sync_btn_blink()
+            QMessageBox.critical(self.parent, "Sync Error", f"Error syncing to drive: {str(e)}")
     
     def load_file_urls_for_batch(self, client_id, batch_number, client_name=""):
         """Load file URLs for selected batch"""
