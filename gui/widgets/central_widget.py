@@ -529,7 +529,7 @@ class CentralWidget(QWidget):
             data_time = (data_end - data_start) * 1000  # Convert to ms
             total_time_ms = total_time * 1000  # Convert to ms
             
-            show_statusbar_message(self, f"Data loaded in {total_time_ms:.1f}ms (count: {count_time:.1f}ms, data: {data_time:.1f}ms)")
+            show_statusbar_message(self, f"Data loaded in {total_time_ms:.1f}ms (count: {count_time:.1f}ms, data: {data_time:.1f}ms) | Records fetched: {len(self.filtered_data)} / {self.found_records}")
         except Exception as e:
             print(f"Error loading data from database: {e}")
             self.filtered_data = []
