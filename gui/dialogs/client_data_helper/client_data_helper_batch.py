@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QTableWidget,
     QTableWidgetItem, QSizePolicy, QHeaderView, QMessageBox, QMenu, QDialog,
-    QLabel, QScrollArea, QFrame
+    QLabel, QScrollArea, QFrame, QComboBox
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QColor
@@ -93,6 +93,10 @@ class ClientDataBatchHelper:
         self._batch_data_all = []
         self._batch_data_filtered = []
         self._selected_client_id = None
+        
+        # Sort settings
+        self._batch_sort_field = "Batch Number"
+        self._batch_sort_order = "Descending"
     
     def get_finished_color_from_config(self):
         """Get the finished status color from window config"""
@@ -138,6 +142,17 @@ class ClientDataBatchHelper:
         self.batch_search_edit.setMinimumHeight(32)
         self.batch_search_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         row.addWidget(self.batch_search_edit, 1)
+        
+        # Sort controls
+        self.batch_sort_combo = QComboBox()
+        self.batch_sort_combo.addItems(["Batch Number", "Note", "File Count"])
+        self.batch_sort_combo.setCurrentText(self._batch_sort_field)
+        self.batch_sort_order_combo = QComboBox()
+        self.batch_sort_order_combo.addItems(["Ascending", "Descending"])
+        self.batch_sort_order_combo.setCurrentText(self._batch_sort_order)
+        row.addWidget(QLabel("Sort by:"))
+        row.addWidget(self.batch_sort_combo)
+        row.addWidget(self.batch_sort_order_combo)
         row.addStretch()
         
         # Action buttons
@@ -176,6 +191,8 @@ class ClientDataBatchHelper:
         self.batch_table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.batch_table.customContextMenuRequested.connect(self.show_batch_context_menu)
         self.batch_search_edit.textChanged.connect(self.on_batch_search_changed)
+        self.batch_sort_combo.currentIndexChanged.connect(self.on_batch_sort_changed)
+        self.batch_sort_order_combo.currentIndexChanged.connect(self.on_batch_sort_changed)
     
     def show_batch_context_menu(self, pos):
         """Show context menu for batch table"""
@@ -248,10 +265,17 @@ class ClientDataBatchHelper:
         """Handle batch search text change"""
         self.update_batch_table()
     
+    def on_batch_sort_changed(self):
+        """Handle sort change"""
+        self._batch_sort_field = self.batch_sort_combo.currentText()
+        self._batch_sort_order = self.batch_sort_order_combo.currentText()
+        self.update_batch_table()
+    
     def update_batch_table(self):
-        """Update the batch table with filtered data"""
+        """Update the batch table with filtered and sorted data"""
         search_text = self.batch_search_edit.text().strip().lower()
         
+        # Apply search filter
         if search_text:
             self._batch_data_filtered = [
                 (batch_number, note, file_count)
@@ -260,6 +284,9 @@ class ClientDataBatchHelper:
             ]
         else:
             self._batch_data_filtered = list(self._batch_data_all)
+        
+        # Apply sorting
+        self._apply_batch_sorting()
         
         # Get finished color from config
         finished_color = self.get_finished_color_from_config()
@@ -285,6 +312,39 @@ class ClientDataBatchHelper:
             self.batch_table.setItem(row_idx, 0, batch_item)
             self.batch_table.setItem(row_idx, 1, note_item)
             self.batch_table.setItem(row_idx, 2, count_item)
+    
+    def _apply_batch_sorting(self):
+        """Apply sorting to filtered batch data"""
+        if not self._batch_data_filtered:
+            return
+        
+        # Determine sort key and reverse flag
+        reverse = self._batch_sort_order == "Descending"
+        
+        if self._batch_sort_field == "Batch Number":
+            # Sort by batch number (try numeric first, then string)
+            def sort_key(item):
+                batch_number = item[0]
+                try:
+                    return (0, int(batch_number))  # Numeric sort
+                except (ValueError, TypeError):
+                    return (1, str(batch_number).lower())  # String sort as fallback
+            
+            self._batch_data_filtered.sort(key=sort_key, reverse=reverse)
+            
+        elif self._batch_sort_field == "Note":
+            # Sort by note (string)
+            self._batch_data_filtered.sort(
+                key=lambda item: str(item[1]).lower(), 
+                reverse=reverse
+            )
+            
+        elif self._batch_sort_field == "File Count":
+            # Sort by file count (numeric)
+            self._batch_data_filtered.sort(
+                key=lambda item: int(item[2]) if item[2] else 0, 
+                reverse=reverse
+            )
     
     def on_batch_add(self):
         """Handle add batch button click"""
