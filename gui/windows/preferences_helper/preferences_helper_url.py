@@ -137,10 +137,13 @@ class PreferencesUrlHelper:
         menu.exec(self.parent.provider_table.viewport().mapToGlobal(pos))
 
     def load_url_providers(self):
-        """Load all URL providers from database"""
+        """Load all URL providers from database, ordered by status (In use, Ready, Full)"""
         self.parent.provider_table.setRowCount(0)
         try:
             providers = self.db_manager.get_all_url_providers()
+            # Sort providers by status: In use < Ready < Full
+            status_order = {"In use": 0, "Ready": 1, "Full": 2}
+            providers.sort(key=lambda p: status_order.get(str(p[3]), 99))
             self.parent.provider_table.setRowCount(len(providers))
             for row_idx, provider in enumerate(providers):
                 provider_id, name, description, status, email, password, url_count = provider
