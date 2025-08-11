@@ -40,6 +40,15 @@ class PreferencesUrlHelper:
         row.addWidget(self.parent.provider_add_btn)
         row.addWidget(self.parent.provider_edit_btn)
         row.addWidget(self.parent.provider_delete_btn)
+        
+        # Add Show/Hide All Passwords toggle icon button only
+        self.parent.show_all_passwords_btn = QPushButton()
+        self.parent.show_all_passwords_btn.setIcon(qta.icon("fa6s.eye"))
+        self.parent.show_all_passwords_btn.setToolTip("Show/Hide all passwords in the table")
+        self.parent.show_all_passwords_btn.setCheckable(True)
+        self.parent.show_all_passwords_btn.setFixedSize(32, 32)
+        row.addWidget(self.parent.show_all_passwords_btn)
+        self.parent.show_all_passwords_btn.clicked.connect(self.on_show_all_passwords_toggle)
         provider_layout.addLayout(row)
         
         # Provider table
@@ -237,3 +246,32 @@ class PreferencesUrlHelper:
                 QMessageBox.information(self.parent, "Success", "Provider deleted successfully.")
             except Exception as e:
                 QMessageBox.warning(self.parent, "Error", f"Failed to delete provider: {e}")
+
+    def on_show_all_passwords_toggle(self):
+        """Toggle show/hide all passwords in the provider table (icon only)"""
+        show = self.parent.show_all_passwords_btn.isChecked()
+        if show:
+            self.parent.show_all_passwords_btn.setIcon(qta.icon("fa6s.eye-slash"))
+            try:
+                for row in range(self.parent.provider_table.rowCount()):
+                    provider_id = self.parent.provider_table.item(row, 0).data(Qt.UserRole)
+                    if provider_id:
+                        provider_data = self.db_manager.get_url_provider_by_id(provider_id)
+                        if provider_data:
+                            _, _, _, _, _, password = provider_data
+                            self.parent.provider_table.setItem(row, 4, QTableWidgetItem(str(password)))
+            except Exception as e:
+                QMessageBox.warning(self.parent, "Error", f"Failed to show all passwords: {e}")
+        else:
+            self.parent.show_all_passwords_btn.setIcon(qta.icon("fa6s.eye"))
+            try:
+                for row in range(self.parent.provider_table.rowCount()):
+                    provider_id = self.parent.provider_table.item(row, 0).data(Qt.UserRole)
+                    if provider_id:
+                        provider_data = self.db_manager.get_url_provider_by_id(provider_id)
+                        if provider_data:
+                            _, _, _, _, _, password = provider_data
+                            masked = "*" * len(str(password)) if password else ""
+                            self.parent.provider_table.setItem(row, 4, QTableWidgetItem(masked))
+            except Exception as e:
+                QMessageBox.warning(self.parent, "Error", f"Failed to hide all passwords: {e}")
