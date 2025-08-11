@@ -33,8 +33,8 @@ class ProviderEditDialog(QDialog):
         
         # Status combo box
         self.status_combo = QComboBox()
-        self.status_combo.addItems(["Ready", "In use", "Full"])
-        if status in ["Ready", "In use", "Full"]:
+        self.status_combo.addItems(["Ready", "In use", "Full", "Inactive", "Trouble"])
+        if status in ["Ready", "In use", "Full", "Inactive", "Trouble"]:
             self.status_combo.setCurrentText(status)
         else:
             self.status_combo.setCurrentText("Ready")

@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
 import qtawesome as qta
+from PySide6 import QtGui
 
 
 class PreferencesUrlHelper:
@@ -141,8 +142,8 @@ class PreferencesUrlHelper:
         self.parent.provider_table.setRowCount(0)
         try:
             providers = self.db_manager.get_all_url_providers()
-            # Sort providers by status: In use < Ready < Full
-            status_order = {"In use": 0, "Ready": 1, "Full": 2}
+            # Sort providers by status: In use < Ready < Full < Inactive < Trouble
+            status_order = {"In use": 0, "Ready": 1, "Full": 2, "Inactive": 3, "Trouble": 4}
             providers.sort(key=lambda p: status_order.get(str(p[3]), 99))
             self.parent.provider_table.setRowCount(len(providers))
             for row_idx, provider in enumerate(providers):
@@ -150,12 +151,18 @@ class PreferencesUrlHelper:
                 self.parent.provider_table.setItem(row_idx, 0, QTableWidgetItem(str(name)))
                 self.parent.provider_table.setItem(row_idx, 1, QTableWidgetItem(str(description or "")))
                 status_item = QTableWidgetItem(str(status or ""))
+                # Status coloring and icon
                 if status == "Ready":
-                    status_item.setForeground(Qt.green)
+                    status_item.setForeground(QtGui.QColor("#43a047"))  # Green
                 elif status == "In use":
-                    status_item.setForeground(Qt.yellow)
+                    status_item.setForeground(QtGui.QColor("#ff9800"))  # Orange
                 elif status == "Full":
-                    status_item.setForeground(Qt.red)
+                    status_item.setForeground(QtGui.QColor("#e53935"))  # Red
+                elif status == "Inactive":
+                    status_item.setForeground(QtGui.QColor("#9e9e9e"))  # Grey
+                elif status == "Trouble":
+                    status_item.setForeground(QtGui.QColor("#e53935"))  # Red
+                    status_item.setText("⚠️ " + str(status))
                 self.parent.provider_table.setItem(row_idx, 2, status_item)
                 self.parent.provider_table.setItem(row_idx, 3, QTableWidgetItem(str(email or "")))
                 password_masked = "*" * len(str(password)) if password else ""
