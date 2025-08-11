@@ -1,10 +1,10 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLineEdit, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QSizePolicy, QMenu,
-    QMessageBox, QDialog
+    QMessageBox, QDialog, QToolTip
 )
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QCursor
 import qtawesome as qta
 from PySide6 import QtGui
 
@@ -87,6 +87,8 @@ class PreferencesUrlHelper:
         self.parent.provider_table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.parent.provider_table.customContextMenuRequested.connect(self.show_provider_context_menu)
         self.parent.provider_search_edit.textChanged.connect(self.on_provider_search_changed)
+        self.parent.provider_table.setMouseTracking(True)
+        self.parent.provider_table.entered.connect(self.on_provider_table_hover)
         
         return tab
         
@@ -285,3 +287,18 @@ class PreferencesUrlHelper:
                             self.parent.provider_table.setItem(row, 4, QTableWidgetItem(masked))
             except Exception as e:
                 QMessageBox.warning(self.parent, "Error", f"Failed to hide all passwords: {e}")
+
+    def on_provider_table_hover(self, index):
+        """Show tooltip with all row details when hovering a cell (fix: use QToolTip.showText)"""
+        if not index.isValid():
+            return
+        row = index.row()
+        col_count = self.parent.provider_table.columnCount()
+        details = []
+        for col in range(col_count):
+            header = self.parent.provider_table.horizontalHeaderItem(col).text()
+            item = self.parent.provider_table.item(row, col)
+            value = item.text() if item else ""
+            details.append(f"{header}: {value}")
+        tooltip_text = "\n".join(details)
+        QToolTip.showText(QCursor.pos(), tooltip_text, self.parent.provider_table, self.parent.provider_table.visualItemRect(self.parent.provider_table.item(row, index.column())))
