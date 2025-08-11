@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLineEdit, QTextEdit,
-    QComboBox, QPushButton, QWidget
+    QComboBox, QPushButton, QWidget, QApplication, QToolTip
 )
 import qtawesome as qta
 
@@ -44,24 +44,31 @@ class ProviderEditDialog(QDialog):
         self.email_edit.setPlaceholderText("Enter account email...")
         form_layout.addRow("Account Email:", self.email_edit)
         
-        # Password field with show/hide button
+        # Password field with show/hide/copy button
         password_layout = QHBoxLayout()
         self.password_edit = QLineEdit()
         self.password_edit.setText(password)
         self.password_edit.setPlaceholderText("Enter password...")
         self.password_edit.setEchoMode(QLineEdit.Password)
-        
+
         self.show_password_btn = QPushButton()
         self.show_password_btn.setIcon(qta.icon("fa6s.eye"))
         self.show_password_btn.setCheckable(True)
         self.show_password_btn.setFixedSize(32, 32)
         self.show_password_btn.setToolTip("Show/Hide Password")
         self.show_password_btn.clicked.connect(self.toggle_password_visibility)
-        
+
+        self.copy_password_btn = QPushButton()
+        self.copy_password_btn.setIcon(qta.icon("fa6s.copy"))
+        self.copy_password_btn.setFixedSize(32, 32)
+        self.copy_password_btn.setToolTip("Copy Password")
+        self.copy_password_btn.clicked.connect(self.copy_password_to_clipboard)
+
         password_layout.addWidget(self.password_edit)
         password_layout.addWidget(self.show_password_btn)
+        password_layout.addWidget(self.copy_password_btn)
         password_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         password_widget = QWidget()
         password_widget.setLayout(password_layout)
         form_layout.addRow("Password:", password_widget)
@@ -95,6 +102,13 @@ class ProviderEditDialog(QDialog):
         else:
             self.password_edit.setEchoMode(QLineEdit.Password)
             self.show_password_btn.setIcon(qta.icon("fa6s.eye"))
+    
+    def copy_password_to_clipboard(self):
+        """Copy password to clipboard"""
+        from PySide6.QtWidgets import QApplication, QToolTip
+        copied_text = self.password_edit.text()
+        QApplication.clipboard().setText(copied_text)
+        QToolTip.showText(self.copy_password_btn.mapToGlobal(self.copy_password_btn.rect().center()), f"Copied: {copied_text}")
     
     def get_values(self):
         """Get form values"""

@@ -91,6 +91,7 @@ class PreferencesUrlHelper:
         
         action_edit = QAction(qta.icon("fa6s.pen-to-square"), "Edit Provider", self.parent)
         action_delete = QAction(qta.icon("fa6s.trash"), "Delete Provider", self.parent)
+        action_show_password = QAction(qta.icon("fa6s.eye"), "Show Password", self.parent)
         
         def do_edit():
             self.parent.provider_table.selectRow(row)
@@ -100,11 +101,30 @@ class PreferencesUrlHelper:
             self.parent.provider_table.selectRow(row)
             self.on_provider_delete()
         
+        def do_show_password():
+            self.parent.provider_table.selectRow(row)
+            provider_id = self.parent.provider_table.item(row, 0).data(Qt.UserRole)
+            if provider_id:
+                try:
+                    provider_data = self.db_manager.get_url_provider_by_id(provider_id)
+                    if provider_data:
+                        _, name, _, _, _, password = provider_data
+                        from .password_display_dialog import PasswordDisplayDialog
+                        dlg = PasswordDisplayDialog(name, password, parent=self.parent)
+                        dlg.exec()
+                    else:
+                        QMessageBox.warning(self.parent, "Error", "Provider not found.")
+                except Exception as e:
+                    QMessageBox.warning(self.parent, "Error", f"Failed to retrieve password: {e}")
+
         action_edit.triggered.connect(do_edit)
         action_delete.triggered.connect(do_delete)
+        action_show_password.triggered.connect(do_show_password)
         
         menu.addAction(action_edit)
         menu.addAction(action_delete)
+        menu.addSeparator()
+        menu.addAction(action_show_password)
         menu.exec(self.parent.provider_table.viewport().mapToGlobal(pos))
 
     def load_url_providers(self):
