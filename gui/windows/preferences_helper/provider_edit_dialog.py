@@ -1,7 +1,8 @@
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLineEdit, QTextEdit,
-    QComboBox, QPushButton, QWidget, QApplication, QToolTip
+    QComboBox, QPushButton, QWidget, QApplication, QToolTip, QLabel, QSizePolicy
 )
+from PySide6.QtCore import Qt
 import qtawesome as qta
 
 
@@ -44,12 +45,13 @@ class ProviderEditDialog(QDialog):
         self.email_edit.setPlaceholderText("Enter account email...")
         form_layout.addRow("Account Email:", self.email_edit)
         
-        # Password field with show/hide/copy button
-        password_layout = QHBoxLayout()
+        # Password field with show/hide/copy button (label and entry in one row, fixed alignment)
         self.password_edit = QLineEdit()
         self.password_edit.setText(password)
         self.password_edit.setPlaceholderText("Enter password...")
         self.password_edit.setEchoMode(QLineEdit.Password)
+        self.password_edit.setMinimumWidth(self.name_edit.minimumWidth())
+        self.password_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         self.show_password_btn = QPushButton()
         self.show_password_btn.setIcon(qta.icon("fa6s.eye"))
@@ -64,14 +66,23 @@ class ProviderEditDialog(QDialog):
         self.copy_password_btn.setToolTip("Copy Password")
         self.copy_password_btn.clicked.connect(self.copy_password_to_clipboard)
 
-        password_layout.addWidget(self.password_edit)
-        password_layout.addWidget(self.show_password_btn)
-        password_layout.addWidget(self.copy_password_btn)
-        password_layout.setContentsMargins(0, 0, 0, 0)
+        password_buttons_widget = QWidget()
+        password_buttons_layout = QHBoxLayout(password_buttons_widget)
+        password_buttons_layout.setContentsMargins(0, 0, 0, 0)
+        password_buttons_layout.setSpacing(0)
+        password_buttons_layout.addWidget(self.show_password_btn)
+        password_buttons_layout.addWidget(self.copy_password_btn)
+        password_buttons_layout.addStretch(0)
 
-        password_widget = QWidget()
-        password_widget.setLayout(password_layout)
-        form_layout.addRow("Password:", password_widget)
+        password_field_layout = QHBoxLayout()
+        password_field_layout.setContentsMargins(0, 0, 0, 0)
+        password_field_layout.setSpacing(4)
+        password_field_layout.addWidget(self.password_edit, 1)
+        password_field_layout.addWidget(password_buttons_widget, 0)
+        password_field_layout.setAlignment(Qt.AlignTop)
+        password_field_widget = QWidget()
+        password_field_widget.setLayout(password_field_layout)
+        form_layout.addRow("Password:", password_field_widget)
         
         layout.addLayout(form_layout)
         
