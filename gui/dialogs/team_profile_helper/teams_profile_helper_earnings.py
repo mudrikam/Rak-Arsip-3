@@ -56,7 +56,6 @@ class EarningsHelper:
         search_row.addWidget(QLabel("Sort by:"))
         search_row.addWidget(self.dialog.earnings_sort_combo)
         search_row.addWidget(self.dialog.earnings_sort_order_combo)
-        
         self.dialog.earnings_status_filter_combo = QComboBox()
         self.dialog.earnings_status_filter_combo.setMinimumWidth(120)
         self.dialog.earnings_status_filter_combo.addItem("All Status")
@@ -80,6 +79,8 @@ class EarningsHelper:
         self.dialog.earnings_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
         self.dialog.earnings_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         tab_layout.addWidget(self.dialog.earnings_table)
+
+        # Pagination row + Export CSV button (kanan bawah)
         pagination_row = QHBoxLayout()
         self.dialog.earnings_prev_btn = QPushButton("Prev")
         self.dialog.earnings_next_btn = QPushButton("Next")
@@ -93,6 +94,14 @@ class EarningsHelper:
         pagination_row.addWidget(self.dialog.earnings_page_input)
         pagination_row.addWidget(self.dialog.earnings_next_btn)
         pagination_row.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
+
+        # Export CSV button rata kanan sejajar pagination
+        self.dialog.earnings_export_csv_btn = QPushButton("Export CSV")
+        self.dialog.earnings_export_csv_btn.setIcon(qta.icon("fa6s.file-csv"))
+        self.dialog.earnings_export_csv_btn.setMinimumHeight(28)
+        self.dialog.earnings_export_csv_btn.setStyleSheet("padding: 4px 16px; font-weight: bold;")
+        pagination_row.addWidget(self.dialog.earnings_export_csv_btn, 0, Qt.AlignRight)
+
         tab_layout.addLayout(pagination_row)
         tab_widget.addTab(tab, qta.icon("fa6s.money-bill-wave"), "Earnings")
         self.dialog.earnings_search_edit.textChanged.connect(self.earnings_search_changed)
@@ -113,6 +122,80 @@ class EarningsHelper:
         self._earnings_shortcut_copy_path.activated.connect(self.earnings_copy_path_shortcut)
         self._earnings_shortcut_open_explorer = QShortcut(QKeySequence("Ctrl+E"), self.dialog.earnings_table)
         self._earnings_shortcut_open_explorer.activated.connect(self.earnings_open_explorer_shortcut)
+
+        # Connect export CSV
+        self.dialog.earnings_export_csv_btn.clicked.connect(self.export_earnings_csv)
+
+    def export_earnings_csv(self):
+        """Export earnings data sesuai filter ke CSV, amount di paling belakang, tanpa file path."""
+        from PySide6.QtWidgets import QFileDialog, QMessageBox
+        import csv
+        records = self.earnings_records_all_filtered
+        if not records:
+            QMessageBox.information(self.dialog, "Export CSV", "No earnings data to export.")
+            return
+        import time
+        import re
+        # Ambil nama tim (username/full_name), filter aktif, dan timestamp
+        username = self._earnings_current_username or "team"
+        # Coba ambil full_name jika ada
+        full_name = username
+        for team in getattr(self.dialog.teams_helper, "_teams_data", []):
+            if team["username"] == username:
+                full_name = team.get("full_name", username)
+                break
+        # Bersihkan nama file dari karakter ilegal
+        def clean_filename(s):
+            return re.sub(r'[^a-zA-Z0-9_\-]', '_', s)
+        # Filter info
+        batch = self._earnings_batch_filter_value
+        status = self._earnings_status_filter_value
+        def clean_filename(s):
+            import re
+            return re.sub(r'[^a-zA-Z0-9_\-]', '_', s)
+        batch_str = batch if batch is not None else "All"
+        status_str = status if status is not None else "All"
+        import time
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        username = self._earnings_current_username or "team"
+        full_name = username
+        for team in getattr(self.dialog.teams_helper, "_teams_data", []):
+            if team["username"] == username:
+                full_name = team.get("full_name", username)
+                break
+        filter_parts = []
+        if batch_str != "All":
+            filter_parts.append(clean_filename(str(batch_str)))
+        if status_str != "All":
+            filter_parts.append(clean_filename(str(status_str)))
+        filter_suffix = f"_{'_'.join(filter_parts)}" if filter_parts else ""
+        filename = f"{clean_filename(full_name)}_earning_{timestamp}{filter_suffix}.csv"
+        from pathlib import Path
+        home_dir = Path.home()
+        default_path = str(home_dir / filename)
+        from PySide6.QtWidgets import QFileDialog, QMessageBox
+        import csv
+        file_path, _ = QFileDialog.getSaveFileName(self.dialog, "Export Earnings to CSV", default_path, "CSV Files (*.csv)")
+        if not file_path:
+            return
+        headers = ["File Name", "Date", "Note", "Status", "Client", "Batch", "Amount"]
+        try:
+            with open(file_path, mode="w", newline='', encoding="utf-8") as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(headers)
+                for rec in records:
+                    writer.writerow([
+                        rec[0],  # File Name
+                        rec[1],  # Date
+                        rec[3],  # Note
+                        rec[4],  # Status
+                        rec[5],  # Client
+                        rec[6],  # Batch
+                        rec[2]   # Amount (paling belakang)
+                    ])
+            QMessageBox.information(self.dialog, "Export CSV", f"Earnings exported to:\n{file_path}")
+        except Exception as e:
+            QMessageBox.critical(self.dialog, "Export CSV Failed", f"Failed to export CSV:\n{e}")
 
     def load_earnings_records(self, team):
         self._earnings_team_id = team["id"]
