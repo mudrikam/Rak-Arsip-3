@@ -169,7 +169,7 @@ class EarningsHelper:
         if status_str != "All":
             filter_parts.append(clean_filename(str(status_str)))
         filter_suffix = f"_{'_'.join(filter_parts)}" if filter_parts else ""
-        filename = f"{clean_filename(full_name)}_earning_{timestamp}{filter_suffix}.csv"
+        filename = f"{clean_filename(full_name)}_Earning_{timestamp}{filter_suffix}.csv"
         from pathlib import Path
         home_dir = Path.home()
         default_path = str(home_dir / filename)
