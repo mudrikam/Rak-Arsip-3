@@ -256,15 +256,13 @@ class ClientDataClientsHelper:
         
         for row_idx, client in enumerate(self._clients_data_sorted):
             self._clients_data.append(client)
-            
-            # Add data columns
             for col_idx, key_col in enumerate(["client_name", "contact", "links", "status", "note"]):
                 value = client.get(key_col, "")
                 item = QTableWidgetItem(str(value) if value is not None else "")
                 item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+                if key_col == "status" and str(value).strip().lower() == "active":
+                    item.setForeground(Qt.green)
                 self.clients_table.setItem(row_idx, col_idx, item)
-            
-            # Add file count column
             file_count = client.get("_file_count", 0)
             item = QTableWidgetItem(str(file_count))
             item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
