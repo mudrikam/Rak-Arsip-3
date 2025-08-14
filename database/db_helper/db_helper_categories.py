@@ -3,6 +3,72 @@ import os
 
 
 class DatabaseCategoriesHelper:
+
+    def rename_category(self, old_name, new_name):
+        """Rename a category and update all references."""
+        # Check if new_name already exists (read)
+        self.db_manager.connect(write=False)
+        cursor = self.db_manager.connection.cursor()
+        cursor.execute("SELECT id FROM categories WHERE name = ?", (new_name,))
+        if cursor.fetchone():
+            self.db_manager.close()
+            raise Exception(f"Category '{new_name}' already exists.")
+        self.db_manager.close()
+        # Get old category id (read)
+        self.db_manager.connect(write=False)
+        cursor = self.db_manager.connection.cursor()
+        cursor.execute("SELECT id FROM categories WHERE name = ?", (old_name,))
+        result = cursor.fetchone()
+        if not result:
+            self.db_manager.close()
+            raise Exception(f"Category '{old_name}' not found.")
+        category_id = result[0]
+        self.db_manager.close()
+        # Update category name (write)
+        self.db_manager.connect()
+        cursor = self.db_manager.connection.cursor()
+        cursor.execute("UPDATE categories SET name = ? WHERE id = ?", (new_name, category_id))
+        self.db_manager.connection.commit()
+        self.db_manager.close()
+        self.db_manager.create_temp_file()
+
+    def rename_subcategory(self, category_name, old_subcategory_name, new_subcategory_name):
+        """Rename a subcategory and update all references."""
+        # Get category id (read)
+        self.db_manager.connect(write=False)
+        cursor = self.db_manager.connection.cursor()
+        cursor.execute("SELECT id FROM categories WHERE name = ?", (category_name,))
+        category = cursor.fetchone()
+        if not category:
+            self.db_manager.close()
+            raise Exception(f"Category '{category_name}' not found.")
+        category_id = category[0]
+        self.db_manager.close()
+        # Check if new subcategory name already exists for this category (read)
+        self.db_manager.connect(write=False)
+        cursor = self.db_manager.connection.cursor()
+        cursor.execute("SELECT id FROM subcategories WHERE category_id = ? AND name = ?", (category_id, new_subcategory_name))
+        if cursor.fetchone():
+            self.db_manager.close()
+            raise Exception(f"Subcategory '{new_subcategory_name}' already exists in category '{category_name}'.")
+        self.db_manager.close()
+        # Get old subcategory id (read)
+        self.db_manager.connect(write=False)
+        cursor = self.db_manager.connection.cursor()
+        cursor.execute("SELECT id FROM subcategories WHERE category_id = ? AND name = ?", (category_id, old_subcategory_name))
+        subcategory = cursor.fetchone()
+        if not subcategory:
+            self.db_manager.close()
+            raise Exception(f"Subcategory '{old_subcategory_name}' not found in category '{category_name}'.")
+        subcategory_id = subcategory[0]
+        self.db_manager.close()
+        # Update subcategory name (write)
+        self.db_manager.connect()
+        cursor = self.db_manager.connection.cursor()
+        cursor.execute("UPDATE subcategories SET name = ? WHERE id = ?", (new_subcategory_name, subcategory_id))
+        self.db_manager.connection.commit()
+        self.db_manager.close()
+        self.db_manager.create_temp_file()
     """Helper class for category and subcategory management."""
     
     def __init__(self, db_manager):

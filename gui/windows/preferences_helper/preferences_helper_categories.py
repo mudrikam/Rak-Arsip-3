@@ -119,11 +119,19 @@ class PreferencesCategoriesHelper:
         current_item = self.parent.categories_list.currentItem()
         if not current_item:
             return
-        
         old_name = current_item.text()
         name, ok = QInputDialog.getText(self.parent, "Edit Category", "Category name:", text=old_name)
         if ok and name.strip() and name.strip() != old_name:
-            QMessageBox.information(self.parent, "Info", "Category editing requires manual database modification.")
+            try:
+                self.db_manager.connect()
+                self.db_manager.rename_category(old_name, name.strip())
+                self.load_categories()
+                self.parent.subcategories_list.clear()
+                QMessageBox.information(self.parent, "Success", f"Category '{old_name}' renamed to '{name.strip()}'.")
+            except Exception as e:
+                QMessageBox.critical(self.parent, "Error", f"Failed to rename category: {e}")
+            finally:
+                self.db_manager.close()
 
     def delete_category(self):
         """Delete selected category"""
@@ -168,13 +176,22 @@ class PreferencesCategoriesHelper:
     def edit_subcategory(self):
         """Edit selected subcategory"""
         current_item = self.parent.subcategories_list.currentItem()
-        if not current_item:
+        category_item = self.parent.categories_list.currentItem()
+        if not current_item or not category_item:
             return
-        
         old_name = current_item.text()
+        category_name = category_item.text()
         name, ok = QInputDialog.getText(self.parent, "Edit Subcategory", "Subcategory name:", text=old_name)
         if ok and name.strip() and name.strip() != old_name:
-            QMessageBox.information(self.parent, "Info", "Subcategory editing requires manual database modification.")
+            try:
+                self.db_manager.connect()
+                self.db_manager.rename_subcategory(category_name, old_name, name.strip())
+                self.load_subcategories()
+                QMessageBox.information(self.parent, "Success", f"Subcategory '{old_name}' renamed to '{name.strip()}'.")
+            except Exception as e:
+                QMessageBox.critical(self.parent, "Error", f"Failed to rename subcategory: {e}")
+            finally:
+                self.db_manager.close()
 
     def delete_subcategory(self):
         """Delete selected subcategory"""

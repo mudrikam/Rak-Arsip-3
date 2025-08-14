@@ -451,3 +451,10 @@ class DatabaseManager(QObject):
     def update_files_status_by_batch(self, batch_number, client_id, status_id):
         """Update status of all files in a batch."""
         return self.clients_helper.update_files_status_by_batch(batch_number, client_id, status_id)
+    def rename_category(self, old_name, new_name):
+        """Rename a category (delegated to categories helper)"""
+        return DatabaseCategoriesHelper(self).rename_category(old_name, new_name)
+
+    def rename_subcategory(self, category_name, old_subcategory_name, new_subcategory_name):
+        """Rename a subcategory (delegated to categories helper)"""
+        return DatabaseCategoriesHelper(self).rename_subcategory(category_name, old_subcategory_name, new_subcategory_name)
