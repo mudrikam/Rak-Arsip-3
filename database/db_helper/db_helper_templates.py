@@ -3,6 +3,29 @@ import os
 
 
 class DatabaseTemplatesHelper:
+
+    def update_template(self, template_id, name, content):
+        """Update template by id."""
+        self.db_manager.connect()
+        cursor = self.db_manager.connection.cursor()
+        cursor.execute(
+            "UPDATE templates SET name = ?, content = ? WHERE id = ?",
+            (name, content, template_id)
+        )
+        self.db_manager.connection.commit()
+        self.db_manager.create_temp_file()
+        self.db_manager.close()
+
+    def get_template_by_name(self, name):
+        """Get template by name."""
+        self.db_manager.connect(write=False)
+        cursor = self.db_manager.connection.cursor()
+        cursor.execute("SELECT id, name, content FROM templates WHERE name = ?", (name,))
+        result = cursor.fetchone()
+        self.db_manager.close()
+        if result:
+            return {'id': result[0], 'name': result[1], 'content': result[2]}
+        return None
     """Helper class for template management."""
     
     def __init__(self, db_manager):

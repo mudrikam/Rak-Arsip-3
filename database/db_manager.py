@@ -18,6 +18,7 @@ from .db_helper.db_helper_urls import DatabaseUrlsHelper
 
 
 class DatabaseManager(QObject):
+
     """Optimized Database Manager using helper classes for modular organization."""
     
     data_changed = Signal()
@@ -458,3 +459,11 @@ class DatabaseManager(QObject):
     def rename_subcategory(self, category_name, old_subcategory_name, new_subcategory_name):
         """Rename a subcategory (delegated to categories helper)"""
         return DatabaseCategoriesHelper(self).rename_subcategory(category_name, old_subcategory_name, new_subcategory_name)
+    
+    def get_template_by_name(self, name):
+        """Get template by name (delegasi ke templates_helper)"""
+        return self.templates_helper.get_template_by_name(name)
+    
+    def update_template(self, template_id, name, content):
+        """Update template by id (delegasi ke templates_helper)"""
+        return self.templates_helper.update_template(template_id, name, content)

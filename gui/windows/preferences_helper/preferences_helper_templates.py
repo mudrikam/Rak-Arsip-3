@@ -138,19 +138,45 @@ class PreferencesTemplatesHelper:
                 self.db_manager.close()
 
     def save_template(self):
-        """Save template to database"""
+        """Save template to database (insert or update)"""
         name = self.parent.template_name_edit.text().strip()
         content = self.parent.template_content_edit.toPlainText().strip()
-        
+
         if not name or not content:
             QMessageBox.warning(self.parent, "Warning", "Please enter both name and content.")
             return
-        
+
+        current_item = self.parent.templates_list.currentItem()
         try:
             self.db_manager.connect()
-            self.db_manager.insert_template(name, content)
-            self.load_templates()
-            QMessageBox.information(self.parent, "Success", "Template saved successfully.")
+            # Cek apakah template dengan nama ini sudah ada
+            existing = self.db_manager.get_template_by_name(name)
+            if current_item:
+                # Mode edit: update template yang sedang dipilih
+                template_id = current_item.data(Qt.UserRole)
+                template = self.db_manager.get_template_by_id(template_id)
+                if template and template['name'] != name and existing:
+                    QMessageBox.warning(self.parent, "Warning", f"Template with name '{name}' already exists.")
+                    return
+                self.db_manager.update_template(template_id, name, content)
+                self.load_templates()
+                # Pilih kembali item yang diedit
+                items = self.parent.templates_list.findItems(name, Qt.MatchExactly)
+                if items:
+                    self.parent.templates_list.setCurrentItem(items[0])
+                QMessageBox.information(self.parent, "Success", "Template updated successfully.")
+            else:
+                # Mode tambah: insert baru
+                if existing:
+                    QMessageBox.warning(self.parent, "Warning", f"Template with name '{name}' already exists.")
+                    return
+                self.db_manager.insert_template(name, content)
+                self.load_templates()
+                # Pilih item yang baru ditambah
+                items = self.parent.templates_list.findItems(name, Qt.MatchExactly)
+                if items:
+                    self.parent.templates_list.setCurrentItem(items[0])
+                QMessageBox.information(self.parent, "Success", "Template saved successfully.")
         except Exception as e:
             QMessageBox.critical(self.parent, "Error", f"Failed to save template: {e}")
         finally:
