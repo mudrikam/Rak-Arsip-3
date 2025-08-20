@@ -584,6 +584,18 @@ class DatabaseClientsHelper:
         
         return updated_count
 
+    def mark_batch_note_finished(self, batch_number):
+        """Update batch_list note to 'Finished' for the given batch_number."""
+        self.db_manager.connect()
+        cursor = self.db_manager.connection.cursor()
+        cursor.execute(
+            "UPDATE batch_list SET note = ?, updated_at = CURRENT_TIMESTAMP WHERE batch_number = ?",
+            ("Finished", batch_number)
+        )
+        self.db_manager.connection.commit()
+        self.db_manager.create_temp_file()
+        self.db_manager.close()
+
     def get_all_batch_numbers(self):
         """Get all batch numbers from all clients."""
         self.db_manager.connect(write=False)

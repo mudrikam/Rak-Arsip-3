@@ -509,19 +509,16 @@ class ClientDataBatchHelper:
         """Handle mark as finished for all files in batch"""
         if row >= len(self._batch_data_filtered):
             return
-        
+
         batch_number = self._batch_data_filtered[row][0]
         client_name = self.parent._selected_client_name
-        
+
         try:
-            # Get all files in this batch
             files_data = self.db_helper.get_files_by_batch_and_client(batch_number, self._selected_client_id)
-            
             if not files_data:
                 QMessageBox.information(self.parent, "No Files", f"No files found in batch '{batch_number}'.")
                 return
-            
-            # Show detailed confirmation dialog
+
             dialog = BatchFilesDetailDialog(
                 parent=self.parent,
                 files_data=files_data,
@@ -529,48 +526,48 @@ class ClientDataBatchHelper:
                 client_name=client_name,
                 operation_title="Mark as Finished"
             )
-            
+
             if dialog.exec() != QDialog.Accepted:
                 return
-            
-            # Get the "Finished" status ID
+
             finished_status_id = self.db_helper.get_status_id("Finished")
             if not finished_status_id:
                 QMessageBox.warning(self.parent, "Status Not Found", 
                                    "Could not find 'Finished' status in database. Please ensure the status exists.")
                 return
-            
-            # Update all files in the batch to "Finished" status
+
             updated_count = self.db_helper.update_files_status_by_batch(
                 batch_number, self._selected_client_id, finished_status_id
             )
-            
+
+            # Update batch note to 'Finished'
+            self.db_helper.mark_batch_note_finished(batch_number)
+
+            # Refresh batch list to show updated data
+            self.load_batch_list_for_client(self._selected_client_id)
+
             if updated_count > 0:
                 QMessageBox.information(
                     self.parent, 
                     "Success", 
                     f"Successfully marked {updated_count} files as 'Finished' in batch '{batch_number}'."
                 )
-                
-                # Refresh file URLs tab if it's currently loaded for this batch
+
                 if (hasattr(self.parent, 'file_urls_helper') and 
                     hasattr(self.parent.file_urls_helper, '_selected_batch_number') and
                     self.parent.file_urls_helper._selected_batch_number == batch_number):
-                    
+
                     self.parent.file_urls_helper.load_file_urls_for_batch(
                         self._selected_client_id, batch_number, client_name
                     )
-                
-                # Refresh files tab if it exists and is using this client/batch
+
                 if (hasattr(self.parent, 'files_helper') and 
                     hasattr(self.parent.files_helper, '_selected_client_id') and
                     self.parent.files_helper._selected_client_id == self._selected_client_id):
-                    
-                    # Refresh files tab data
+
                     if hasattr(self.parent.files_helper, 'fetch_files_page_and_summary'):
                         self.parent.files_helper.fetch_files_page_and_summary()
-                
-                # Refresh batch table to update colors
+
                 self.update_batch_table()
             else:
                 QMessageBox.information(self.parent, "No Updates", "No files were updated.")

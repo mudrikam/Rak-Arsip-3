@@ -475,3 +475,7 @@ class DatabaseManager(QObject):
     def get_all_batch_numbers(self):
         """Get all batch numbers from all clients (with client_id, note, created_at)."""
         return self.clients_helper.get_all_batch_numbers()
+
+    def mark_batch_note_finished(self, batch_number):
+        """Update batch_list note to 'Finished' for the given batch_number."""
+        return self.clients_helper.mark_batch_note_finished(batch_number)
