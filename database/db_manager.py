@@ -467,3 +467,7 @@ class DatabaseManager(QObject):
     def update_template(self, template_id, name, content):
         """Update template by id (delegasi ke templates_helper)"""
         return self.templates_helper.update_template(template_id, name, content)
+
+    def get_all_batch_numbers(self):
+        """Get all batch numbers from all clients."""
+        return self.clients_helper.get_all_batch_numbers()

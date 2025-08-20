@@ -56,6 +56,18 @@ class ClientDataDatabaseHelper:
             }
         return None
     
+    def get_client_name_by_id(self, client_id):
+        """Get client name by ID"""
+        db_manager = self.get_db_manager()
+        db_manager.connect(write=False)
+        cursor = db_manager.connection.cursor()
+        cursor.execute("SELECT client_name FROM client WHERE id = ?", (client_id,))
+        row = cursor.fetchone()
+        db_manager.close()
+        if row:
+            return row[0]
+        return ""
+    
     def add_client(self, client_name, contact, links, status, note):
         """Add new client to database"""
         db_manager = self.get_db_manager()
@@ -209,3 +221,8 @@ class ClientDataDatabaseHelper:
         """Get status name by status ID."""
         db_manager = self.get_db_manager()
         return db_manager.connection_helper.get_status_name_by_id(status_id)
+
+    def get_all_batch_numbers(self):
+        """Get all batch numbers from all clients."""
+        db_manager = self.get_db_manager()
+        return db_manager.get_all_batch_numbers()

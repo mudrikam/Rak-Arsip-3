@@ -193,6 +193,9 @@ class ClientDataBatchHelper:
         self.batch_search_edit.textChanged.connect(self.on_batch_search_changed)
         self.batch_sort_combo.currentIndexChanged.connect(self.on_batch_sort_changed)
         self.batch_sort_order_combo.currentIndexChanged.connect(self.on_batch_sort_changed)
+
+        # Load all batch list by default (no client selected)
+        self.load_batch_list_for_client(None)
     
     def show_batch_context_menu(self, pos):
         """Show context menu for batch table"""
@@ -241,25 +244,29 @@ class ClientDataBatchHelper:
         menu.exec(self.batch_table.viewport().mapToGlobal(pos))
     
     def load_batch_list_for_client(self, client_id):
-        """Load batch list for selected client"""
+        """Load batch list for selected client, or all if client_id is None"""
         self._selected_client_id = client_id
-        batch_numbers = self.db_helper.get_batch_numbers_by_client(client_id)
         batch_data = []
-        
-        for batch_number in batch_numbers:
-            note, _ = self.db_helper.get_batch_list_note_and_client(batch_number)
-            file_count = self.db_helper.count_file_client_batch_by_batch_number(batch_number)
-            batch_data.append((batch_number, note, file_count))
-        
+        if client_id is not None:
+            batch_numbers = self.db_helper.get_batch_numbers_by_client(client_id)
+            for batch_number in batch_numbers:
+                note, _ = self.db_helper.get_batch_list_note_and_client(batch_number)
+                file_count = self.db_helper.count_file_client_batch_by_batch_number(batch_number)
+                batch_data.append((batch_number, note, file_count))
+        else:
+            # Load all batch numbers from all clients
+            batch_numbers = self.db_helper.get_all_batch_numbers()
+            for batch_number in batch_numbers:
+                note, client_id_val = self.db_helper.get_batch_list_note_and_client(batch_number)
+                file_count = self.db_helper.count_file_client_batch_by_batch_number(batch_number)
+                batch_data.append((batch_number, note, file_count))
         self._batch_data_all = batch_data
         self.update_batch_table()
     
     def on_batch_refresh(self):
         """Handle refresh button click - reload batch data"""
-        if self._selected_client_id:
-            self.load_batch_list_for_client(self._selected_client_id)
-        else:
-            print("No client selected for batch refresh")
+        # If a client is selected, show only that client's batches; otherwise show all
+        self.load_batch_list_for_client(self._selected_client_id)
     
     def on_batch_search_changed(self):
         """Handle batch search text change"""
@@ -451,6 +458,8 @@ class ClientDataBatchHelper:
         self._batch_data_all = []
         self._batch_data_filtered = []
         self._selected_client_id = None
+        # After clearing, reload all batch list
+        self.load_batch_list_for_client(None)
     
     def on_batch_row_clicked(self, row, col):
         """Handle batch row click - load file URLs for selected batch"""
@@ -458,11 +467,17 @@ class ClientDataBatchHelper:
             return
         
         batch_number = self._batch_data_filtered[row][0]
-        client_name = self.parent._selected_client_name
+        # If client is not selected, get client_id from batch_number
+        if self._selected_client_id is None:
+            _, client_id = self.db_helper.get_batch_list_note_and_client(batch_number)
+            client_name = self.db_helper.get_client_name_by_id(client_id)
+            selected_client_id = client_id
+        else:
+            client_name = self.parent._selected_client_name
+            selected_client_id = self._selected_client_id
         
-        # Load file URLs for this batch
         if hasattr(self.parent, '_load_file_urls_for_batch'):
-            self.parent._load_file_urls_for_batch(self._selected_client_id, batch_number, client_name)
+            self.parent._load_file_urls_for_batch(selected_client_id, batch_number, client_name)
     
     def on_batch_row_double_clicked(self, row, col):
         """Handle batch row double click - switch to File URLs tab"""
@@ -470,15 +485,18 @@ class ClientDataBatchHelper:
             return
         
         batch_number = self._batch_data_filtered[row][0]
-        client_name = self.parent._selected_client_name
+        if self._selected_client_id is None:
+            _, client_id = self.db_helper.get_batch_list_note_and_client(batch_number)
+            client_name = self.db_helper.get_client_name_by_id(client_id)
+            selected_client_id = client_id
+        else:
+            client_name = self.parent._selected_client_name
+            selected_client_id = self._selected_client_id
         
-        # Load file URLs for this batch
         if hasattr(self.parent, '_load_file_urls_for_batch'):
-            self.parent._load_file_urls_for_batch(self._selected_client_id, batch_number, client_name)
+            self.parent._load_file_urls_for_batch(selected_client_id, batch_number, client_name)
         
-        # Switch to File URLs tab
         if hasattr(self.parent, 'tab_widget'):
-            # Find the File URLs tab index (usually tab index 2: Client Details, Batch List, File URLs)
             for i in range(self.parent.tab_widget.count()):
                 tab_text = self.parent.tab_widget.tabText(i)
                 if "File URLs" in tab_text:

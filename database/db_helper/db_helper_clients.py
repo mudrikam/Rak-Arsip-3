@@ -567,3 +567,12 @@ class DatabaseClientsHelper:
         self.db_manager.close()
         
         return updated_count
+
+    def get_all_batch_numbers(self):
+        """Get all batch numbers from all clients."""
+        self.db_manager.connect(write=False)
+        cursor = self.db_manager.connection.cursor()
+        cursor.execute("SELECT batch_number FROM batch_list ORDER BY batch_number ASC")
+        batch_numbers = [row[0] for row in cursor.fetchall()]
+        self.db_manager.close()
+        return batch_numbers
