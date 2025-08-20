@@ -256,7 +256,7 @@ class DatabaseManager(QObject):
         return self.clients_helper.get_assigned_batch_number(file_id, client_id)
 
     def get_batch_list_note_and_client(self, batch_number):
-        """Get batch list note and client."""
+        """Get batch list note, client, and created_at."""
         return self.clients_helper.get_batch_list_note_and_client(batch_number)
 
     def update_batch_list_note_and_client(self, batch_number, note, client_id):
@@ -279,8 +279,12 @@ class DatabaseManager(QObject):
         """Get batch number for file client."""
         return self.clients_helper.get_batch_number_for_file_client(file_id, client_id)
 
+    def get_all_batch_numbers(self):
+        """Get all batch numbers from all clients (with client_id, note, created_at)."""
+        return self.clients_helper.get_all_batch_numbers()
+
     def get_batch_numbers_by_client(self, client_id):
-        """Get batch numbers by client."""
+        """Get batch numbers by client (with note, created_at)."""
         return self.clients_helper.get_batch_numbers_by_client(client_id)
 
     def get_batch_creation_date(self, batch_number, client_id):
@@ -469,5 +473,5 @@ class DatabaseManager(QObject):
         return self.templates_helper.update_template(template_id, name, content)
 
     def get_all_batch_numbers(self):
-        """Get all batch numbers from all clients."""
+        """Get all batch numbers from all clients (with client_id, note, created_at)."""
         return self.clients_helper.get_all_batch_numbers()

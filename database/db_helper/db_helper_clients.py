@@ -362,12 +362,13 @@ class DatabaseClientsHelper:
         """Get batch list details."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT note, client_id FROM batch_list WHERE batch_number = ?", (batch_number,))
+        cursor.execute("SELECT note, client_id, created_at FROM batch_list WHERE batch_number = ?", (batch_number,))
         row = cursor.fetchone()
         self.db_manager.close()
         if row:
-            return (row["note"] if row["note"] else "", row["client_id"])
-        return ("", None)
+            # Return note, client_id, created_at
+            return (row["note"] if row["note"] else "", row["client_id"], row["created_at"])
+        return ("", None, None)
 
     def update_batch_list_note_and_client(self, batch_number, note, client_id):
         """Update batch list details."""
@@ -430,12 +431,27 @@ class DatabaseClientsHelper:
             return row[0]
         return ""
 
+    def get_all_batch_numbers(self):
+        """Get all batch numbers from all clients."""
+        self.db_manager.connect(write=False)
+        cursor = self.db_manager.connection.cursor()
+        cursor.execute("SELECT batch_number, client_id, note, created_at FROM batch_list ORDER BY batch_number ASC")
+        batch_numbers = []
+        for row in cursor.fetchall():
+            # Return as tuple (batch_number, client_id, note, created_at)
+            batch_numbers.append((row["batch_number"], row["client_id"], row["note"], row["created_at"]))
+        self.db_manager.close()
+        return batch_numbers
+
     def get_batch_numbers_by_client(self, client_id):
         """Get all batch numbers for a client."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT batch_number FROM batch_list WHERE client_id = ? ORDER BY batch_number ASC", (client_id,))
-        batch_numbers = [row[0] for row in cursor.fetchall()]
+        cursor.execute("SELECT batch_number, note, created_at FROM batch_list WHERE client_id = ? ORDER BY batch_number ASC", (client_id,))
+        batch_numbers = []
+        for row in cursor.fetchall():
+            # Return as tuple (batch_number, note, created_at)
+            batch_numbers.append((row["batch_number"], row["note"], row["created_at"]))
         self.db_manager.close()
         return batch_numbers
 
@@ -572,7 +588,22 @@ class DatabaseClientsHelper:
         """Get all batch numbers from all clients."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT batch_number FROM batch_list ORDER BY batch_number ASC")
-        batch_numbers = [row[0] for row in cursor.fetchall()]
+        cursor.execute("SELECT batch_number, client_id, note, created_at FROM batch_list ORDER BY batch_number ASC")
+        batch_numbers = []
+        for row in cursor.fetchall():
+            # Return as tuple (batch_number, client_id, note, created_at)
+            batch_numbers.append((row["batch_number"], row["client_id"], row["note"], row["created_at"]))
+        self.db_manager.close()
+        return batch_numbers
+
+    def get_batch_numbers_by_client(self, client_id):
+        """Get all batch numbers for a client."""
+        self.db_manager.connect(write=False)
+        cursor = self.db_manager.connection.cursor()
+        cursor.execute("SELECT batch_number, note, created_at FROM batch_list WHERE client_id = ? ORDER BY batch_number ASC", (client_id,))
+        batch_numbers = []
+        for row in cursor.fetchall():
+            # Return as tuple (batch_number, note, created_at)
+            batch_numbers.append((row["batch_number"], row["note"], row["created_at"]))
         self.db_manager.close()
         return batch_numbers

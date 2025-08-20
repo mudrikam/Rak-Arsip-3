@@ -154,15 +154,25 @@ class ClientDataFilesHelper:
     
     def refresh_batch_filter_combo(self):
         """Refresh batch filter combo with client's batches"""
-        batch_numbers = self.db_helper.get_batch_numbers_by_client(self._selected_client_id) if self._selected_client_id else []
-        self.files_batch_filter_combo.blockSignals(True)
         self.files_batch_filter_combo.clear()
         self.files_batch_filter_combo.addItem("All Batches")
-        for batch in batch_numbers:
-            self.files_batch_filter_combo.addItem(batch)
-        self.files_batch_filter_combo.setCurrentIndex(0)
-        self._batch_filter_value = None
-        self.files_batch_filter_combo.blockSignals(False)
+        if self._selected_client_id:
+            batch_rows = self.db_helper.get_batch_numbers_by_client(self._selected_client_id)
+            for batch_row in batch_rows:
+                # batch_row could be (batch_number, note, created_at) or (batch_number, client_id, note, created_at)
+                if isinstance(batch_row, tuple):
+                    batch_number = batch_row[0]
+                else:
+                    batch_number = batch_row
+                self.files_batch_filter_combo.addItem(str(batch_number))
+        else:
+            batch_rows = self.db_helper.get_all_batch_numbers()
+            for batch_row in batch_rows:
+                if isinstance(batch_row, tuple):
+                    batch_number = batch_row[0]
+                else:
+                    batch_number = batch_row
+                self.files_batch_filter_combo.addItem(str(batch_number))
     
     def refresh_status_filter_combo(self):
         """Refresh status filter combo with available statuses"""
@@ -207,15 +217,25 @@ class ClientDataFilesHelper:
     
     def refresh_batch_filter_combo(self):
         """Refresh batch filter combo with client's batches"""
-        batch_numbers = self.db_helper.get_batch_numbers_by_client(self._selected_client_id) if self._selected_client_id else []
-        self.files_batch_filter_combo.blockSignals(True)
         self.files_batch_filter_combo.clear()
         self.files_batch_filter_combo.addItem("All Batches")
-        for batch in batch_numbers:
-            self.files_batch_filter_combo.addItem(batch)
-        self.files_batch_filter_combo.setCurrentIndex(0)
-        self._batch_filter_value = None
-        self.files_batch_filter_combo.blockSignals(False)
+        if self._selected_client_id:
+            batch_rows = self.db_helper.get_batch_numbers_by_client(self._selected_client_id)
+            for batch_row in batch_rows:
+                # batch_row could be (batch_number, note, created_at) or (batch_number, client_id, note, created_at)
+                if isinstance(batch_row, tuple):
+                    batch_number = batch_row[0]
+                else:
+                    batch_number = batch_row
+                self.files_batch_filter_combo.addItem(str(batch_number))
+        else:
+            batch_rows = self.db_helper.get_all_batch_numbers()
+            for batch_row in batch_rows:
+                if isinstance(batch_row, tuple):
+                    batch_number = batch_row[0]
+                else:
+                    batch_number = batch_row
+                self.files_batch_filter_combo.addItem(str(batch_number))
     
     def on_files_batch_filter_changed(self, idx):
         """Handle batch filter change"""

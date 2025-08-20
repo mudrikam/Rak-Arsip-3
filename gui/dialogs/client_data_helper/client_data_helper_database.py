@@ -123,12 +123,12 @@ class ClientDataDatabaseHelper:
         )
     
     def get_batch_numbers_by_client(self, client_id):
-        """Get batch numbers for client"""
+        """Get batch numbers for client (with note, created_at)."""
         db_manager = self.get_db_manager()
         return db_manager.get_batch_numbers_by_client(client_id)
     
     def get_batch_list_note_and_client(self, batch_number):
-        """Get batch note and client"""
+        """Get batch note, client, and created_at."""
         db_manager = self.get_db_manager()
         return db_manager.get_batch_list_note_and_client(batch_number)
     
@@ -223,6 +223,6 @@ class ClientDataDatabaseHelper:
         return db_manager.connection_helper.get_status_name_by_id(status_id)
 
     def get_all_batch_numbers(self):
-        """Get all batch numbers from all clients."""
+        """Get all batch numbers from all clients (with client_id, note, created_at)."""
         db_manager = self.get_db_manager()
         return db_manager.get_all_batch_numbers()
