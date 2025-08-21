@@ -169,7 +169,11 @@ class AssignPriceDialog(QDialog):
         if batch_list:
             self.batch_combo.addItem("")
             for batch in batch_list:
-                self.batch_combo.addItem(batch)
+                if isinstance(batch, tuple):
+                    batch_number = batch[0]
+                else:
+                    batch_number = batch
+                self.batch_combo.addItem(str(batch_number))
         else:
             self.batch_combo.addItem("")
             self.batch_combo.setCurrentIndex(0)
@@ -213,7 +217,7 @@ class AssignPriceDialog(QDialog):
             QMessageBox.warning(self, "Input Error", "Batch number cannot be empty.")
             return
         clients = self.db_manager.get_all_clients()
-        batch_note, batch_client_id = self.db_manager.get_batch_list_note_and_client(batch_number)
+        batch_note, batch_client_id = self.db_manager.get_batch_list_note_and_client(batch_number)[:2]
         dialog = QDialog(self)
         dialog.setWindowTitle("Edit Batch List")
         layout = QFormLayout(dialog)
