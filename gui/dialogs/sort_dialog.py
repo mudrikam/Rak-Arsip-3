@@ -198,7 +198,11 @@ class SortDialog(QDialog):
                 self.batch_combo.clear()
                 self.batch_combo.addItem("")
                 for batch in batch_list:
-                    self.batch_combo.addItem(batch)
+                    if isinstance(batch, tuple):
+                        batch_number = batch[0]
+                    else:
+                        batch_number = batch
+                    self.batch_combo.addItem(str(batch_number))
         else:
             self.batch_combo.clear()
             self.batch_combo.setEnabled(False)
