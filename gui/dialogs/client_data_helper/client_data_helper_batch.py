@@ -253,15 +253,15 @@ class ClientDataBatchHelper:
                 # batch_row: (batch_number, note, created_at)
                 batch_number, note, created_at = batch_row
                 file_count = self.db_helper.count_file_client_batch_by_batch_number(batch_number)
-                batch_data.append((batch_number, note, file_count, created_at))
+                batch_data.append((batch_number, note, file_count, created_at, client_id))
         else:
             # Load all batch numbers from all clients
             batch_rows = self.db_helper.get_all_batch_numbers()
             for batch_row in batch_rows:
                 # batch_row: (batch_number, client_id, note, created_at)
-                batch_number, _, note, created_at = batch_row
+                batch_number, client_id_row, note, created_at = batch_row
                 file_count = self.db_helper.count_file_client_batch_by_batch_number(batch_number)
-                batch_data.append((batch_number, note, file_count, created_at))
+                batch_data.append((batch_number, note, file_count, created_at, client_id_row))
         self._batch_data_all = batch_data
         self.update_batch_table()
     
@@ -287,8 +287,8 @@ class ClientDataBatchHelper:
         # Apply search filter
         if search_text:
             self._batch_data_filtered = [
-                (batch_number, note, file_count, created_at)
-                for batch_number, note, file_count, created_at in self._batch_data_all
+                (batch_number, note, file_count, created_at, client_id)
+                for batch_number, note, file_count, created_at, client_id in self._batch_data_all
                 if search_text in str(batch_number).lower() or search_text in str(note).lower()
             ]
         else:
@@ -301,15 +301,16 @@ class ClientDataBatchHelper:
         finished_color = self.get_finished_color_from_config()
         
         self.batch_table.setRowCount(len(self._batch_data_filtered))
-        for row_idx, (batch_number, note, file_count, created_at) in enumerate(self._batch_data_filtered):
+        for row_idx, (batch_number, note, file_count, created_at, client_id_row) in enumerate(self._batch_data_filtered):
             # Create table items
             batch_item = QTableWidgetItem(str(batch_number))
             note_item = QTableWidgetItem(str(note))
             count_item = QTableWidgetItem(str(file_count))
             created_item = QTableWidgetItem(str(created_at) if created_at else "")
             
-            # Check if all files in this batch are finished
-            if self._selected_client_id and self.check_batch_all_finished(batch_number, self._selected_client_id):
+            # Always check finished status using the correct client_id
+            highlight_client_id = self._selected_client_id if self._selected_client_id else client_id_row
+            if highlight_client_id and self.check_batch_all_finished(batch_number, highlight_client_id):
                 green_color = QColor(finished_color)
                 green_color.setAlpha(80)
                 batch_item.setBackground(green_color)
