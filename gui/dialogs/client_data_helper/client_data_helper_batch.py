@@ -136,7 +136,6 @@ class ClientDataBatchHelper:
             return False
     
     def init_batch_list_tab(self, tab_widget):
-        """Initialize the batch list tab"""
         tab = QWidget()
         tab_layout = QVBoxLayout(tab)
         
@@ -187,7 +186,6 @@ class ClientDataBatchHelper:
         pagination_layout = QHBoxLayout()
         self.batch_prev_btn = QPushButton("Previous")
         self.batch_next_btn = QPushButton("Next")
-        self.batch_page_label = QLabel("Page 1/1")
         self.batch_page_spinner = QSpinBox()
         self.batch_page_spinner.setMinimum(1)
         self.batch_page_spinner.setMaximum(1)
@@ -200,7 +198,6 @@ class ClientDataBatchHelper:
         pagination_layout.addWidget(self.batch_next_btn)
         pagination_layout.addWidget(QLabel("Page:"))
         pagination_layout.addWidget(self.batch_page_spinner)
-        pagination_layout.addWidget(self.batch_page_label)
         pagination_layout.addStretch()
         pagination_layout.addWidget(QLabel("Rows per page:"))
         pagination_layout.addWidget(self.batch_rows_per_page_combo)
@@ -397,7 +394,6 @@ class ClientDataBatchHelper:
             self.batch_table.setItem(row_idx, 3, count_item)
             self.batch_table.setItem(row_idx, 4, created_item)
 
-        self.batch_page_label.setText(f"Page {self._batch_page}/{self._batch_total_pages}")
         self.batch_prev_btn.setEnabled(self._batch_page > 1)
         self.batch_next_btn.setEnabled(self._batch_page < self._batch_total_pages)
         self.batch_page_spinner.blockSignals(True)
