@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QTableWidget,
     QTableWidgetItem, QSizePolicy, QHeaderView, QMessageBox, QMenu, QDialog,
-    QLabel, QScrollArea, QFrame, QComboBox
+    QLabel, QScrollArea, QFrame, QComboBox, QSpacerItem
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QColor
@@ -88,15 +88,20 @@ class ClientDataBatchHelper:
     def __init__(self, parent_dialog, database_helper):
         self.parent = parent_dialog
         self.db_helper = database_helper
-        
+
         # Data storage
         self._batch_data_all = []
         self._batch_data_filtered = []
         self._selected_client_id = None
-        
+
         # Sort settings
-        self._batch_sort_field = "Batch Number"
-        self._batch_sort_order = "Descending"
+        self._batch_sort_field = "Created At"
+        self._batch_sort_order = "Ascending"
+
+        # Pagination
+        self._batch_page = 1
+        self._batch_rows_per_page = 20
+        self._batch_total_pages = 1
     
     def get_finished_color_from_config(self):
         """Get the finished status color from window config"""
@@ -178,6 +183,22 @@ class ClientDataBatchHelper:
         self.batch_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         tab_layout.addWidget(self.batch_table)
         
+        # Pagination controls
+        pagination_layout = QHBoxLayout()
+        self.batch_prev_btn = QPushButton("Previous")
+        self.batch_next_btn = QPushButton("Next")
+        self.batch_page_label = QLabel("Page 1/1")
+        self.batch_rows_per_page_combo = QComboBox()
+        self.batch_rows_per_page_combo.addItems(["10", "20", "50", "100"])
+        self.batch_rows_per_page_combo.setCurrentText(str(self._batch_rows_per_page))
+        pagination_layout.addWidget(self.batch_prev_btn)
+        pagination_layout.addWidget(self.batch_next_btn)
+        pagination_layout.addWidget(self.batch_page_label)
+        pagination_layout.addStretch()
+        pagination_layout.addWidget(QLabel("Rows per page:"))
+        pagination_layout.addWidget(self.batch_rows_per_page_combo)
+        tab_layout.addLayout(pagination_layout)
+
         # Add tab to widget
         tab_widget.addTab(tab, qta.icon("fa6s.layer-group"), "Batch List")
         
@@ -193,6 +214,9 @@ class ClientDataBatchHelper:
         self.batch_search_edit.textChanged.connect(self.on_batch_search_changed)
         self.batch_sort_combo.currentIndexChanged.connect(self.on_batch_sort_changed)
         self.batch_sort_order_combo.currentIndexChanged.connect(self.on_batch_sort_changed)
+        self.batch_prev_btn.clicked.connect(self.on_batch_prev_page)
+        self.batch_next_btn.clicked.connect(self.on_batch_next_page)
+        self.batch_rows_per_page_combo.currentIndexChanged.connect(self.on_batch_rows_per_page_changed)
 
         # Load all batch list by default (no client selected)
         self.load_batch_list_for_client(None)
@@ -265,6 +289,7 @@ class ClientDataBatchHelper:
                 client_name = self.db_helper.get_client_name_by_id(client_id_row)
                 batch_data.append((client_name, batch_number, note, file_count, created_at, client_id_row))
         self._batch_data_all = batch_data
+        self._batch_page = 1
         self.update_batch_table()
     
     def on_batch_refresh(self):
@@ -274,12 +299,32 @@ class ClientDataBatchHelper:
     
     def on_batch_search_changed(self):
         """Handle batch search text change"""
+        self._batch_page = 1
         self.update_batch_table()
     
     def on_batch_sort_changed(self):
         """Handle sort change"""
         self._batch_sort_field = self.batch_sort_combo.currentText()
         self._batch_sort_order = self.batch_sort_order_combo.currentText()
+        self._batch_page = 1
+        self.update_batch_table()
+    
+    def on_batch_prev_page(self):
+        """Handle previous page button click"""
+        if self._batch_page > 1:
+            self._batch_page -= 1
+            self.update_batch_table()
+    
+    def on_batch_next_page(self):
+        """Handle next page button click"""
+        if self._batch_page < self._batch_total_pages:
+            self._batch_page += 1
+            self.update_batch_table()
+    
+    def on_batch_rows_per_page_changed(self):
+        """Handle rows per page combo box change"""
+        self._batch_rows_per_page = int(self.batch_rows_per_page_combo.currentText())
+        self._batch_page = 1
         self.update_batch_table()
     
     def update_batch_table(self):
@@ -301,11 +346,21 @@ class ClientDataBatchHelper:
         # Apply sorting
         self._apply_batch_sorting()
         
+        total_rows = len(self._batch_data_filtered)
+        rows_per_page = self._batch_rows_per_page
+        self._batch_total_pages = max(1, (total_rows + rows_per_page - 1) // rows_per_page)
+        if self._batch_page > self._batch_total_pages:
+            self._batch_page = self._batch_total_pages
+
+        start_idx = (self._batch_page - 1) * rows_per_page
+        end_idx = min(start_idx + rows_per_page, total_rows)
+        page_data = self._batch_data_filtered[start_idx:end_idx]
+
         # Get finished color from config
         finished_color = self.get_finished_color_from_config()
         
-        self.batch_table.setRowCount(len(self._batch_data_filtered))
-        for row_idx, (client_name, batch_number, note, file_count, created_at, client_id_row) in enumerate(self._batch_data_filtered):
+        self.batch_table.setRowCount(len(page_data))
+        for row_idx, (client_name, batch_number, note, file_count, created_at, client_id_row) in enumerate(page_data):
             client_item = QTableWidgetItem(str(client_name))
             batch_item = QTableWidgetItem(str(batch_number))
             note_item = QTableWidgetItem(str(note))
@@ -327,6 +382,10 @@ class ClientDataBatchHelper:
             self.batch_table.setItem(row_idx, 2, note_item)
             self.batch_table.setItem(row_idx, 3, count_item)
             self.batch_table.setItem(row_idx, 4, created_item)
+
+        self.batch_page_label.setText(f"Page {self._batch_page}/{self._batch_total_pages}")
+        self.batch_prev_btn.setEnabled(self._batch_page > 1)
+        self.batch_next_btn.setEnabled(self._batch_page < self._batch_total_pages)
 
     def _apply_batch_sorting(self):
         """Apply sorting to filtered batch data"""
@@ -471,18 +530,20 @@ class ClientDataBatchHelper:
         self._batch_data_all = []
         self._batch_data_filtered = []
         self._selected_client_id = None
+        self._batch_page = 1
+        self.update_batch_table()
         # After clearing, reload all batch list
         self.load_batch_list_for_client(None)
     
     def on_batch_row_clicked(self, row, col):
         """Handle batch row click - load file URLs for selected batch"""
-        if row >= len(self._batch_data_filtered):
+        actual_row = (self._batch_page - 1) * self._batch_rows_per_page + row
+        if actual_row >= len(self._batch_data_filtered):
             return
 
-        client_name = self._batch_data_filtered[row][0]
-        batch_number = self._batch_data_filtered[row][1]
-        client_id = self._batch_data_filtered[row][5]
-        # If client is not selected, get client_id from batch_number
+        client_name = self._batch_data_filtered[actual_row][0]
+        batch_number = self._batch_data_filtered[actual_row][1]
+        client_id = self._batch_data_filtered[actual_row][5]
         if self._selected_client_id is None:
             selected_client_id = client_id
         else:
@@ -493,12 +554,13 @@ class ClientDataBatchHelper:
 
     def on_batch_row_double_clicked(self, row, col):
         """Handle batch row double click - switch to File URLs tab"""
-        if row >= len(self._batch_data_filtered):
+        actual_row = (self._batch_page - 1) * self._batch_rows_per_page + row
+        if actual_row >= len(self._batch_data_filtered):
             return
 
-        client_name = self._batch_data_filtered[row][0]
-        batch_number = self._batch_data_filtered[row][1]
-        client_id = self._batch_data_filtered[row][5]
+        client_name = self._batch_data_filtered[actual_row][0]
+        batch_number = self._batch_data_filtered[actual_row][1]
+        client_id = self._batch_data_filtered[actual_row][5]
         if self._selected_client_id is None:
             selected_client_id = client_id
         else:
@@ -516,10 +578,11 @@ class ClientDataBatchHelper:
 
     def on_batch_mark_finished(self, row):
         """Handle mark as finished for all files in batch"""
-        if row >= len(self._batch_data_filtered):
+        actual_row = (self._batch_page - 1) * self._batch_rows_per_page + row
+        if actual_row >= len(self._batch_data_filtered):
             return
 
-        batch_number = self._batch_data_filtered[row][1]
+        batch_number = self._batch_data_filtered[actual_row][1]
         client_name = self.parent._selected_client_name
 
         try:
