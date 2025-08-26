@@ -145,7 +145,7 @@ class ClientDataBatchHelper:
         
         # Sort controls
         self.batch_sort_combo = QComboBox()
-        self.batch_sort_combo.addItems(["Batch Number", "Note", "File Count", "Created At"])
+        self.batch_sort_combo.addItems(["Client Name", "Batch Number", "Note", "File Count", "Created At"])
         self.batch_sort_combo.setCurrentText(self._batch_sort_field)
         self.batch_sort_order_combo = QComboBox()
         self.batch_sort_order_combo.addItems(["Ascending", "Descending"])
@@ -168,9 +168,9 @@ class ClientDataBatchHelper:
         
         # Batch table
         self.batch_table = QTableWidget(tab)
-        self.batch_table.setColumnCount(4)
+        self.batch_table.setColumnCount(5)
         self.batch_table.setHorizontalHeaderLabels([
-            "Batch Number", "Note", "File Count", "Created At"
+            "Client Name", "Batch Number", "Note", "File Count", "Created At"
         ])
         self.batch_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.batch_table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -253,7 +253,8 @@ class ClientDataBatchHelper:
                 # batch_row: (batch_number, note, created_at)
                 batch_number, note, created_at = batch_row
                 file_count = self.db_helper.count_file_client_batch_by_batch_number(batch_number)
-                batch_data.append((batch_number, note, file_count, created_at, client_id))
+                client_name = self.db_helper.get_client_name_by_id(client_id)
+                batch_data.append((client_name, batch_number, note, file_count, created_at, client_id))
         else:
             # Load all batch numbers from all clients
             batch_rows = self.db_helper.get_all_batch_numbers()
@@ -261,7 +262,8 @@ class ClientDataBatchHelper:
                 # batch_row: (batch_number, client_id, note, created_at)
                 batch_number, client_id_row, note, created_at = batch_row
                 file_count = self.db_helper.count_file_client_batch_by_batch_number(batch_number)
-                batch_data.append((batch_number, note, file_count, created_at, client_id_row))
+                client_name = self.db_helper.get_client_name_by_id(client_id_row)
+                batch_data.append((client_name, batch_number, note, file_count, created_at, client_id_row))
         self._batch_data_all = batch_data
         self.update_batch_table()
     
@@ -287,9 +289,11 @@ class ClientDataBatchHelper:
         # Apply search filter
         if search_text:
             self._batch_data_filtered = [
-                (batch_number, note, file_count, created_at, client_id)
-                for batch_number, note, file_count, created_at, client_id in self._batch_data_all
-                if search_text in str(batch_number).lower() or search_text in str(note).lower()
+                (client_name, batch_number, note, file_count, created_at, client_id)
+                for client_name, batch_number, note, file_count, created_at, client_id in self._batch_data_all
+                if search_text in str(client_name).lower()
+                or search_text in str(batch_number).lower()
+                or search_text in str(note).lower()
             ]
         else:
             self._batch_data_filtered = list(self._batch_data_all)
@@ -301,28 +305,28 @@ class ClientDataBatchHelper:
         finished_color = self.get_finished_color_from_config()
         
         self.batch_table.setRowCount(len(self._batch_data_filtered))
-        for row_idx, (batch_number, note, file_count, created_at, client_id_row) in enumerate(self._batch_data_filtered):
-            # Create table items
+        for row_idx, (client_name, batch_number, note, file_count, created_at, client_id_row) in enumerate(self._batch_data_filtered):
+            client_item = QTableWidgetItem(str(client_name))
             batch_item = QTableWidgetItem(str(batch_number))
             note_item = QTableWidgetItem(str(note))
             count_item = QTableWidgetItem(str(file_count))
             created_item = QTableWidgetItem(str(created_at) if created_at else "")
             
-            # Always check finished status using the correct client_id
             highlight_client_id = self._selected_client_id if self._selected_client_id else client_id_row
             if highlight_client_id and self.check_batch_all_finished(batch_number, highlight_client_id):
                 green_color = QColor(finished_color)
                 green_color.setAlpha(80)
+                client_item.setBackground(green_color)
                 batch_item.setBackground(green_color)
                 note_item.setBackground(green_color)
                 count_item.setBackground(green_color)
                 created_item.setBackground(green_color)
             
-            # Set items in table
-            self.batch_table.setItem(row_idx, 0, batch_item)
-            self.batch_table.setItem(row_idx, 1, note_item)
-            self.batch_table.setItem(row_idx, 2, count_item)
-            self.batch_table.setItem(row_idx, 3, created_item)
+            self.batch_table.setItem(row_idx, 0, client_item)
+            self.batch_table.setItem(row_idx, 1, batch_item)
+            self.batch_table.setItem(row_idx, 2, note_item)
+            self.batch_table.setItem(row_idx, 3, count_item)
+            self.batch_table.setItem(row_idx, 4, created_item)
 
     def _apply_batch_sorting(self):
         """Apply sorting to filtered batch data"""
@@ -330,28 +334,34 @@ class ClientDataBatchHelper:
             return
         
         reverse = self._batch_sort_order == "Descending"
-        
-        if self._batch_sort_field == "Batch Number":
+        field = self._batch_sort_field
+
+        if field == "Client Name":
+            self._batch_data_filtered.sort(
+                key=lambda item: str(item[0]).lower(),
+                reverse=reverse
+            )
+        elif field == "Batch Number":
             def sort_key(item):
-                batch_number = item[0]
+                batch_number = item[1]
                 try:
                     return (0, int(batch_number))
                 except (ValueError, TypeError):
                     return (1, str(batch_number).lower())
             self._batch_data_filtered.sort(key=sort_key, reverse=reverse)
-        elif self._batch_sort_field == "Note":
+        elif field == "Note":
             self._batch_data_filtered.sort(
-                key=lambda item: str(item[1]).lower(), 
+                key=lambda item: str(item[2]).lower(), 
                 reverse=reverse
             )
-        elif self._batch_sort_field == "File Count":
+        elif field == "File Count":
             self._batch_data_filtered.sort(
-                key=lambda item: int(item[2]) if item[2] else 0, 
+                key=lambda item: int(item[3]) if item[3] else 0, 
                 reverse=reverse
             )
-        elif self._batch_sort_field == "Created At":
+        elif field == "Created At":
             self._batch_data_filtered.sort(
-                key=lambda item: item[3] if item[3] else "", 
+                key=lambda item: item[4] if item[4] else "", 
                 reverse=reverse
             )
     
@@ -385,8 +395,8 @@ class ClientDataBatchHelper:
             QMessageBox.warning(self.parent, "No Batch Selected", "Please select a batch to edit.")
             return
 
-        batch_number = self.batch_table.item(row, 0).text()
-        note = self.batch_table.item(row, 1).text()
+        batch_number = self.batch_table.item(row, 1).text()
+        note = self.batch_table.item(row, 2).text()
 
         from ..client_data_dialog import BatchEditDialog
 
@@ -426,7 +436,7 @@ class ClientDataBatchHelper:
             QMessageBox.warning(self.parent, "No Batch Selected", "Please select a batch to delete.")
             return
         
-        batch_number = self.batch_table.item(row, 0).text()
+        batch_number = self.batch_table.item(row, 1).text()
         affected_count = self.db_helper.count_file_client_batch_by_batch_number(batch_number)
         
         # First confirmation
@@ -469,14 +479,13 @@ class ClientDataBatchHelper:
         if row >= len(self._batch_data_filtered):
             return
 
-        batch_number = self._batch_data_filtered[row][0]
+        client_name = self._batch_data_filtered[row][0]
+        batch_number = self._batch_data_filtered[row][1]
+        client_id = self._batch_data_filtered[row][5]
         # If client is not selected, get client_id from batch_number
         if self._selected_client_id is None:
-            _, client_id, _ = self.db_helper.get_batch_list_note_and_client(batch_number)
-            client_name = self.db_helper.get_client_name_by_id(client_id)
             selected_client_id = client_id
         else:
-            client_name = self.parent._selected_client_name
             selected_client_id = self._selected_client_id
 
         if hasattr(self.parent, '_load_file_urls_for_batch'):
@@ -487,13 +496,12 @@ class ClientDataBatchHelper:
         if row >= len(self._batch_data_filtered):
             return
 
-        batch_number = self._batch_data_filtered[row][0]
+        client_name = self._batch_data_filtered[row][0]
+        batch_number = self._batch_data_filtered[row][1]
+        client_id = self._batch_data_filtered[row][5]
         if self._selected_client_id is None:
-            _, client_id, _ = self.db_helper.get_batch_list_note_and_client(batch_number)
-            client_name = self.db_helper.get_client_name_by_id(client_id)
             selected_client_id = client_id
         else:
-            client_name = self.parent._selected_client_name
             selected_client_id = self._selected_client_id
 
         if hasattr(self.parent, '_load_file_urls_for_batch'):
@@ -511,7 +519,7 @@ class ClientDataBatchHelper:
         if row >= len(self._batch_data_filtered):
             return
 
-        batch_number = self._batch_data_filtered[row][0]
+        batch_number = self._batch_data_filtered[row][1]
         client_name = self.parent._selected_client_name
 
         try:
