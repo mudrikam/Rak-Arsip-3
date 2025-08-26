@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QTableWidget,
     QTableWidgetItem, QSizePolicy, QHeaderView, QMessageBox, QMenu, QDialog,
-    QLabel, QScrollArea, QFrame, QComboBox, QSpacerItem
+    QLabel, QScrollArea, QFrame, QComboBox, QSpacerItem, QSpinBox
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QColor
@@ -188,11 +188,18 @@ class ClientDataBatchHelper:
         self.batch_prev_btn = QPushButton("Previous")
         self.batch_next_btn = QPushButton("Next")
         self.batch_page_label = QLabel("Page 1/1")
+        self.batch_page_spinner = QSpinBox()
+        self.batch_page_spinner.setMinimum(1)
+        self.batch_page_spinner.setMaximum(1)
+        self.batch_page_spinner.setValue(1)
+        self.batch_page_spinner.setFixedWidth(60)
         self.batch_rows_per_page_combo = QComboBox()
         self.batch_rows_per_page_combo.addItems(["10", "20", "50", "100"])
         self.batch_rows_per_page_combo.setCurrentText(str(self._batch_rows_per_page))
         pagination_layout.addWidget(self.batch_prev_btn)
         pagination_layout.addWidget(self.batch_next_btn)
+        pagination_layout.addWidget(QLabel("Page:"))
+        pagination_layout.addWidget(self.batch_page_spinner)
         pagination_layout.addWidget(self.batch_page_label)
         pagination_layout.addStretch()
         pagination_layout.addWidget(QLabel("Rows per page:"))
@@ -217,6 +224,7 @@ class ClientDataBatchHelper:
         self.batch_prev_btn.clicked.connect(self.on_batch_prev_page)
         self.batch_next_btn.clicked.connect(self.on_batch_next_page)
         self.batch_rows_per_page_combo.currentIndexChanged.connect(self.on_batch_rows_per_page_changed)
+        self.batch_page_spinner.valueChanged.connect(self.on_batch_page_spinner_changed)
 
         # Load all batch list by default (no client selected)
         self.load_batch_list_for_client(None)
@@ -327,6 +335,12 @@ class ClientDataBatchHelper:
         self._batch_page = 1
         self.update_batch_table()
     
+    def on_batch_page_spinner_changed(self, value):
+        """Handle page spinner value change"""
+        if value != self._batch_page:
+            self._batch_page = value
+            self.update_batch_table()
+    
     def update_batch_table(self):
         """Update the batch table with filtered and sorted data"""
         search_text = self.batch_search_edit.text().strip().lower()
@@ -386,6 +400,10 @@ class ClientDataBatchHelper:
         self.batch_page_label.setText(f"Page {self._batch_page}/{self._batch_total_pages}")
         self.batch_prev_btn.setEnabled(self._batch_page > 1)
         self.batch_next_btn.setEnabled(self._batch_page < self._batch_total_pages)
+        self.batch_page_spinner.blockSignals(True)
+        self.batch_page_spinner.setMaximum(self._batch_total_pages)
+        self.batch_page_spinner.setValue(self._batch_page)
+        self.batch_page_spinner.blockSignals(False)
 
     def _apply_batch_sorting(self):
         """Apply sorting to filtered batch data"""
