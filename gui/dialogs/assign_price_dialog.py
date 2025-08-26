@@ -10,8 +10,16 @@ class AssignPriceDialog(QDialog):
         main_layout = QVBoxLayout(self)
         form_layout = QFormLayout()
         self.item_label = QLabel(file_record.get("name", ""))
-        self.price_edit = QLineEdit()
-        self.price_edit.setPlaceholderText("Enter price")
+
+        # Price ComboBox (editable), default kosong, pilihan 50000 dan 70000
+        self.price_combo = QComboBox()
+        self.price_combo.setEditable(True)
+        self.price_combo.addItem("")  # default kosong
+        self.price_combo.addItem("50000")
+        self.price_combo.addItem("70000")
+        self.price_combo.setCurrentIndex(0)
+        self.price_combo.setPlaceholderText("Enter price")  # PySide6 6.5+ only, safe to ignore if not visible
+
         self.currency_combo = QComboBox()
         self.currency_combo.addItems(["IDR", "USD"])
         self.currency_combo.setCurrentText("IDR")
@@ -27,11 +35,20 @@ class AssignPriceDialog(QDialog):
                 price_display = str(price_float)
         except Exception:
             price_display = price
-        self.price_edit.setText(price_display)
+        if price_display and price_display not in ["50000", "70000"]:
+            self.price_combo.addItem(price_display)
+        if price_display:
+            idx = self.price_combo.findText(price_display)
+            if idx >= 0:
+                self.price_combo.setCurrentIndex(idx)
+            else:
+                self.price_combo.setEditText(price_display)
+        else:
+            self.price_combo.setCurrentIndex(0)
         self.currency_combo.setCurrentText(currency)
         self.note_edit.setText(note)
         form_layout.addRow(QLabel("Item Name:"), self.item_label)
-        form_layout.addRow(QLabel("Price:"), self.price_edit)
+        form_layout.addRow(QLabel("Price:"), self.price_combo)
         form_layout.addRow(QLabel("Currency:"), self.currency_combo)
         form_layout.addRow(QLabel("Note:"), self.note_edit)
 
@@ -143,7 +160,7 @@ class AssignPriceDialog(QDialog):
         self.remove_team_btn.clicked.connect(self._on_remove_selected_team)
         self.edit_note_btn.clicked.connect(self._on_edit_note)
         # Only save price on focus out, not on every textChanged
-        self.price_edit.installEventFilter(self)
+        self.price_combo.lineEdit().installEventFilter(self)
         self.currency_combo.currentTextChanged.connect(self._on_price_changed)
         self.note_edit.installEventFilter(self)
         self.client_combo.currentIndexChanged.connect(self._on_client_changed)
@@ -154,7 +171,7 @@ class AssignPriceDialog(QDialog):
         self.refresh_earnings_table()
 
     def eventFilter(self, obj, event):
-        if obj == self.price_edit and event.type() == QEvent.FocusOut:
+        if obj == self.price_combo.lineEdit() and event.type() == QEvent.FocusOut:
             self._on_price_changed()
         if obj == self.note_edit and event.type() == QEvent.FocusOut:
             self._on_note_changed()
@@ -374,7 +391,7 @@ class AssignPriceDialog(QDialog):
             self.refresh_earnings_table()
 
     def _on_price_changed(self):
-        price = self.price_edit.text().strip()
+        price = self.price_combo.currentText().strip()
         currency = self.currency_combo.currentText()
         note = self.note_edit.text().strip()
         file_id = self.file_record["id"]
@@ -387,7 +404,7 @@ class AssignPriceDialog(QDialog):
             self.refresh_earnings_table()
 
     def _on_note_changed(self):
-        price = self.price_edit.text().strip()
+        price = self.price_combo.currentText().strip()
         currency = self.currency_combo.currentText()
         note = self.note_edit.text().strip()
         file_id = self.file_record["id"]
@@ -417,7 +434,7 @@ class AssignPriceDialog(QDialog):
             self.batch_combo.setCurrentIndex(0)
 
     def _on_accept(self):
-        price = self.price_edit.text().strip()
+        price = self.price_combo.currentText().strip()
         currency = self.currency_combo.currentText()
         note = self.note_edit.text().strip()
         file_id = self.file_record["id"]
