@@ -1,9 +1,9 @@
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QTableWidget,
     QTableWidgetItem, QSizePolicy, QHeaderView, QLabel, QComboBox, QSpinBox,
-    QMessageBox, QMenu, QDateTimeEdit
+    QMessageBox, QMenu, QDateTimeEdit, QCheckBox
 )
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QColor
 from PySide6.QtCore import Qt, QDateTime
 import qtawesome as qta
 
@@ -20,6 +20,7 @@ class BatchManagementDialog(QDialog):
         self._batch_page = 1
         self._batch_rows_per_page = 20
         self._batch_total_pages = 1
+        self._hide_finished = False
         self.init_ui()
         self.load_batch_data()
 
@@ -94,11 +95,11 @@ class BatchManagementDialog(QDialog):
         pagination_layout.addStretch()
         pagination_layout.addWidget(QLabel("Rows per page:"))
         pagination_layout.addWidget(self.batch_rows_per_page_combo)
-        layout.addLayout(pagination_layout)
 
-        close_btn = QPushButton("Close", self)
-        close_btn.clicked.connect(self.accept)
-        layout.addWidget(close_btn)
+        self.hide_finished_checkbox = QCheckBox("Hide Finished")
+        self.hide_finished_checkbox.setChecked(False)
+        pagination_layout.addWidget(self.hide_finished_checkbox)
+        layout.addLayout(pagination_layout)
 
         self.batch_refresh_btn.clicked.connect(self.load_batch_data)
         self.batch_search_edit.textChanged.connect(self.update_batch_table)
@@ -113,14 +114,10 @@ class BatchManagementDialog(QDialog):
         self.batch_delete_btn.clicked.connect(self.on_batch_delete)
         self.batch_table.cellDoubleClicked.connect(self.on_batch_edit)
         self.batch_table.customContextMenuRequested.connect(self.show_batch_context_menu)
+        self.hide_finished_checkbox.stateChanged.connect(self.on_hide_finished_changed)
 
     def load_batch_data(self):
-        if not self.db_manager:
-            self._batch_data_all = []
-            self.update_batch_table()
-            return
-        # Ambil data batch lengkap (dengan client_name)
-        batch_rows = self.db_manager.get_all_batches()
+        batch_rows = self.db_manager.get_all_batches() if self.db_manager else []
         batch_data = []
         for row in batch_rows:
             file_count = self.db_manager.count_file_client_batch_by_batch_number(row["batch_number"])
@@ -133,8 +130,9 @@ class BatchManagementDialog(QDialog):
 
     def update_batch_table(self):
         search_text = self.batch_search_edit.text().strip().lower()
+        hide_finished = self.hide_finished_checkbox.isChecked()
         if search_text:
-            self._batch_data_filtered = [
+            filtered = [
                 (client_name, batch_number, note, file_count, created_at, client_id)
                 for client_name, batch_number, note, file_count, created_at, client_id in self._batch_data_all
                 if search_text in str(client_name).lower()
@@ -142,7 +140,10 @@ class BatchManagementDialog(QDialog):
                 or search_text in str(note).lower()
             ]
         else:
-            self._batch_data_filtered = list(self._batch_data_all)
+            filtered = list(self._batch_data_all)
+        if hide_finished:
+            filtered = [row for row in filtered if str(row[2]).strip().lower() != "finished"]
+        self._batch_data_filtered = filtered
 
         self._apply_batch_sorting()
 
@@ -159,11 +160,21 @@ class BatchManagementDialog(QDialog):
 
         self.batch_table.setRowCount(len(page_data))
         for row_idx, (client_name, batch_number, note, file_count, created_at, client_id) in enumerate(page_data):
-            self.batch_table.setItem(row_idx, 0, QTableWidgetItem(str(client_name)))
-            self.batch_table.setItem(row_idx, 1, QTableWidgetItem(str(batch_number)))
-            self.batch_table.setItem(row_idx, 2, QTableWidgetItem(str(note)))
-            self.batch_table.setItem(row_idx, 3, QTableWidgetItem(str(file_count)))
-            self.batch_table.setItem(row_idx, 4, QTableWidgetItem(str(created_at) if created_at else ""))
+            client_item = QTableWidgetItem(str(client_name))
+            batch_item = QTableWidgetItem(str(batch_number))
+            note_item = QTableWidgetItem(str(note))
+            count_item = QTableWidgetItem(str(file_count))
+            created_item = QTableWidgetItem(str(created_at) if created_at else "")
+            if str(note).strip().lower() == "finished":
+                green = QColor("#43a047")
+                green.setAlpha(80)
+                for item in (client_item, batch_item, note_item, count_item, created_item):
+                    item.setBackground(green)
+            self.batch_table.setItem(row_idx, 0, client_item)
+            self.batch_table.setItem(row_idx, 1, batch_item)
+            self.batch_table.setItem(row_idx, 2, note_item)
+            self.batch_table.setItem(row_idx, 3, count_item)
+            self.batch_table.setItem(row_idx, 4, created_item)
 
         self.batch_page_label.setText(f"Page {self._batch_page}/{self._batch_total_pages}")
         self.batch_prev_btn.setEnabled(self._batch_page > 1)
@@ -233,6 +244,9 @@ class BatchManagementDialog(QDialog):
         if value != self._batch_page:
             self._batch_page = value
             self.update_batch_table()
+
+    def on_hide_finished_changed(self, state):
+        self.update_batch_table()
 
     def get_selected_row_data(self):
         row = self.batch_table.currentRow()
