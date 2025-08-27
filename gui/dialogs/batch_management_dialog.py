@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QAction, QColor
 from PySide6.QtCore import Qt, QDateTime, QTimer, QThread, Signal, QObject
 import qtawesome as qta
+from datetime import datetime, timedelta
 
 class SyncDriveWorker(QObject):
     finished = Signal()
@@ -37,8 +38,10 @@ class SyncDriveWorker(QObject):
             ).execute()
             spreadsheets = results.get('files', [])
             if spreadsheets:
-                for file in spreadsheets:
-                    self.message.emit(f"Batch Queue spreadsheet already exists: {file['name']}")
+                spreadsheet_id = spreadsheets[0]['id']
+                self.message.emit(f"Batch Queue spreadsheet already exists: {spreadsheets[0]['name']}")
+                self.dialog.update_batch_queue_spreadsheet(spreadsheet_id)
+                self.message.emit("Batch Queue spreadsheet updated with latest data.")
             else:
                 self.message.emit("Batch Queue spreadsheet not found, creating...")
                 spreadsheet_id = self.dialog.create_batch_queue_spreadsheet()
@@ -533,6 +536,137 @@ class BatchManagementDialog(QDialog):
         except Exception as e:
             print(f"Sync to Drive error: {e}")
 
+    def get_batch_queue_data_and_header(self):
+        """Prepare header and data for Batch Queue spreadsheet."""
+        from datetime import datetime
+        header = [
+            "Batch Number", "File Count", "Created At"
+        ]
+        data = []
+        for row in self._batch_data_all:
+            note = row[2]
+            if str(note).strip().lower() == "finished":
+                continue
+            batch_number = row[1]
+            file_count = row[3]
+            created_at = row[4]
+            created_at_ago = time_ago(created_at)
+            data.append((batch_number, file_count, created_at_ago, created_at))
+        # Sort ascending by created_at (oldest at top)
+        data.sort(key=lambda x: x[3] if x[3] else "", reverse=False)
+        data = [[d[0], d[1], d[2]] for d in data]
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        return header, data, today_str
+
+    def write_batch_queue_sheet_content(self, sheets_service, spreadsheet_id, header, data, today_str):
+        """Write title, date, header, and data to the spreadsheet."""
+        sheets_service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range="A1",
+            valueInputOption="USER_ENTERED",
+            body={"values": [["DESAINIA STUDIO BATCH QUEUE"]]
+        }).execute()
+        sheets_service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range="A2",
+            valueInputOption="USER_ENTERED",
+            body={"values": [[today_str]]}
+        ).execute()
+        sheets_service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range="A5",
+            valueInputOption="USER_ENTERED",
+            body={"values": [header] + data}
+        ).execute()
+
+    def apply_batch_queue_sheet_formatting(self, sheets_service, spreadsheet_id):
+        """Apply formatting to the Batch Queue spreadsheet."""
+        requests = [
+            {
+                "repeatCell": {
+                    "range": {
+                        "sheetId": 0,
+                        "startRowIndex": 0,
+                        "endRowIndex": 1,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 3
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "textFormat": {
+                                "fontSize": 16,
+                                "bold": True
+                            }
+                        }
+                    },
+                    "fields": "userEnteredFormat.textFormat"
+                }
+            },
+            {
+                "repeatCell": {
+                    "range": {
+                        "sheetId": 0,
+                        "startRowIndex": 1,
+                        "endRowIndex": 2,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 3
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "textFormat": {
+                                "bold": True
+                            },
+                            "horizontalAlignment": "CENTER"
+                        }
+                    },
+                    "fields": "userEnteredFormat.textFormat,userEnteredFormat.horizontalAlignment"
+                }
+            },
+            {
+                "repeatCell": {
+                    "range": {
+                        "sheetId": 0,
+                        "startRowIndex": 4,
+                        "endRowIndex": 5,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 3
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "backgroundColor": {"red": 0, "green": 0, "blue": 0},
+                            "textFormat": {
+                                "foregroundColor": {"red": 1, "green": 1, "blue": 1},
+                                "bold": True
+                            },
+                            "horizontalAlignment": "CENTER"
+                        }
+                    },
+                    "fields": "userEnteredFormat.backgroundColor,userEnteredFormat.textFormat,userEnteredFormat.horizontalAlignment"
+                }
+            },
+            {
+                "repeatCell": {
+                    "range": {
+                        "sheetId": 0,
+                        "startRowIndex": 5,
+                        "endRowIndex": 1000,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 3
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "horizontalAlignment": "CENTER"
+                        }
+                    },
+                    "fields": "userEnteredFormat.horizontalAlignment"
+                }
+            }
+        ]
+        sheets_service.spreadsheets().batchUpdate(
+            spreadsheetId=spreadsheet_id,
+            body={"requests": requests}
+        ).execute()
+
     def create_batch_queue_spreadsheet(self):
         try:
             drive_service, sheets_service = self.get_google_services(require_sheets=True)
@@ -569,10 +703,36 @@ class BatchManagementDialog(QDialog):
                 fields="id, parents"
             ).execute()
 
+            try:
+                header, data, today_str = self.get_batch_queue_data_and_header()
+                self.write_batch_queue_sheet_content(sheets_service, spreadsheet_id, header, data, today_str)
+                self.apply_batch_queue_sheet_formatting(sheets_service, spreadsheet_id)
+            except Exception as e:
+                print(f"Failed to set A1/A2/header value or formatting: {e}")
+
             return spreadsheet_id
         except Exception as e:
             print(f"Error creating batch queue spreadsheet: {e}")
             return None
+
+    def update_batch_queue_spreadsheet(self, spreadsheet_id):
+        try:
+            sheets_service = self._sheets_service
+            if not sheets_service:
+                return False
+
+            header, data, today_str = self.get_batch_queue_data_and_header()
+            # Clear old data rows before writing new data
+            sheets_service.spreadsheets().values().clear(
+                spreadsheetId=spreadsheet_id,
+                range="A6:C1000"
+            ).execute()
+            self.write_batch_queue_sheet_content(sheets_service, spreadsheet_id, header, data, today_str)
+            self.apply_batch_queue_sheet_formatting(sheets_service, spreadsheet_id)
+            return True
+        except Exception as e:
+            print(f"Failed to update Batch Queue spreadsheet: {e}")
+            return False
 
     def start_sync_btn_blink(self):
         if not self._sync_blink_timer:
@@ -615,3 +775,33 @@ class BatchManagementDialog(QDialog):
 
     def _on_sync_drive_message(self, msg):
         print(msg)
+
+def time_ago(dt_str):
+    """Convert datetime string to 'x days ago' style."""
+    try:
+        dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
+    except Exception:
+        try:
+            dt = datetime.strptime(dt_str, "%Y-%m-%d")
+        except Exception:
+            return dt_str
+    now = datetime.now()
+    diff = now - dt
+    seconds = diff.total_seconds()
+    if seconds < 60:
+        return f"{int(seconds)} seconds ago"
+    elif seconds < 3600:
+        minutes = int(seconds // 60)
+        return f"{minutes} minute{'s' if minutes > 1 else ''} ago"
+    elif seconds < 86400:
+        hours = int(seconds // 3600)
+        return f"{hours} hour{'s' if hours > 1 else ''} ago"
+    elif seconds < 30 * 86400:
+        days = int(seconds // 86400)
+        return f"{days} day{'s' if days > 1 else ''} ago"
+    elif seconds < 365 * 86400:
+        months = int(seconds // (30 * 86400))
+        return f"{months} month{'s' if months > 1 else ''} ago"
+    else:
+        years = int(seconds // (365 * 86400))
+        return f"{years} year{'s' if years > 1 else ''} ago"
