@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QTabWidget, QFormLayout, QLineEdit, QMessageBox, QComboBox, QDialogButtonBox, QMainWindow
+    QDialog, QVBoxLayout, QTabWidget, QFormLayout, QLineEdit, QMessageBox, QComboBox, QDialogButtonBox, QMainWindow, QDateTimeEdit
 )
-from PySide6.QtCore import Qt, QPoint
+from PySide6.QtCore import Qt, QPoint, QDateTime
 import qtawesome as qta
 
 # Import helper classes
@@ -15,21 +15,16 @@ from .client_data_helper.client_data_invoice_helper import ClientDataInvoiceHelp
 
 class BatchEditDialog(QDialog):
     """Dialog for editing batch information"""
-    def __init__(self, batch_number="", note="", client_id=None, clients=None, parent=None, show_client_combo=False):
+    def __init__(self, batch_number="", note="", client_id=None, clients=None, parent=None, show_client_combo=False, created_at=None):
         super().__init__(parent)
         self.setWindowTitle("Edit Batch List" if not show_client_combo else "Add Batch List")
         self.setMinimumWidth(350)
         layout = QFormLayout(self)
-        
-        self.batch_number_edit = QLineEdit(batch_number)
-        self.note_edit = QLineEdit(note)
-        layout.addRow("Batch Number:", self.batch_number_edit)
-        layout.addRow("Note:", self.note_edit)
-        
+
         self.client_combo = None
         self._client_id = client_id
         self._show_client_combo = show_client_combo
-        
+
         if show_client_combo and clients:
             self.client_combo = QComboBox(self)
             for c in clients:
@@ -39,24 +34,50 @@ class BatchEditDialog(QDialog):
                 if idx >= 0:
                     self.client_combo.setCurrentIndex(idx)
             layout.addRow("Assign Batch to Client:", self.client_combo)
-        
+
+        self.batch_number_edit = QLineEdit(batch_number)
+        layout.addRow("Batch Number:", self.batch_number_edit)
+
+        self.created_at_edit = QDateTimeEdit(self)
+        self.created_at_edit.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
+        self.created_at_edit.setCalendarPopup(True)
+        if created_at:
+            if isinstance(created_at, str):
+                dt = QDateTime.fromString(created_at, "yyyy-MM-dd HH:mm:ss")
+                if not dt.isValid():
+                    dt = QDateTime.currentDateTime()
+            elif isinstance(created_at, QDateTime):
+                dt = created_at
+            else:
+                dt = QDateTime.currentDateTime()
+            self.created_at_edit.setDateTime(dt)
+        else:
+            self.created_at_edit.setDateTime(QDateTime.currentDateTime())
+        layout.addRow("Created At:", self.created_at_edit)
+
+        self.note_edit = QLineEdit(note)
+        layout.addRow("Note:", self.note_edit)
+
         self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         layout.addWidget(self.button_box)
         self.button_box.accepted.connect(self.accept)
         self.button_box.rejected.connect(self.reject)
 
     def get_values(self):
+        created_at_str = self.created_at_edit.dateTime().toString("yyyy-MM-dd HH:mm:ss")
         if self._show_client_combo and self.client_combo:
             return (
                 self.batch_number_edit.text().strip(),
                 self.note_edit.text().strip(),
-                self.client_combo.currentData()
+                self.client_combo.currentData(),
+                created_at_str
             )
         else:
             return (
                 self.batch_number_edit.text().strip(),
                 self.note_edit.text().strip(),
-                self._client_id
+                self._client_id,
+                created_at_str
             )
 
 def find_main_window(widget):

@@ -15,6 +15,7 @@ from .db_helper.db_helper_teams import DatabaseTeamsHelper
 from .db_helper.db_helper_price import DatabasePriceHelper
 from .db_helper.db_helper_backup import DatabaseBackupHelper
 from .db_helper.db_helper_urls import DatabaseUrlsHelper
+from .db_helper.db_helper_batch_manager import DatabaseBatchManagerHelper
 
 
 class DatabaseManager(QObject):
@@ -49,6 +50,7 @@ class DatabaseManager(QObject):
         self.price_helper = DatabasePriceHelper(self)
         self.backup_helper = DatabaseBackupHelper(self)
         self.urls_helper = DatabaseUrlsHelper(self)
+        self.batch_manager_helper = DatabaseBatchManagerHelper(self)
 
         # Initialize database
         self.connection_helper.ensure_database_exists()
@@ -479,3 +481,28 @@ class DatabaseManager(QObject):
     def mark_batch_note_finished(self, batch_number):
         """Update batch_list note to 'Finished' for the given batch_number."""
         return self.clients_helper.mark_batch_note_finished(batch_number)
+
+    # Batch Manager methods - delegate to batch manager helper
+    def get_all_batches(self):
+        return self.batch_manager_helper.get_all_batches()
+
+    def get_batch_by_number(self, batch_number):
+        return self.batch_manager_helper.get_batch_by_number(batch_number)
+
+    def add_batch(self, batch_number, client_id, note=""):
+        return self.batch_manager_helper.add_batch(batch_number, client_id, note)
+
+    def update_batch(self, batch_number, client_id, note):
+        return self.batch_manager_helper.update_batch(batch_number, client_id, note)
+
+    def delete_batch(self, batch_number):
+        return self.batch_manager_helper.delete_batch(batch_number)
+
+    def get_batch_clients(self):
+        return self.batch_manager_helper.get_batch_clients()
+
+    def get_batch_file_count(self, batch_number):
+        return self.batch_manager_helper.get_batch_file_count(batch_number)
+
+    def get_batch_list(self, search_text=None, sort_field="Created At", sort_order="Ascending", offset=0, limit=20):
+        return self.batch_manager_helper.get_batch_list(search_text, sort_field, sort_order, offset, limit)

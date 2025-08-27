@@ -50,6 +50,10 @@ class MainMenu(QMenuBar):
         self.client_action.triggered.connect(self.show_client_dialog)
         self.addAction(self.client_action)
 
+        self.batch_action = QAction("Batch", self)
+        self.batch_action.triggered.connect(self.show_batch_management_dialog)
+        self.addAction(self.batch_action)
+
         help_menu = QMenu("Help", self)
         self.about_action = QAction(qta.icon('fa6s.circle-info'), "About", self)
         self.repo_action = QAction(qta.icon('fa6b.github'), "Repo", self)
@@ -82,6 +86,11 @@ class MainMenu(QMenuBar):
 
     def show_client_dialog(self):
         dialog = ClientDataDialog(self)
+        dialog.exec()
+
+    def show_batch_management_dialog(self):
+        from gui.dialogs.batch_management_dialog import BatchManagementDialog
+        dialog = BatchManagementDialog(self)
         dialog.exec()
 
     def _get_central_widget(self):
