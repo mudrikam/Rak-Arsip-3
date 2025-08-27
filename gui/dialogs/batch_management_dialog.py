@@ -162,6 +162,25 @@ class BatchManagementDialog(QDialog):
 
         layout.addLayout(pagination_layout)
 
+        # STATISTICS ROW
+        stats_layout = QHBoxLayout()
+        self.stats_total_files_label = QLabel("Total Files: 0")
+        self.stats_batch_queue_label = QLabel("Batch Queue: 0 batch (0 files)")
+        self.stats_total_batch_label = QLabel("Total Batch: 0")
+        self.stats_oldest_label = QLabel("Oldest: -")
+        self.stats_newest_label = QLabel("Newest: -")
+        stats_layout.addWidget(self.stats_total_files_label)
+        stats_layout.addSpacing(20)
+        stats_layout.addWidget(self.stats_batch_queue_label)
+        stats_layout.addSpacing(20)
+        stats_layout.addWidget(self.stats_total_batch_label)
+        stats_layout.addSpacing(20)
+        stats_layout.addWidget(self.stats_oldest_label)
+        stats_layout.addSpacing(20)
+        stats_layout.addWidget(self.stats_newest_label)
+        stats_layout.addStretch()
+        layout.addLayout(stats_layout)
+
         self.batch_refresh_btn.clicked.connect(self.load_batch_data)
         self.batch_search_edit.textChanged.connect(self.update_batch_table)
         self.batch_sort_combo.currentIndexChanged.connect(self.on_sort_changed)
@@ -189,6 +208,7 @@ class BatchManagementDialog(QDialog):
         self._batch_data_all = batch_data
         self._batch_page = 1
         self.update_batch_table()
+        self.update_stats_row()
 
     def update_batch_table(self):
         search_text = self.batch_search_edit.text().strip().lower()
@@ -245,6 +265,40 @@ class BatchManagementDialog(QDialog):
         self.batch_page_spinner.setMaximum(self._batch_total_pages)
         self.batch_page_spinner.setValue(self._batch_page)
         self.batch_page_spinner.blockSignals(False)
+        self.update_stats_row()
+
+    def update_stats_row(self):
+        total_files = 0
+        total_batch = len(self._batch_data_all)
+        queue_batches = []
+        queue_files = 0
+        for row in self._batch_data_all:
+            total_files += int(row[3]) if row[3] else 0
+            if str(row[2]).strip().lower() != "finished":
+                queue_batches.append(row)
+                queue_files += int(row[3]) if row[3] else 0
+        self.stats_total_files_label.setText(f"Total Files: {total_files}")
+        self.stats_batch_queue_label.setText(f"Batch Queue: {len(queue_batches)} batch ({queue_files} files)")
+        self.stats_total_batch_label.setText(f"Total Batch: {total_batch}")
+
+        # Oldest and newest logic
+        hide_finished = self.hide_finished_checkbox.isChecked()
+        if hide_finished:
+            # Only consider not finished batches
+            filtered_rows = [row for row in self._batch_data_all if str(row[2]).strip().lower() != "finished"]
+        else:
+            filtered_rows = self._batch_data_all
+        created_dates = [row[4] for row in filtered_rows if row[4]]
+        if created_dates:
+            oldest_date = min(created_dates)
+            newest_date = max(created_dates)
+            oldest_text = time_ago(oldest_date)
+            newest_text = time_ago(newest_date)
+        else:
+            oldest_text = "-"
+            newest_text = "-"
+        self.stats_oldest_label.setText(f"Oldest: {oldest_text}")
+        self.stats_newest_label.setText(f"Newest: {newest_text}")
 
     def _apply_batch_sorting(self):
         if not self._batch_data_filtered:
