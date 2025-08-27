@@ -162,6 +162,25 @@ class BatchManagementDialog(QDialog):
 
         layout.addLayout(pagination_layout)
 
+        # STATISTICS ROW
+        stats_layout = QHBoxLayout()
+        self.stats_total_files_label = QLabel("Total Files: 0")
+        self.stats_batch_queue_label = QLabel("Batch Queue: 0 batch (0 files)")
+        self.stats_total_batch_label = QLabel("Total Batch: 0")
+        self.stats_oldest_label = QLabel("Oldest: -")
+        self.stats_newest_label = QLabel("Newest: -")
+        stats_layout.addWidget(self.stats_total_files_label)
+        stats_layout.addSpacing(20)
+        stats_layout.addWidget(self.stats_batch_queue_label)
+        stats_layout.addSpacing(20)
+        stats_layout.addWidget(self.stats_total_batch_label)
+        stats_layout.addSpacing(20)
+        stats_layout.addWidget(self.stats_oldest_label)
+        stats_layout.addSpacing(20)
+        stats_layout.addWidget(self.stats_newest_label)
+        stats_layout.addStretch()
+        layout.addLayout(stats_layout)
+
         self.batch_refresh_btn.clicked.connect(self.load_batch_data)
         self.batch_search_edit.textChanged.connect(self.update_batch_table)
         self.batch_sort_combo.currentIndexChanged.connect(self.on_sort_changed)
@@ -189,6 +208,7 @@ class BatchManagementDialog(QDialog):
         self._batch_data_all = batch_data
         self._batch_page = 1
         self.update_batch_table()
+        self.update_stats_row()
 
     def update_batch_table(self):
         search_text = self.batch_search_edit.text().strip().lower()
@@ -245,6 +265,40 @@ class BatchManagementDialog(QDialog):
         self.batch_page_spinner.setMaximum(self._batch_total_pages)
         self.batch_page_spinner.setValue(self._batch_page)
         self.batch_page_spinner.blockSignals(False)
+        self.update_stats_row()
+
+    def update_stats_row(self):
+        total_files = 0
+        total_batch = len(self._batch_data_all)
+        queue_batches = []
+        queue_files = 0
+        for row in self._batch_data_all:
+            total_files += int(row[3]) if row[3] else 0
+            if str(row[2]).strip().lower() != "finished":
+                queue_batches.append(row)
+                queue_files += int(row[3]) if row[3] else 0
+        self.stats_total_files_label.setText(f"Total Files: {total_files}")
+        self.stats_batch_queue_label.setText(f"Batch Queue: {len(queue_batches)} batch ({queue_files} files)")
+        self.stats_total_batch_label.setText(f"Total Batch: {total_batch}")
+
+        # Oldest and newest logic
+        hide_finished = self.hide_finished_checkbox.isChecked()
+        if hide_finished:
+            # Only consider not finished batches
+            filtered_rows = [row for row in self._batch_data_all if str(row[2]).strip().lower() != "finished"]
+        else:
+            filtered_rows = self._batch_data_all
+        created_dates = [row[4] for row in filtered_rows if row[4]]
+        if created_dates:
+            oldest_date = min(created_dates)
+            newest_date = max(created_dates)
+            oldest_text = time_ago(oldest_date)
+            newest_text = time_ago(newest_date)
+        else:
+            oldest_text = "-"
+            newest_text = "-"
+        self.stats_oldest_label.setText(f"Oldest: {oldest_text}")
+        self.stats_newest_label.setText(f"Newest: {newest_text}")
 
     def _apply_batch_sorting(self):
         if not self._batch_data_filtered:
@@ -554,12 +608,11 @@ class BatchManagementDialog(QDialog):
             data.append((batch_number, file_count, created_at_ago, created_at))
         # Sort ascending by created_at (oldest at top)
         data.sort(key=lambda x: x[3] if x[3] else "", reverse=False)
-        data = [[d[0], d[1], d[2]] for d in data]
+        data = [[d[0], d[1], d[2], d[3]] for d in data]
         today_str = datetime.now().strftime("%Y-%m-%d")
         return header, data, today_str
 
     def write_batch_queue_sheet_content(self, sheets_service, spreadsheet_id, header, data, today_str):
-        """Write title, date, header, and data to the spreadsheet."""
         sheets_service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
             range="A1",
@@ -576,11 +629,71 @@ class BatchManagementDialog(QDialog):
             spreadsheetId=spreadsheet_id,
             range="A5",
             valueInputOption="USER_ENTERED",
-            body={"values": [header] + data}
+            body={"values": [header] + [row[:3] for row in data]}
+        ).execute()
+        self.add_color_legend(sheets_service, spreadsheet_id)
+
+    def add_color_legend(self, sheets_service, spreadsheet_id):
+        color_steps = [
+            {"red": 0.992, "green": 0.733, "blue": 0.733},
+            {"red": 0.992, "green": 0.827, "blue": 0.733},
+            {"red": 0.992, "green": 0.914, "blue": 0.733},
+            {"red": 0.949, "green": 0.949, "blue": 0.733},
+            {"red": 0.827, "green": 0.949, "blue": 0.733},
+            {"red": 0.733, "green": 0.949, "blue": 0.827},
+            {"red": 0.733, "green": 0.949, "blue": 0.949},
+            {"red": 0.733, "green": 0.827, "blue": 0.949},
+            {"red": 0.733, "green": 0.792, "blue": 0.949},
+            {"red": 0.792, "green": 0.733, "blue": 0.949},
+            {"red": 0.882, "green": 0.733, "blue": 0.949},
+        ]
+        legend_labels = [
+            "Active task (highest priority, oldest in queue)",   # 1
+            "Critical task (very high priority)",                # 2
+            "High-priority task",                                # 3
+            "Ongoing task (moderate-high priority)",             # 4
+            "Standard task (moderate priority)",                 # 5
+            "Backlog task (moderate-low priority)",              # 6
+            "Deferred task (low priority)",                      # 7
+            "Parked task (very low priority)",                   # 8
+            "On-hold task (lowest priority)",                    # 9
+            "Incoming batch (just added)",                       # 10
+            "New batch (newest, lowest priority)"                # 11
+        ]
+        legend_values = [["", desc] for desc in legend_labels]
+        sheets_service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range="E5",
+            valueInputOption="USER_ENTERED",
+            body={"values": legend_values}
+        ).execute()
+        requests = []
+        for i, color in enumerate(color_steps):
+            requests.append({
+                "repeatCell": {
+                    "range": {
+                        "sheetId": 0,
+                        "startRowIndex": 4 + i,
+                        "endRowIndex": 5 + i,
+                        "startColumnIndex": 4,
+                        "endColumnIndex": 5
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "backgroundColor": color
+                        }
+                    },
+                    "fields": "userEnteredFormat.backgroundColor"
+                }
+            })
+        sheets_service.spreadsheets().batchUpdate(
+            spreadsheetId=spreadsheet_id,
+            body={"requests": requests}
         ).execute()
 
     def apply_batch_queue_sheet_formatting(self, sheets_service, spreadsheet_id):
-        """Apply formatting to the Batch Queue spreadsheet."""
+        from datetime import datetime
+        header, data, _ = self.get_batch_queue_data_and_header()
         requests = [
             {
                 "repeatCell": {
@@ -662,10 +775,66 @@ class BatchManagementDialog(QDialog):
                 }
             }
         ]
+        now = datetime.now()
+        color_steps = [
+            {"red": 0.992, "green": 0.733, "blue": 0.733},
+            {"red": 0.992, "green": 0.827, "blue": 0.733},
+            {"red": 0.992, "green": 0.914, "blue": 0.733},
+            {"red": 0.949, "green": 0.949, "blue": 0.733},
+            {"red": 0.827, "green": 0.949, "blue": 0.733},
+            {"red": 0.733, "green": 0.949, "blue": 0.827},
+            {"red": 0.733, "green": 0.949, "blue": 0.949},
+            {"red": 0.733, "green": 0.827, "blue": 0.949},
+            {"red": 0.733, "green": 0.792, "blue": 0.949},
+            {"red": 0.792, "green": 0.733, "blue": 0.949},
+            {"red": 0.882, "green": 0.733, "blue": 0.949},
+        ]
+        max_days = 30
+        step = 3
+        for idx, row in enumerate(data):
+            created_at_str = row[3]
+            try:
+                created_at = datetime.strptime(created_at_str, "%Y-%m-%d %H:%M:%S")
+            except Exception:
+                try:
+                    created_at = datetime.strptime(created_at_str, "%Y-%m-%d")
+                except Exception:
+                    created_at = None
+            color = None
+            if created_at:
+                days_diff = (now - created_at).days
+                if days_diff >= max_days:
+                    color = color_steps[0]
+                else:
+                    color_idx = (max_days - days_diff) // step
+                    if color_idx < 0:
+                        color_idx = len(color_steps) - 1
+                    elif color_idx >= len(color_steps):
+                        color_idx = 0
+                    color = color_steps[min(color_idx, len(color_steps) - 1)]
+            if color:
+                requests.append({
+                    "repeatCell": {
+                        "range": {
+                            "sheetId": 0,
+                            "startRowIndex": 5 + idx,
+                            "endRowIndex": 6 + idx,
+                            "startColumnIndex": 0,
+                            "endColumnIndex": 3
+                        },
+                        "cell": {
+                            "userEnteredFormat": {
+                                "backgroundColor": color
+                            }
+                        },
+                        "fields": "userEnteredFormat.backgroundColor"
+                    }
+                })
         sheets_service.spreadsheets().batchUpdate(
             spreadsheetId=spreadsheet_id,
             body={"requests": requests}
         ).execute()
+        self.add_color_legend(sheets_service, spreadsheet_id)
 
     def create_batch_queue_spreadsheet(self):
         try:
@@ -722,7 +891,6 @@ class BatchManagementDialog(QDialog):
                 return False
 
             header, data, today_str = self.get_batch_queue_data_and_header()
-            # Clear old data rows before writing new data
             sheets_service.spreadsheets().values().clear(
                 spreadsheetId=spreadsheet_id,
                 range="A6:C1000"
