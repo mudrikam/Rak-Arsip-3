@@ -635,30 +635,20 @@ class BatchManagementDialog(QDialog):
 
     def add_color_legend(self, sheets_service, spreadsheet_id):
         color_steps = [
-            {"red": 0.992, "green": 0.733, "blue": 0.733},
-            {"red": 0.992, "green": 0.827, "blue": 0.733},
-            {"red": 0.992, "green": 0.914, "blue": 0.733},
+            {"red": 0.992, "green": 0.733, "blue": 0.733},  # merah (oldest)
             {"red": 0.949, "green": 0.949, "blue": 0.733},
             {"red": 0.827, "green": 0.949, "blue": 0.733},
-            {"red": 0.733, "green": 0.949, "blue": 0.827},
             {"red": 0.733, "green": 0.949, "blue": 0.949},
             {"red": 0.733, "green": 0.827, "blue": 0.949},
-            {"red": 0.733, "green": 0.792, "blue": 0.949},
-            {"red": 0.792, "green": 0.733, "blue": 0.949},
-            {"red": 0.882, "green": 0.733, "blue": 0.949},
+            {"red": 0.882, "green": 0.733, "blue": 0.949},  # ungu (newest)
         ]
         legend_labels = [
             "Active task (highest priority, oldest in queue)",   # 1
             "Critical task (very high priority)",                # 2
-            "High-priority task",                                # 3
-            "Ongoing task (moderate-high priority)",             # 4
-            "Standard task (moderate priority)",                 # 5
-            "Backlog task (moderate-low priority)",              # 6
-            "Deferred task (low priority)",                      # 7
-            "Parked task (very low priority)",                   # 8
-            "On-hold task (lowest priority)",                    # 9
-            "Incoming batch (just added)",                       # 10
-            "New batch (newest, lowest priority)"                # 11
+            "Ongoing task (moderate priority)",                  # 3
+            "Backlog task (moderate-low priority)",              # 4
+            "Incoming batch (just added)",                       # 5
+            "New batch (newest, lowest priority)",               # 6
         ]
         legend_values = [["", desc] for desc in legend_labels]
         sheets_service.spreadsheets().values().update(
@@ -777,20 +767,15 @@ class BatchManagementDialog(QDialog):
         ]
         now = datetime.now()
         color_steps = [
-            {"red": 0.992, "green": 0.733, "blue": 0.733},
-            {"red": 0.992, "green": 0.827, "blue": 0.733},
-            {"red": 0.992, "green": 0.914, "blue": 0.733},
+            {"red": 0.992, "green": 0.733, "blue": 0.733},  # merah (oldest)
             {"red": 0.949, "green": 0.949, "blue": 0.733},
             {"red": 0.827, "green": 0.949, "blue": 0.733},
-            {"red": 0.733, "green": 0.949, "blue": 0.827},
             {"red": 0.733, "green": 0.949, "blue": 0.949},
             {"red": 0.733, "green": 0.827, "blue": 0.949},
-            {"red": 0.733, "green": 0.792, "blue": 0.949},
-            {"red": 0.792, "green": 0.733, "blue": 0.949},
-            {"red": 0.882, "green": 0.733, "blue": 0.949},
+            {"red": 0.882, "green": 0.733, "blue": 0.949},  # ungu (newest)
         ]
         max_days = 30
-        step = 3
+        step = 5
         for idx, row in enumerate(data):
             created_at_str = row[3]
             try:
@@ -806,12 +791,12 @@ class BatchManagementDialog(QDialog):
                 if days_diff >= max_days:
                     color = color_steps[0]
                 else:
-                    color_idx = (max_days - days_diff) // step
+                    color_idx = len(color_steps) - 1 - (days_diff // step)
                     if color_idx < 0:
-                        color_idx = len(color_steps) - 1
-                    elif color_idx >= len(color_steps):
                         color_idx = 0
-                    color = color_steps[min(color_idx, len(color_steps) - 1)]
+                    elif color_idx >= len(color_steps):
+                        color_idx = len(color_steps) - 1
+                    color = color_steps[color_idx]
             if color:
                 requests.append({
                     "repeatCell": {
