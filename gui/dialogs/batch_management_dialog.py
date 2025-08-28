@@ -237,7 +237,11 @@ class BatchManagementDialog(QDialog):
         end_idx = min(start_idx + rows_per_page, total_rows)
         page_data = self._batch_data_filtered[start_idx:end_idx]
 
+        # Clean up table before filling data
+        self.batch_table.clearContents()
+        self.batch_table.setRowCount(0)
         self.batch_table.setRowCount(len(page_data))
+
         for row_idx, (client_name, batch_number, note, file_count, created_at, client_id) in enumerate(page_data):
             client_item = QTableWidgetItem(str(client_name))
             batch_item = QTableWidgetItem(str(batch_number))
@@ -889,6 +893,25 @@ class BatchManagementDialog(QDialog):
             print(f"Error creating batch queue spreadsheet: {e}")
             return None
 
+    def clean_batch_queue_spreadsheet(self, sheets_service, spreadsheet_id):
+        sheets_service.spreadsheets().values().clear(
+            spreadsheetId=spreadsheet_id,
+            range="A1:Z1000"
+        ).execute()
+        sheets_service.spreadsheets().batchUpdate(
+            spreadsheetId=spreadsheet_id,
+            body={"requests": [
+                {
+                    "updateCells": {
+                        "range": {
+                            "sheetId": 0
+                        },
+                        "fields": "userEnteredFormat"
+                    }
+                }
+            ]}
+        ).execute()
+
     def update_batch_queue_spreadsheet(self, spreadsheet_id):
         try:
             sheets_service = self._sheets_service
@@ -896,10 +919,7 @@ class BatchManagementDialog(QDialog):
                 return False
 
             header, data, today_str = self.get_batch_queue_data_and_header()
-            sheets_service.spreadsheets().values().clear(
-                spreadsheetId=spreadsheet_id,
-                range="A6:C1000"
-            ).execute()
+            self.clean_batch_queue_spreadsheet(sheets_service, spreadsheet_id)
             self.write_batch_queue_sheet_content(sheets_service, spreadsheet_id, header, data, today_str)
             self.apply_batch_queue_sheet_formatting(sheets_service, spreadsheet_id)
             return True
