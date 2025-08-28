@@ -3,8 +3,8 @@ from PySide6.QtWidgets import (
     QTableWidgetItem, QSizePolicy, QHeaderView, QLabel, QComboBox, QSpinBox,
     QMessageBox, QMenu, QDateTimeEdit, QCheckBox
 )
-from PySide6.QtGui import QAction, QColor
-from PySide6.QtCore import Qt, QDateTime, QTimer, QThread, Signal, QObject
+from PySide6.QtGui import QAction, QColor, QDesktopServices
+from PySide6.QtCore import Qt, QDateTime, QTimer, QThread, Signal, QObject, QUrl
 import qtawesome as qta
 from datetime import datetime, timedelta
 
@@ -40,12 +40,14 @@ class SyncDriveWorker(QObject):
             if spreadsheets:
                 spreadsheet_id = spreadsheets[0]['id']
                 self.message.emit(f"Batch Queue spreadsheet already exists: {spreadsheets[0]['name']}")
+                self.dialog._batch_queue_spreadsheet_id = spreadsheet_id
                 self.dialog.update_batch_queue_spreadsheet(spreadsheet_id)
                 self.message.emit("Batch Queue spreadsheet updated with latest data.")
             else:
                 self.message.emit("Batch Queue spreadsheet not found, creating...")
                 spreadsheet_id = self.dialog.create_batch_queue_spreadsheet()
                 if spreadsheet_id:
+                    self.dialog._batch_queue_spreadsheet_id = spreadsheet_id
                     self.message.emit(f"Batch Queue spreadsheet created with ID: {spreadsheet_id}")
                 else:
                     self.message.emit("Failed to create Batch Queue spreadsheet.")
@@ -77,6 +79,7 @@ class BatchManagementDialog(QDialog):
         self._sync_blink_state = False
         self._sync_thread = None
         self._sync_worker = None
+        self._batch_queue_spreadsheet_id = None
         self.init_ui()
         self.load_batch_data()
         QTimer.singleShot(0, self.on_sync_drive_clicked)
@@ -160,9 +163,14 @@ class BatchManagementDialog(QDialog):
         self.batch_sync_drive_btn = QPushButton(qta.icon("fa6s.cloud-arrow-up"), "Sync to Drive")
         pagination_layout.addWidget(self.batch_sync_drive_btn)
 
+        self.batch_globe_btn = QPushButton(qta.icon("fa6s.globe"), "")
+        self.batch_globe_btn.setToolTip("Open Batch Queue Sheet in browser")
+        self.batch_globe_btn.setFixedWidth(32)
+        self.batch_globe_btn.clicked.connect(self.on_open_batch_queue_sheet)
+        pagination_layout.addWidget(self.batch_globe_btn)
+
         layout.addLayout(pagination_layout)
 
-        # STATISTICS ROW
         stats_layout = QHBoxLayout()
         self.stats_total_files_label = QLabel("Total Files: 0")
         self.stats_batch_queue_label = QLabel("Batch Queue: 0 batch (0 files)")
@@ -193,6 +201,14 @@ class BatchManagementDialog(QDialog):
         self.batch_table.customContextMenuRequested.connect(self.show_batch_context_menu)
         self.hide_finished_checkbox.stateChanged.connect(self.on_hide_finished_changed)
         self.batch_sync_drive_btn.clicked.connect(self.on_sync_drive_clicked)
+
+    def on_open_batch_queue_sheet(self):
+        spreadsheet_id = getattr(self, "_batch_queue_spreadsheet_id", None)
+        if spreadsheet_id:
+            url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/edit"
+            QDesktopServices.openUrl(QUrl(url))
+        else:
+            print("Batch Queue spreadsheet ID not available.")
 
     def load_batch_data(self):
         batch_rows = self.db_manager.get_all_batches() if self.db_manager else []
