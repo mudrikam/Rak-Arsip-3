@@ -166,14 +166,11 @@ class BatchManagementDialog(QDialog):
         stats_layout = QHBoxLayout()
         self.stats_total_files_label = QLabel("Total Files: 0")
         self.stats_batch_queue_label = QLabel("Batch Queue: 0 batch (0 files)")
-        self.stats_total_batch_label = QLabel("Total Batch: 0")
         self.stats_oldest_label = QLabel("Oldest: -")
         self.stats_newest_label = QLabel("Newest: -")
         stats_layout.addWidget(self.stats_total_files_label)
         stats_layout.addSpacing(20)
         stats_layout.addWidget(self.stats_batch_queue_label)
-        stats_layout.addSpacing(20)
-        stats_layout.addWidget(self.stats_total_batch_label)
         stats_layout.addSpacing(20)
         stats_layout.addWidget(self.stats_oldest_label)
         stats_layout.addSpacing(20)
@@ -277,14 +274,11 @@ class BatchManagementDialog(QDialog):
             if str(row[2]).strip().lower() != "finished":
                 queue_batches.append(row)
                 queue_files += int(row[3]) if row[3] else 0
-        self.stats_total_files_label.setText(f"Total Files: {total_files}")
-        self.stats_batch_queue_label.setText(f"Batch Queue: {len(queue_batches)} batch ({queue_files} files)")
-        self.stats_total_batch_label.setText(f"Total Batch: {total_batch}")
+        self.stats_total_files_label.setText(f"Total Batches: {total_batch} ({total_files} files)")
+        self.stats_batch_queue_label.setText(f"Batch Queue: {len(queue_batches)} ({queue_files} files)")
 
-        # Oldest and newest logic
         hide_finished = self.hide_finished_checkbox.isChecked()
         if hide_finished:
-            # Only consider not finished batches
             filtered_rows = [row for row in self._batch_data_all if str(row[2]).strip().lower() != "finished"]
         else:
             filtered_rows = self._batch_data_all
@@ -643,12 +637,12 @@ class BatchManagementDialog(QDialog):
             {"red": 0.882, "green": 0.733, "blue": 0.949},  # ungu (newest)
         ]
         legend_labels = [
-            "Active task (highest priority, oldest in queue)",   # 1
-            "Critical task (very high priority)",                # 2
-            "Ongoing task (moderate priority)",                  # 3
-            "Backlog task (moderate-low priority)",              # 4
-            "Incoming batch (just added)",                       # 5
-            "New batch (newest, lowest priority)",               # 6
+            "Active task (highest priority, oldest in queue)",
+            "Critical task (very high priority)",
+            "Ongoing task (moderate priority)",
+            "Backlog task (moderate-low priority)",
+            "Incoming batch (just added)",
+            "New batch (newest, lowest priority)",
         ]
         legend_values = [["", desc] for desc in legend_labels]
         sheets_service.spreadsheets().values().update(
@@ -656,6 +650,19 @@ class BatchManagementDialog(QDialog):
             range="E5",
             valueInputOption="USER_ENTERED",
             body={"values": legend_values}
+        ).execute()
+        total_queue, total_file_queue = self._get_total_queue_and_files()
+        sheets_service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range="E11",
+            valueInputOption="USER_ENTERED",
+            body={"values": [["Total Queue", total_queue]]}
+        ).execute()
+        sheets_service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range="E12",
+            valueInputOption="USER_ENTERED",
+            body={"values": [["Total File Queue", total_file_queue]]}
         ).execute()
         requests = []
         for i, color in enumerate(color_steps):
@@ -680,6 +687,19 @@ class BatchManagementDialog(QDialog):
             spreadsheetId=spreadsheet_id,
             body={"requests": requests}
         ).execute()
+
+    def _get_total_queue_and_files(self):
+        total_queue = 0
+        total_file_queue = 0
+        for row in self._batch_data_all:
+            note = row[2]
+            if str(note).strip().lower() != "finished":
+                total_queue += 1
+                try:
+                    total_file_queue += int(row[3]) if row[3] else 0
+                except Exception:
+                    pass
+        return total_queue, total_file_queue
 
     def apply_batch_queue_sheet_formatting(self, sheets_service, spreadsheet_id):
         from datetime import datetime
