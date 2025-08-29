@@ -7,6 +7,16 @@ from PySide6.QtGui import QAction, QColor, QDesktopServices
 from PySide6.QtCore import Qt, QDateTime, QTimer, QThread, Signal, QObject, QUrl
 import qtawesome as qta
 from datetime import datetime, timedelta
+import os
+import logging
+
+log_path = os.path.join(os.path.dirname(__file__), "batch_management.log")
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s %(levelname)s %(message)s',
+    filename=log_path,
+    filemode='a'
+)
 
 class SyncDriveWorker(QObject):
     finished = Signal()
@@ -17,9 +27,12 @@ class SyncDriveWorker(QObject):
 
     def run(self):
         try:
+            logging.debug("SyncDriveWorker: Starting sync process.")
             drive_service, sheets_service = self.dialog.get_google_services(require_sheets=True)
             if not drive_service or not sheets_service:
-                self.message.emit("Google Drive/Sheets service not available.")
+                msg = "Google Drive/Sheets service not available."
+                logging.error(msg)
+                self.message.emit(msg)
                 return
 
             self.dialog.ensure_batch_folder_exist()
@@ -27,33 +40,61 @@ class SyncDriveWorker(QObject):
             batch_folder_id = self.dialog._batch_folder_id
 
             if not rak_arsip_folder_id or not batch_folder_id:
-                self.message.emit("Rak_Arsip_Database or BATCH folder not found or failed to create.")
+                msg = "Rak_Arsip_Database or BATCH folder not found or failed to create."
+                logging.error(msg)
+                self.message.emit(msg)
                 return
 
             self.message.emit("Checking for Batch Queue spreadsheet in BATCH folder...")
-            results = drive_service.files().list(
-                q=f"name = 'Batch Queue' and mimeType = 'application/vnd.google-apps.spreadsheet' and '{batch_folder_id}' in parents and trashed = false",
-                fields="files(id, name)",
-                pageSize=5
-            ).execute()
+            logging.debug("SyncDriveWorker: Checking for Batch Queue spreadsheet in BATCH folder...")
+            try:
+                results = drive_service.files().list(
+                    q=f"name = 'Batch Queue' and mimeType = 'application/vnd.google-apps.spreadsheet' and '{batch_folder_id}' in parents and trashed = false",
+                    fields="files(id, name)",
+                    pageSize=5
+                ).execute()
+            except Exception as e:
+                logging.error(f"Drive API error: {e}")
+                self.message.emit(f"Drive API error: {e}")
+                return
+
             spreadsheets = results.get('files', [])
             if spreadsheets:
                 spreadsheet_id = spreadsheets[0]['id']
-                self.message.emit(f"Batch Queue spreadsheet already exists: {spreadsheets[0]['name']}")
+                msg = f"Batch Queue spreadsheet already exists: {spreadsheets[0]['name']}"
+                logging.info(msg)
+                self.message.emit(msg)
                 self.dialog._batch_queue_spreadsheet_id = spreadsheet_id
-                self.dialog.update_batch_queue_spreadsheet(spreadsheet_id)
-                self.message.emit("Batch Queue spreadsheet updated with latest data.")
+                try:
+                    self.dialog.update_batch_queue_spreadsheet(spreadsheet_id)
+                    self.message.emit("Batch Queue spreadsheet updated with latest data.")
+                    logging.info("Batch Queue spreadsheet updated with latest data.")
+                except Exception as e:
+                    logging.error(f"Failed to update Batch Queue spreadsheet: {e}")
+                    self.message.emit(f"Failed to update Batch Queue spreadsheet: {e}")
             else:
                 self.message.emit("Batch Queue spreadsheet not found, creating...")
-                spreadsheet_id = self.dialog.create_batch_queue_spreadsheet()
+                logging.info("Batch Queue spreadsheet not found, creating...")
+                try:
+                    spreadsheet_id = self.dialog.create_batch_queue_spreadsheet()
+                except Exception as e:
+                    logging.error(f"Error creating batch queue spreadsheet: {e}")
+                    self.message.emit(f"Error creating batch queue spreadsheet: {e}")
+                    spreadsheet_id = None
                 if spreadsheet_id:
                     self.dialog._batch_queue_spreadsheet_id = spreadsheet_id
-                    self.message.emit(f"Batch Queue spreadsheet created with ID: {spreadsheet_id}")
+                    msg = f"Batch Queue spreadsheet created with ID: {spreadsheet_id}"
+                    logging.info(msg)
+                    self.message.emit(msg)
                 else:
-                    self.message.emit("Failed to create Batch Queue spreadsheet.")
+                    msg = "Failed to create Batch Queue spreadsheet."
+                    logging.error(msg)
+                    self.message.emit(msg)
         except Exception as e:
+            logging.error(f"Sync to Drive error: {e}", exc_info=True)
             self.message.emit(f"Sync to Drive error: {e}")
         finally:
+            logging.debug("SyncDriveWorker: Sync process finished.")
             self.finished.emit()
 
 class BatchManagementDialog(QDialog):
@@ -967,6 +1008,9 @@ class BatchManagementDialog(QDialog):
                 self.batch_sync_drive_btn.setStyleSheet("")
 
     def on_sync_drive_clicked(self):
+        if self._sync_thread and self._sync_thread.isRunning():
+            logging.warning("Sync already in progress, skipping new sync request.")
+            return
         self.start_sync_btn_blink()
         self._sync_thread = QThread()
         self._sync_worker = SyncDriveWorker(self)
@@ -978,12 +1022,15 @@ class BatchManagementDialog(QDialog):
         self._sync_worker.finished.connect(self._sync_worker.deleteLater)
         self._sync_thread.finished.connect(self._sync_thread.deleteLater)
         self._sync_thread.start()
+        logging.debug("BatchManagementDialog: Sync thread started.")
 
     def _on_sync_drive_finished(self):
         self.stop_sync_btn_blink()
+        logging.debug("BatchManagementDialog: Sync thread finished.")
 
     def _on_sync_drive_message(self, msg):
         print(msg)
+        logging.info(f"SyncDriveWorker message: {msg}")
 
 def time_ago(dt_str):
     """Convert datetime string to 'x days ago' style."""
