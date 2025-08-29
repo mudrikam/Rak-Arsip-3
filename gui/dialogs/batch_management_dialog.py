@@ -7,16 +7,7 @@ from PySide6.QtGui import QAction, QColor, QDesktopServices
 from PySide6.QtCore import Qt, QDateTime, QTimer, QThread, Signal, QObject, QUrl
 import qtawesome as qta
 from datetime import datetime, timedelta
-import os
 import logging
-
-log_path = os.path.join(os.path.dirname(__file__), "batch_management.log")
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s %(levelname)s %(message)s',
-    filename=log_path,
-    filemode='a'
-)
 
 class SyncDriveWorker(QObject):
     finished = Signal()
