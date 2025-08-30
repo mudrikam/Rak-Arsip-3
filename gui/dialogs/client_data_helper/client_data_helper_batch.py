@@ -234,45 +234,44 @@ class ClientDataBatchHelper:
         index = self.batch_table.indexAt(pos)
         if not index.isValid():
             return
-        
+
         row = index.row()
         menu = QMenu(self.batch_table)
         icon_edit = qta.icon("fa6s.pen-to-square")
         icon_delete = qta.icon("fa6s.trash")
         icon_finished = qta.icon("fa6s.circle-check")
         icon_refresh = qta.icon("fa6s.arrows-rotate")
-        
+
         action_edit = QAction(icon_edit, "Edit Batch", self.parent)
         action_delete = QAction(icon_delete, "Delete Batch", self.parent)
         action_mark_finished = QAction(icon_finished, "Mark as Finished", self.parent)
         action_refresh = QAction(icon_refresh, "Refresh", self.parent)
-        
+
         def do_edit():
             self.batch_table.selectRow(row)
             self.on_batch_edit()
-        
+
         def do_delete():
             self.batch_table.selectRow(row)
             self.on_batch_delete()
-        
+
         def do_mark_finished():
             self.batch_table.selectRow(row)
             self.on_batch_mark_finished(row)
-        
+
         def do_refresh():
             self.on_batch_refresh()
-        
+
         action_edit.triggered.connect(do_edit)
         action_delete.triggered.connect(do_delete)
         action_mark_finished.triggered.connect(do_mark_finished)
         action_refresh.triggered.connect(do_refresh)
-        
+
         menu.addAction(action_edit)
-        menu.addAction(action_delete)
-        menu.addSeparator()
         menu.addAction(action_mark_finished)
         menu.addSeparator()
         menu.addAction(action_refresh)
+        menu.addAction(action_delete)
         menu.exec(self.batch_table.viewport().mapToGlobal(pos))
     
     def load_batch_list_for_client(self, client_id):
@@ -664,4 +663,5 @@ class ClientDataBatchHelper:
                 
         except Exception as e:
             QMessageBox.critical(self.parent, "Error", f"An error occurred while marking files as finished:\n{str(e)}")
+            print(f"Error in on_batch_mark_finished: {e}")
             print(f"Error in on_batch_mark_finished: {e}")
