@@ -482,7 +482,8 @@ class ClientDataBatchHelper:
         )
 
         if dialog.exec() == QDialog.Accepted:
-            new_batch_number, new_note, client_id = dialog.get_values()
+            values = dialog.get_values()
+            new_batch_number, new_note, client_id = values[:3]
             # Ensure client_id is always set
             if not client_id:
                 client_id = self._selected_client_id
