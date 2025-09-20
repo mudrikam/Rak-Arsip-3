@@ -116,6 +116,9 @@ class MainActionDock(QDockWidget):
     def __init__(self, config_manager, parent=None, db_manager=None):
         super().__init__("Project Creator", parent)
         self.setWindowIcon(qta.icon("fa6s.circle-plus"))
+        self.setFeatures(QDockWidget.NoDockWidgetFeatures)
+        self.setAllowedAreas(Qt.TopDockWidgetArea)
+        self.setWindowTitle("Project Creator")
         self.config_manager = config_manager
         self.db_manager = db_manager
         

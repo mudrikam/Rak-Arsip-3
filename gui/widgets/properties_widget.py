@@ -14,6 +14,9 @@ from database.db_manager import DatabaseManager
 class PropertiesWidget(QDockWidget):
     def __init__(self, parent=None):
         super().__init__("Project Properties", parent)
+        self.setFeatures(QDockWidget.NoDockWidgetFeatures)
+        self.setAllowedAreas(Qt.RightDockWidgetArea)
+        self.setWindowTitle("Project Properties")
         self.setWindowIcon(qta.icon("fa6s.circle-info"))
         self.parent_window = parent
 
@@ -609,6 +612,10 @@ class PropertiesWidget(QDockWidget):
 
     def _hide_image_nav_widget(self):
         self.image_nav_widget.hide()
+
+    def closeEvent(self, event):
+        # Ignore any attempt to close the dock from UI or programmatically
+        event.ignore()
 
     def _on_image_nav_spin_changed(self, value):
         idx = value - 1
