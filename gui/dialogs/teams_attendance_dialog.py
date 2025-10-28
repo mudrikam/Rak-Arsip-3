@@ -89,11 +89,6 @@ class TeamsAttendanceDialog(QDialog):
         panel.setFrameStyle(QFrame.StyledPanel)
         layout = QVBoxLayout(panel)
         
-        title = QLabel("Select User")
-        title.setFont(QFont("Segoe UI", 12, QFont.Bold))
-        title.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title)
-        
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -111,11 +106,6 @@ class TeamsAttendanceDialog(QDialog):
         panel = QFrame()
         panel.setFrameStyle(QFrame.StyledPanel)
         layout = QVBoxLayout(panel)
-        
-        pin_label = QLabel("Attendance PIN")
-        pin_label.setFont(QFont("Segoe UI", 10, QFont.Bold))
-        pin_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(pin_label)
         
         self.pin_edit = QLineEdit()
         self.pin_edit.setEchoMode(QLineEdit.Password)
