@@ -298,13 +298,13 @@ class DatabaseManager(QObject):
         """Get all teams."""
         return self.teams_helper.get_all_teams()
 
-    def add_team(self, username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder):
+    def add_team(self, username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder, profile_image=None):
         """Add team."""
-        return self.teams_helper.add_team(username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder)
+        return self.teams_helper.add_team(username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder, profile_image)
 
-    def update_team(self, old_username, new_username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder):
+    def update_team(self, old_username, new_username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder, profile_image=None):
         """Update team."""
-        return self.teams_helper.update_team(old_username, new_username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder)
+        return self.teams_helper.update_team(old_username, new_username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder, profile_image)
 
     def get_team_profile_data(self, username=None):
         """Get team profile data."""

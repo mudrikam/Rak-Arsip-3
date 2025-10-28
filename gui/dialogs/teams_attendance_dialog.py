@@ -1,11 +1,14 @@
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QFormLayout, QLineEdit, QPushButton, QLabel, QComboBox, QTextEdit
-from PySide6.QtGui import QFont
-from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QFormLayout, 
+                               QLineEdit, QPushButton, QLabel, QComboBox, QTextEdit, 
+                               QScrollArea, QWidget, QFrame)
+from PySide6.QtGui import QFont, QPixmap, QIcon
+from PySide6.QtCore import Qt, Signal
 import qtawesome as qta
 from database.db_manager import DatabaseManager
 from manager.config_manager import ConfigManager
 from pathlib import Path
 from datetime import datetime
+import base64
 
 def format_date_indonesian(date_str, with_time=False):
     hari_map = {
@@ -35,50 +38,234 @@ class TeamsAttendanceDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Teams Attendance")
-        self.setMinimumSize(400, 300)
-        layout = QVBoxLayout(self)
-
-        form_layout = QFormLayout()
-        self.username_combo = QComboBox()
+        self.setMinimumSize(700, 500)
+        
+        main_layout = QVBoxLayout(self)
+        content_layout = QHBoxLayout()
+        
+        self.selected_username = None
+        self.current_mode = "checkin"
+        self._teams_data = []
+        
+        left_panel = self._create_user_grid_panel()
+        right_panel = self._create_pin_panel()
+        
+        content_layout.addWidget(left_panel, 2)
+        content_layout.addWidget(right_panel, 1)
+        main_layout.addLayout(content_layout)
+        
+        self.status_label = QLabel("")
+        self.status_label.setWordWrap(True)
+        self.status_label.setStyleSheet("padding: 10px; border-top: 1px solid #ccc;")
+        main_layout.addWidget(self.status_label)
+        
+        self._populate_users()
+        self.live_update_attendance_state()
+    
+    def _create_user_grid_panel(self):
+        panel = QFrame()
+        panel.setFrameStyle(QFrame.StyledPanel)
+        layout = QVBoxLayout(panel)
+        
+        title = QLabel("Select User")
+        title.setFont(QFont("Segoe UI", 12, QFont.Bold))
+        title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title)
+        
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        
+        self.user_grid_widget = QWidget()
+        self.user_grid_layout = QGridLayout(self.user_grid_widget)
+        self.user_grid_layout.setSpacing(10)
+        
+        scroll.setWidget(self.user_grid_widget)
+        layout.addWidget(scroll)
+        
+        return panel
+    
+    def _create_pin_panel(self):
+        panel = QFrame()
+        panel.setFrameStyle(QFrame.StyledPanel)
+        layout = QVBoxLayout(panel)
+        
+        pin_label = QLabel("Attendance PIN")
+        pin_label.setFont(QFont("Segoe UI", 10, QFont.Bold))
+        pin_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(pin_label)
+        
         self.pin_edit = QLineEdit()
         self.pin_edit.setEchoMode(QLineEdit.Password)
+        self.pin_edit.setAlignment(Qt.AlignCenter)
+        self.pin_edit.setFont(QFont("Segoe UI", 16))
+        self.pin_edit.setFixedHeight(48)
+        self.pin_edit.setPlaceholderText("Enter PIN")
+        self.pin_edit.textChanged.connect(self.live_update_attendance_state)
+        self.pin_edit.returnPressed.connect(self.toggle_check)
+        layout.addWidget(self.pin_edit)
+        
+        numpad_layout = QGridLayout()
+        numpad_layout.setSpacing(5)
+        
+        buttons = [
+            ('7', 0, 0), ('8', 0, 1), ('9', 0, 2),
+            ('4', 1, 0), ('5', 1, 1), ('6', 1, 2),
+            ('1', 2, 0), ('2', 2, 1), ('3', 2, 2),
+            ('', 3, 0), ('0', 3, 1), ('⌫', 3, 2)
+        ]
+        
+        for text, row, col in buttons:
+            if text:
+                btn = QPushButton(text)
+                btn.setFont(QFont("Segoe UI", 14, QFont.Bold))
+                btn.setMinimumSize(60, 60)
+                btn.setStyleSheet("padding: 5px; border-radius: 5px;")
+                if text == '⌫':
+                    btn.clicked.connect(lambda: self.pin_edit.backspace())
+                else:
+                    btn.clicked.connect(lambda checked=False, t=text: self.pin_edit.insert(t))
+                numpad_layout.addWidget(btn, row, col)
+        
+        layout.addLayout(numpad_layout)
+        
         self.note_edit = QTextEdit()
-        self.note_edit.setPlaceholderText("Optional note for attendance...")
-        self.note_edit.setFixedHeight(48)
-        form_layout.addRow("Username", self.username_combo)
-        form_layout.addRow("Attendance Pin", self.pin_edit)
-        form_layout.addRow("Note", self.note_edit)
-        layout.addLayout(form_layout)
-
-        self.status_label = QLabel("")
-        layout.addWidget(self.status_label)
-
+        self.note_edit.setPlaceholderText("Optional note...")
+        self.note_edit.setFixedHeight(60)
+        self.note_edit.textChanged.connect(self.validate_entry)
+        layout.addWidget(self.note_edit)
+        
         self.toggle_button = QPushButton()
         self.toggle_button.setFont(QFont("Segoe UI", 14, QFont.Bold))
         self.toggle_button.setMinimumHeight(48)
         self.toggle_button.setStyleSheet("padding: 8px; border-radius: 8px;")
         self.toggle_button.clicked.connect(self.toggle_check)
         layout.addWidget(self.toggle_button)
+        
+        layout.addStretch()
+        return panel
 
-        self.current_mode = "checkin"
-
-        self._teams_data = []
-        self._populate_usernames()
-        self.username_combo.currentIndexChanged.connect(self.live_update_attendance_state)
-        self.pin_edit.textChanged.connect(self.live_update_attendance_state)
-        self.note_edit.textChanged.connect(self.validate_entry)
-        self.live_update_attendance_state()
-
-    def _populate_usernames(self):
+    def _populate_users(self):
         basedir = Path(__file__).parent.parent.parent
         db_config_path = basedir / "configs" / "db_config.json"
         config_manager = ConfigManager(str(db_config_path))
         db_manager = DatabaseManager(config_manager, config_manager)
-        teams = db_manager.get_all_teams()
-        self._teams_data = teams
-        usernames = sorted([team["username"] for team in teams], key=lambda x: x.lower())
-        self.username_combo.clear()
-        self.username_combo.addItems(usernames)
+        teams = db_manager.get_team_profile_data()
+        self._teams_data = teams["teams"]
+        self._attendance_map = teams.get("attendance_map", {})
+        
+        for i, user_btn in enumerate(self.user_grid_widget.findChildren(QPushButton)):
+            user_btn.deleteLater()
+        
+        row, col = 0, 0
+        max_cols = 3
+        
+        for team in sorted(self._teams_data, key=lambda x: x["username"].lower()):
+            btn = self._create_user_button(team)
+            self.user_grid_layout.addWidget(btn, row, col)
+            col += 1
+            if col >= max_cols:
+                col = 0
+                row += 1
+    
+    def _create_user_button(self, team):
+        team_id = team.get("id")
+        has_open_attendance = False
+        
+        if hasattr(self, '_attendance_map') and team_id in self._attendance_map:
+            for att in self._attendance_map[team_id]:
+                if att[1] and not att[2]:
+                    has_open_attendance = True
+                    break
+        
+        btn = QPushButton()
+        btn.setFixedSize(120, 140)
+        
+        if has_open_attendance:
+            btn.setStyleSheet("""
+                QPushButton {
+                    border: 2px solid #4CAF50;
+                    border-radius: 8px;
+                    padding: 5px;
+                    background-color: rgba(76, 175, 80, 0.05);
+                }
+                QPushButton:hover {
+                    border-color: #388E3C;
+                    background-color: rgba(76, 175, 80, 0.05);
+                }
+                QPushButton:checked {
+                    border-color: #2196F3;
+                    border-width: 3px;
+                    background-color: rgba(33, 150, 243, 0.05);
+                }
+            """)
+        else:
+            btn.setStyleSheet("""
+                QPushButton {
+                    border: none;
+                    border-radius: 8px;
+                    padding: 5px;
+                }
+                QPushButton:hover {
+                    border: 2px solid #999;
+                }
+                QPushButton:checked {
+                    border: 3px solid #2196F3;
+                    background-color: rgba(33, 150, 243, 0.05);
+                }
+            """)
+        
+        btn.setCheckable(True)
+        btn.clicked.connect(lambda: self._on_user_selected(team["username"]))
+        
+        layout = QVBoxLayout(btn)
+        layout.setSpacing(5)
+        layout.setAlignment(Qt.AlignCenter)
+        
+        profile_label = QLabel()
+        profile_label.setFixedSize(80, 80)
+        profile_label.setAlignment(Qt.AlignCenter)
+        profile_label.setStyleSheet("border: none; background-color: rgba(128, 128, 128, 0.05); border-radius: 40px;")
+        
+        if team.get("profile_image"):
+            try:
+                image_data = base64.b64decode(team["profile_image"])
+                pixmap = QPixmap()
+                pixmap.loadFromData(image_data)
+                if not pixmap.isNull():
+                    scaled_pixmap = pixmap.scaled(80, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                    profile_label.setPixmap(scaled_pixmap)
+                else:
+                    icon = qta.icon('fa5s.user-circle', color='#888')
+                    profile_label.setPixmap(icon.pixmap(80, 80))
+            except Exception:
+                icon = qta.icon('fa5s.user-circle', color='#888')
+                profile_label.setPixmap(icon.pixmap(80, 80))
+        else:
+            icon = qta.icon('fa5s.user-circle', color='#888')
+            profile_label.setPixmap(icon.pixmap(80, 80))
+        
+        layout.addWidget(profile_label)
+        
+        username_label = QLabel(team["username"])
+        username_label.setAlignment(Qt.AlignCenter)
+        username_label.setFont(QFont("Segoe UI", 9, QFont.Bold))
+        username_label.setWordWrap(True)
+        username_label.setStyleSheet("border: none;")
+        layout.addWidget(username_label)
+        
+        btn.setProperty("username", team["username"])
+        
+        return btn
+    
+    def _on_user_selected(self, username):
+        self.selected_username = username
+        for btn in self.user_grid_widget.findChildren(QPushButton):
+            btn_username = btn.property("username")
+            if btn_username and btn_username != username:
+                btn.setChecked(False)
+        self.pin_edit.setFocus()
+        self.live_update_attendance_state()
 
     def _get_full_name(self, username):
         for team in self._teams_data:
@@ -93,7 +280,9 @@ class TeamsAttendanceDialog(QDialog):
         return False
 
     def validate_entry(self):
-        username = self.username_combo.currentText().strip()
+        username = self.selected_username
+        if not username:
+            return
         pin = self.pin_edit.text().strip()
         pin_valid = self._is_pin_valid(username, pin)
         self.toggle_button.setEnabled(pin_valid)
@@ -131,12 +320,27 @@ class TeamsAttendanceDialog(QDialog):
                 return date_str
 
     def live_update_attendance_state(self):
-        username = self.username_combo.currentText().strip()
+        username = self.selected_username
+        if not username:
+            self.status_label.setText(
+                "Name: -\n"
+                "Date: -\n"
+                "Check In: -\n"
+                "Check Out: -\n"
+                "Note: -"
+            )
+            self.toggle_button.setIcon(qta.icon('fa6s.arrow-right-to-bracket'))
+            self.toggle_button.setText("Check In")
+            self.current_mode = "checkin"
+            self._update_toggle_button_style(enabled=False)
+            return
+        
         pin = self.pin_edit.text().strip()
         full_name = self._get_full_name(username)
         pin_valid = self._is_pin_valid(username, pin)
         self.toggle_button.setEnabled(pin_valid)
         self.note_edit.setEnabled(pin_valid)
+        
         if not pin:
             self.status_label.setText(
                 f"Name: {full_name}\n"
@@ -213,7 +417,9 @@ class TeamsAttendanceDialog(QDialog):
             self._update_toggle_button_style(enabled=True if pin_valid else False)
 
     def toggle_check(self):
-        username = self.username_combo.currentText().strip()
+        username = self.selected_username
+        if not username:
+            return
         pin = self.pin_edit.text().strip()
         note = self.note_edit.toPlainText().strip()
         basedir = Path(__file__).parent.parent.parent
@@ -230,4 +436,12 @@ class TeamsAttendanceDialog(QDialog):
             self.status_label.setText(msg)
             self.pin_edit.clear()
             self.note_edit.clear()
+        
+        self._populate_users()
+        
+        for btn in self.user_grid_widget.findChildren(QPushButton):
+            if btn.property("username") == username:
+                btn.setChecked(True)
+                break
+        
         self.live_update_attendance_state()

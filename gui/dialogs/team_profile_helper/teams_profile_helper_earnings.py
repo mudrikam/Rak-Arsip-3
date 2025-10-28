@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QLabel, QHBoxLayout, QLineEdit, QComboBox, QPushButton, QSpinBox, QSpacerItem, QSizePolicy, QHeaderView, QMenu, QApplication, QToolTip
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QAction, QCursor, QKeySequence, QShortcut
+from PySide6.QtGui import QColor, QAction, QCursor, QKeySequence, QShortcut, QPixmap
 import qtawesome as qta
 from database.db_manager import DatabaseManager
 from manager.config_manager import ConfigManager
@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 import os
 import subprocess
+import base64
 from helpers.show_statusbar_helper import show_statusbar_message
 
 def find_main_window(widget):
@@ -38,11 +39,24 @@ class EarningsHelper:
     def init_earnings_tab(self, tab_widget):
         tab = QWidget()
         tab_layout = QVBoxLayout(tab)
+        
+        profile_summary_row = QHBoxLayout()
+        
+        self.dialog.earnings_profile_image = QLabel()
+        self.dialog.earnings_profile_image.setFixedSize(100, 100)
+        self.dialog.earnings_profile_image.setAlignment(Qt.AlignCenter)
+        self.dialog.earnings_profile_image.setStyleSheet("border-radius: 8px; background-color: rgba(128, 128, 128, 0.05);")
+        default_icon = qta.icon('fa5s.user-circle', color='#888')
+        self.dialog.earnings_profile_image.setPixmap(default_icon.pixmap(100, 100))
+        profile_summary_row.addWidget(self.dialog.earnings_profile_image)
+        
         self.dialog.earnings_summary_widget = QWidget()
         self.dialog.earnings_summary_layout = QVBoxLayout(self.dialog.earnings_summary_widget)
         self.dialog.earnings_summary_layout.setContentsMargins(0, 0, 0, 0)
         self.dialog.earnings_summary_layout.setSpacing(2)
-        tab_layout.addWidget(self.dialog.earnings_summary_widget)
+        profile_summary_row.addWidget(self.dialog.earnings_summary_widget, 1)
+        
+        tab_layout.addLayout(profile_summary_row)
         search_row = QHBoxLayout()
         self.dialog.earnings_search_edit = QLineEdit()
         self.dialog.earnings_search_edit.setPlaceholderText("Search earnings notes or file name...")
@@ -201,6 +215,24 @@ class EarningsHelper:
         self._earnings_team_id = team["id"]
         self._earnings_current_username = team["username"]
         self.earnings_current_page = 1
+        
+        if team.get("profile_image"):
+            try:
+                image_data = base64.b64decode(team["profile_image"])
+                pixmap = QPixmap()
+                pixmap.loadFromData(image_data)
+                if not pixmap.isNull():
+                    self.dialog.earnings_profile_image.setPixmap(pixmap.scaled(100, 100, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                else:
+                    default_icon = qta.icon('fa5s.user-circle', color='#888')
+                    self.dialog.earnings_profile_image.setPixmap(default_icon.pixmap(100, 100))
+            except Exception:
+                default_icon = qta.icon('fa5s.user-circle', color='#888')
+                self.dialog.earnings_profile_image.setPixmap(default_icon.pixmap(100, 100))
+        else:
+            default_icon = qta.icon('fa5s.user-circle', color='#888')
+            self.dialog.earnings_profile_image.setPixmap(default_icon.pixmap(100, 100))
+        
         self.update_earnings_table(self._earnings_current_username)
 
     def refresh_earnings_batch_filter_combo(self, batch_set):
@@ -717,6 +749,9 @@ class EarningsHelper:
         QToolTip.showText(QCursor.pos(), f"Opened: {file_path}")
 
     def clear_earnings_data(self):
+        default_icon = qta.icon('fa5s.user-circle', color='#888')
+        self.dialog.earnings_profile_image.setPixmap(default_icon.pixmap(100, 100))
+        
         self.dialog.earnings_table.setRowCount(0)
         while self.dialog.earnings_summary_layout.count():
             item = self.dialog.earnings_summary_layout.takeAt(0)

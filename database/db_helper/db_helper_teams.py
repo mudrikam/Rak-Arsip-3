@@ -35,7 +35,7 @@ class DatabaseTeamsHelper:
         self.db_manager.close()
         return teams
 
-    def add_team(self, username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder):
+    def add_team(self, username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder, profile_image=None):
         """Add new team member."""
         if not username or not full_name:
             raise ValueError("Username and Full Name cannot be empty.")
@@ -43,14 +43,14 @@ class DatabaseTeamsHelper:
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute("""
-            INSERT INTO teams (username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder, added_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        """, (username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder))
+            INSERT INTO teams (username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder, profile_image, added_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        """, (username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder, profile_image))
         self.db_manager.connection.commit()
         self.db_manager.close()
         self.db_manager.create_temp_file()
 
-    def update_team(self, old_username, new_username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder):
+    def update_team(self, old_username, new_username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder, profile_image=None):
         """Update existing team member."""
         if not new_username or not full_name:
             raise ValueError("Username and Full Name cannot be empty.")
@@ -69,9 +69,10 @@ class DatabaseTeamsHelper:
                 started_at = ?,
                 bank = ?,
                 account_number = ?,
-                account_holder = ?
+                account_holder = ?,
+                profile_image = ?
             WHERE username = ?
-        """, (new_username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder, old_username))
+        """, (new_username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder, profile_image, old_username))
         self.db_manager.connection.commit()
         self.db_manager.close()
         self.db_manager.create_temp_file()

@@ -1,10 +1,12 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QLabel, QHBoxLayout, QLineEdit, QComboBox, QPushButton, QSpinBox, QSpacerItem, QSizePolicy, QHeaderView
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QPixmap
 import qtawesome as qta
 from database.db_manager import DatabaseManager
 from manager.config_manager import ConfigManager
 from pathlib import Path
 from datetime import datetime
+import base64
 
 class AttendanceHelper:
     def __init__(self, dialog):
@@ -26,11 +28,24 @@ class AttendanceHelper:
     def init_attendance_tab(self, tab_widget):
         tab = QWidget()
         tab_layout = QVBoxLayout(tab)
+        
+        profile_summary_row = QHBoxLayout()
+        
+        self.dialog.attendance_profile_image = QLabel()
+        self.dialog.attendance_profile_image.setFixedSize(100, 100)
+        self.dialog.attendance_profile_image.setAlignment(Qt.AlignCenter)
+        self.dialog.attendance_profile_image.setStyleSheet("border-radius: 8px; background-color: rgba(128, 128, 128, 0.05);")
+        default_icon = qta.icon('fa5s.user-circle', color='#888')
+        self.dialog.attendance_profile_image.setPixmap(default_icon.pixmap(100, 100))
+        profile_summary_row.addWidget(self.dialog.attendance_profile_image)
+        
         self.dialog.attendance_summary_widget = QWidget()
         self.dialog.attendance_summary_layout = QVBoxLayout(self.dialog.attendance_summary_widget)
         self.dialog.attendance_summary_layout.setContentsMargins(0, 0, 0, 0)
         self.dialog.attendance_summary_layout.setSpacing(2)
-        tab_layout.addWidget(self.dialog.attendance_summary_widget)
+        profile_summary_row.addWidget(self.dialog.attendance_summary_widget, 1)
+        
+        tab_layout.addLayout(profile_summary_row)
         search_row = QHBoxLayout()
         self.dialog.attendance_search_edit = QLineEdit()
         self.dialog.attendance_search_edit.setPlaceholderText("Search attendance notes...")
@@ -121,6 +136,24 @@ class AttendanceHelper:
         self._attendance_team_id = team["id"]
         self._attendance_full_name = team.get("full_name", "")
         self.attendance_current_page = 1
+        
+        if team.get("profile_image"):
+            try:
+                image_data = base64.b64decode(team["profile_image"])
+                pixmap = QPixmap()
+                pixmap.loadFromData(image_data)
+                if not pixmap.isNull():
+                    self.dialog.attendance_profile_image.setPixmap(pixmap.scaled(100, 100, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                else:
+                    default_icon = qta.icon('fa5s.user-circle', color='#888')
+                    self.dialog.attendance_profile_image.setPixmap(default_icon.pixmap(100, 100))
+            except Exception:
+                default_icon = qta.icon('fa5s.user-circle', color='#888')
+                self.dialog.attendance_profile_image.setPixmap(default_icon.pixmap(100, 100))
+        else:
+            default_icon = qta.icon('fa5s.user-circle', color='#888')
+            self.dialog.attendance_profile_image.setPixmap(default_icon.pixmap(100, 100))
+        
         basedir = Path(__file__).resolve().parents[3]
         db_config_path = basedir / "configs" / "db_config.json"
         config_manager = ConfigManager(str(db_config_path))
@@ -429,6 +462,9 @@ class AttendanceHelper:
         parent_layout.addWidget(stats_widget)
 
     def clear_attendance_data(self):
+        default_icon = qta.icon('fa5s.user-circle', color='#888')
+        self.dialog.attendance_profile_image.setPixmap(default_icon.pixmap(100, 100))
+        
         self.dialog.attendance_table.setRowCount(0)
         while self.dialog.attendance_summary_layout.count():
             item = self.dialog.attendance_summary_layout.takeAt(0)

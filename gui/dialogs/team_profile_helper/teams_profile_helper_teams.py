@@ -1,10 +1,11 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QFormLayout, QLineEdit, QPushButton, QDateEdit, QHBoxLayout, QLabel, QMessageBox, QInputDialog, QFrame
-from PySide6.QtCore import Qt, QDate
-from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QFormLayout, QLineEdit, QPushButton, QDateEdit, QHBoxLayout, QLabel, QMessageBox, QInputDialog, QFrame, QFileDialog
+from PySide6.QtCore import Qt, QDate, QBuffer, QIODevice
+from PySide6.QtGui import QColor, QPixmap, QImage
 import qtawesome as qta
 from database.db_manager import DatabaseManager
 from manager.config_manager import ConfigManager
 from pathlib import Path
+import base64
 
 class TeamsHelper:
     def __init__(self, dialog):
@@ -174,11 +175,41 @@ class TeamsHelper:
     def init_details_tab(self, tab_widget):
         tab = QWidget()
         tab_layout = QVBoxLayout(tab)
+        
+        profile_layout = QHBoxLayout()
+        
+        left_profile_layout = QVBoxLayout()
+        self.profile_image_label = QLabel()
+        self.profile_image_label.setFixedSize(100, 100)
+        self.profile_image_label.setAlignment(Qt.AlignCenter)
+        self.profile_image_label.setStyleSheet("border-radius: 8px; background-color: rgba(128, 128, 128, 0.05);")
+        default_icon = qta.icon('fa5s.user-circle', color='#888')
+        self.profile_image_label.setPixmap(default_icon.pixmap(100, 100))
+        left_profile_layout.addWidget(self.profile_image_label)
+        
+        upload_btn = QPushButton("Upload Photo")
+        upload_btn.setIcon(qta.icon('fa5s.camera'))
+        upload_btn.clicked.connect(self.upload_profile_image)
+        left_profile_layout.addWidget(upload_btn)
+        
+        remove_btn = QPushButton("Remove Photo")
+        remove_btn.setIcon(qta.icon('fa5s.trash'))
+        remove_btn.clicked.connect(self.remove_profile_image)
+        left_profile_layout.addWidget(remove_btn)
+        
+        left_profile_layout.addStretch()
+        profile_layout.addLayout(left_profile_layout)
+        
         self.dialog.details_layout = QFormLayout()
-        tab_layout.addLayout(self.dialog.details_layout)
+        profile_layout.addLayout(self.dialog.details_layout, 1)
+        
+        tab_layout.addLayout(profile_layout)
+        
         self.dialog.details_widgets = {}
         self.dialog.details_editable = {}
         self.dialog.details_copy_buttons = {}
+        self.current_profile_image_base64 = None
+        
         fields = [
             ("Username", "username", True),
             ("Full Name", "full_name", True),
@@ -242,6 +273,40 @@ class TeamsHelper:
         tab_widget.addTab(tab, qta.icon("fa6s.id-card"), "Details")
         self.dialog.save_button.setEnabled(False)
 
+    def upload_profile_image(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self.dialog,
+            "Select Profile Image",
+            "",
+            "Images (*.png *.jpg *.jpeg *.bmp *.gif)"
+        )
+        if file_path:
+            pixmap = QPixmap(file_path)
+            if not pixmap.isNull():
+                scaled_pixmap = pixmap.scaled(100, 100, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+                
+                cropped_pixmap = scaled_pixmap.copy(
+                    (scaled_pixmap.width() - 100) // 2,
+                    (scaled_pixmap.height() - 100) // 2,
+                    100,
+                    100
+                )
+                
+                self.profile_image_label.setPixmap(cropped_pixmap)
+                
+                buffer = QBuffer()
+                buffer.open(QIODevice.WriteOnly)
+                cropped_pixmap.save(buffer, "PNG")
+                self.current_profile_image_base64 = base64.b64encode(buffer.data()).decode('utf-8')
+                buffer.close()
+            else:
+                QMessageBox.warning(self.dialog, "Invalid Image", "Failed to load the selected image.")
+    
+    def remove_profile_image(self):
+        default_icon = qta.icon('fa5s.user-circle', color='#888')
+        self.profile_image_label.setPixmap(default_icon.pixmap(100, 100))
+        self.current_profile_image_base64 = None
+
     def fetch_team_data(self):
         basedir = Path(__file__).resolve().parents[3]
         db_config_path = basedir / "configs" / "db_config.json"
@@ -287,6 +352,28 @@ class TeamsHelper:
             team = self._teams_data[row]
             self._selected_team_index = row
             self._add_mode = False
+            
+            if team.get("profile_image"):
+                try:
+                    image_data = base64.b64decode(team["profile_image"])
+                    pixmap = QPixmap()
+                    pixmap.loadFromData(image_data)
+                    if not pixmap.isNull():
+                        self.profile_image_label.setPixmap(pixmap.scaled(100, 100, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                        self.current_profile_image_base64 = team["profile_image"]
+                    else:
+                        default_icon = qta.icon('fa5s.user-circle', color='#888')
+                        self.profile_image_label.setPixmap(default_icon.pixmap(100, 100))
+                        self.current_profile_image_base64 = None
+                except Exception:
+                    default_icon = qta.icon('fa5s.user-circle', color='#888')
+                    self.profile_image_label.setPixmap(default_icon.pixmap(100, 100))
+                    self.current_profile_image_base64 = None
+            else:
+                default_icon = qta.icon('fa5s.user-circle', color='#888')
+                self.profile_image_label.setPixmap(default_icon.pixmap(100, 100))
+                self.current_profile_image_base64 = None
+            
             for key, widget in self.dialog.details_widgets.items():
                 value = str(team.get(key, ""))
                 if key == "started_at":
@@ -321,6 +408,11 @@ class TeamsHelper:
     def add_member_mode(self):
         self._selected_team_index = None
         self._add_mode = True
+        
+        default_icon = qta.icon('fa5s.user-circle', color='#888')
+        self.profile_image_label.setPixmap(default_icon.pixmap(100, 100))
+        self.current_profile_image_base64 = None
+        
         for key, widget in self.dialog.details_widgets.items():
             if key == "started_at":
                 widget.setDate(QDate.currentDate())
@@ -367,7 +459,8 @@ class TeamsHelper:
                     started_at=updated_data["started_at"],
                     bank=updated_data["bank"],
                     account_number=updated_data["account_number"],
-                    account_holder=updated_data["account_holder"]
+                    account_holder=updated_data["account_holder"],
+                    profile_image=self.current_profile_image_base64
                 )
             except Exception as e:
                 QMessageBox.warning(self.dialog, "Error", str(e))
@@ -420,7 +513,8 @@ class TeamsHelper:
                     started_at=updated_data["started_at"],
                     bank=updated_data["bank"],
                     account_number=updated_data["account_number"],
-                    account_holder=updated_data["account_holder"]
+                    account_holder=updated_data["account_holder"],
+                    profile_image=self.current_profile_image_base64
                 )
             except Exception as e:
                 QMessageBox.warning(self.dialog, "Error", str(e))
