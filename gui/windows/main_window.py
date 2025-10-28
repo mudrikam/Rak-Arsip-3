@@ -1,10 +1,11 @@
-from PySide6.QtWidgets import QMainWindow, QApplication, QWidget, QStatusBar, QLabel
+from PySide6.QtWidgets import QMainWindow, QApplication, QWidget, QStatusBar, QLabel, QHBoxLayout, QDockWidget
 from PySide6.QtCore import Qt, QRect, QCoreApplication, QTimer
 from helpers.window_helper import get_window_config, set_app_user_model_id, set_window_icon
 from gui.widgets.main_menu import MainMenu
 from gui.widgets.main_action import MainActionDock
 from gui.widgets.central_widget import CentralWidget
 from gui.widgets.properties_widget import PropertiesWidget
+from gui.widgets.attendance_sidebar import AttendanceSidebar
 from helpers.show_statusbar_helper import get_datetime_string
 from database.db_manager import DatabaseManager
 from manager.config_manager import ConfigManager
@@ -35,6 +36,13 @@ class MainWindow(QMainWindow):
         self.main_action_dock = MainActionDock(self.config_manager, self, db_manager=self.db_manager)
         self.addDockWidget(Qt.TopDockWidgetArea, self.main_action_dock)
 
+        self.attendance_sidebar_dock = QDockWidget("Attendance", self)
+        self.attendance_sidebar_dock.setFeatures(QDockWidget.NoDockWidgetFeatures)
+        self.attendance_sidebar_dock.setTitleBarWidget(QWidget())
+        self.attendance_sidebar = AttendanceSidebar(self)
+        self.attendance_sidebar_dock.setWidget(self.attendance_sidebar)
+        self.addDockWidget(Qt.LeftDockWidgetArea, self.attendance_sidebar_dock)
+
         self.central_widget = CentralWidget(self, db_manager=self.db_manager)
         self.setCentralWidget(self.central_widget)
 
@@ -42,6 +50,8 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.RightDockWidgetArea, self.properties_widget)
 
         self.central_widget.row_selected.connect(self.properties_widget.update_properties)
+        
+        self.db_manager.data_changed.connect(self.attendance_sidebar.refresh_attendance)
 
         self.status_bar = QStatusBar(self)
         self.setStatusBar(self.status_bar)
