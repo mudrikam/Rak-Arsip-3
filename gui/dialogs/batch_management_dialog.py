@@ -808,7 +808,19 @@ class BatchManagementDialog(QDialog):
         # Remove the raw created_at from data for sheet output
         data = [[d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8]] for d in data]
         
-        today_str = datetime.now().strftime("%Y-%m-%d")
+        # Format date: Senin, 10 Oktober 2025 (update terakhir 15:12 WIB)
+        now = datetime.now()
+        day_names = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]
+        month_names = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", 
+                       "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
+        
+        day_name = day_names[now.weekday()]
+        day = now.day
+        month_name = month_names[now.month - 1]
+        year = now.year
+        time_str = now.strftime("%H:%M")
+        
+        today_str = f"{day_name}, {day} {month_name} {year} (update terakhir {time_str} WIB)"
         return header, data, today_str
 
     def write_batch_queue_sheet_content(self, sheets_service, spreadsheet_id, header, data, today_str):
