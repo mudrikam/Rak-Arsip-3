@@ -795,96 +795,180 @@ class BatchManagementDialog(QDialog):
         return header, data, today_str
 
     def write_batch_queue_sheet_content(self, sheets_service, spreadsheet_id, header, data, today_str):
+        # Row 1: Title
         sheets_service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
             range="A1",
             valueInputOption="USER_ENTERED",
             body={"values": [["DESAINIA STUDIO BATCH QUEUE"]]
         }).execute()
+        
+        # Row 2: Date
         sheets_service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
             range="A2",
             valueInputOption="USER_ENTERED",
             body={"values": [[today_str]]}
         ).execute()
+        
+        # Row 4-5: Legend (pindah ke sini)
+        self.add_color_legend(sheets_service, spreadsheet_id)
+        
+        # Row 7: Empty row for spacing
+        # Row 8: Header
+        # Row 9+: Data
         sheets_service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
-            range="A5",
+            range="A8",
             valueInputOption="USER_ENTERED",
             body={"values": [header] + data}
         ).execute()
-        self.add_color_legend(sheets_service, spreadsheet_id)
 
     def add_color_legend(self, sheets_service, spreadsheet_id):
-        color_steps = [
-            {"red": 0.992, "green": 0.733, "blue": 0.733},  # merah (oldest)
-            {"red": 0.949, "green": 0.949, "blue": 0.733},
-            {"red": 0.827, "green": 0.949, "blue": 0.733},
-            {"red": 0.733, "green": 0.949, "blue": 0.949},
-            {"red": 0.733, "green": 0.827, "blue": 0.949},
-            {"red": 0.882, "green": 0.733, "blue": 0.949},  # ungu (newest)
-        ]
-        legend_labels = [
-            "Active task (highest priority, oldest in queue)",
-            "Critical task (very high priority)",
-            "Ongoing task (moderate priority)",
-            "Backlog task (moderate-low priority)",
-            "Incoming batch (just added)",
-            "New batch (newest, lowest priority)",
-        ]
-        
-        legend_values = [["", desc] for desc in legend_labels]
-        
-        # Place legend starting from column K (index 10) to avoid conflict with data
-        sheets_service.spreadsheets().values().update(
-            spreadsheetId=spreadsheet_id,
-            range="K5",
-            valueInputOption="USER_ENTERED",
-            body={"values": legend_values}
-        ).execute()
-        
-        # Calculate totals including draft count
+        # Calculate totals
         total_queue, total_file_queue = self._get_total_queue_and_files()
         total_draft_count = self._get_total_draft_count()
         
+        # Stats di row 4-6 (vertical layout) - label di kolom A, value di kolom B
         sheets_service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
-            range="K11",
+            range="A4",
             valueInputOption="USER_ENTERED",
-            body={"values": [["Total Queue", total_queue]]}
-        ).execute()
-        sheets_service.spreadsheets().values().update(
-            spreadsheetId=spreadsheet_id,
-            range="K12",
-            valueInputOption="USER_ENTERED",
-            body={"values": [["Total File Queue", total_file_queue]]}
-        ).execute()
-        sheets_service.spreadsheets().values().update(
-            spreadsheetId=spreadsheet_id,
-            range="K13",
-            valueInputOption="USER_ENTERED",
-            body={"values": [["Total Draft Items", total_draft_count]]}
+            body={"values": [
+                ["📊 Total Queue", total_queue],
+                ["📁 Total Files", total_file_queue],
+                ["✏️ Draft Items", total_draft_count]
+            ]}
         ).execute()
         
+        # Color priority legend di row 4 - kolom D onwards (horizontal)
+        color_legend_data = [
+            ["🔴 Oldest", "🟡 Old", "🟢 Medium", "🔵 Recent", "🟣 New", "☑️ Newest"]
+        ]
+        
+        sheets_service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range="D4",
+            valueInputOption="USER_ENTERED",
+            body={"values": color_legend_data}
+        ).execute()
+        
+        # Apply styling
+        color_steps = [
+            {"red": 0.992, "green": 0.733, "blue": 0.733},  # merah (oldest)
+            {"red": 0.949, "green": 0.949, "blue": 0.733},  # kuning
+            {"red": 0.827, "green": 0.949, "blue": 0.733},  # hijau muda
+            {"red": 0.733, "green": 0.949, "blue": 0.949},  # cyan
+            {"red": 0.733, "green": 0.827, "blue": 0.949},  # biru
+            {"red": 0.882, "green": 0.733, "blue": 0.949},  # ungu (newest)
+        ]
+        
         requests = []
+        
+        # Merge A1:I1 for title
+        requests.append({
+            "mergeCells": {
+                "range": {
+                    "sheetId": 0,
+                    "startRowIndex": 0,
+                    "endRowIndex": 1,
+                    "startColumnIndex": 0,
+                    "endColumnIndex": 9
+                },
+                "mergeType": "MERGE_ALL"
+            }
+        })
+        
+        # Merge A2:I2 for date
+        requests.append({
+            "mergeCells": {
+                "range": {
+                    "sheetId": 0,
+                    "startRowIndex": 1,
+                    "endRowIndex": 2,
+                    "startColumnIndex": 0,
+                    "endColumnIndex": 9
+                },
+                "mergeType": "MERGE_ALL"
+            }
+        })
+        
+        # Style stats labels (A4:A6) - light gray background, bold, left-aligned
+        requests.append({
+            "repeatCell": {
+                "range": {
+                    "sheetId": 0,
+                    "startRowIndex": 3,
+                    "endRowIndex": 6,
+                    "startColumnIndex": 0,
+                    "endColumnIndex": 1
+                },
+                "cell": {
+                    "userEnteredFormat": {
+                        "backgroundColor": {"red": 0.95, "green": 0.95, "blue": 0.95},
+                        "textFormat": {
+                            "bold": True,
+                            "fontSize": 10
+                        },
+                        "horizontalAlignment": "LEFT",
+                        "verticalAlignment": "MIDDLE"
+                    }
+                },
+                "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)"
+            }
+        })
+        
+        # Style stats values (B4:B6) - light gray background, right-aligned
+        requests.append({
+            "repeatCell": {
+                "range": {
+                    "sheetId": 0,
+                    "startRowIndex": 3,
+                    "endRowIndex": 6,
+                    "startColumnIndex": 1,
+                    "endColumnIndex": 2
+                },
+                "cell": {
+                    "userEnteredFormat": {
+                        "backgroundColor": {"red": 0.95, "green": 0.95, "blue": 0.95},
+                        "textFormat": {
+                            "bold": False,
+                            "fontSize": 10
+                        },
+                        "horizontalAlignment": "RIGHT",
+                        "verticalAlignment": "MIDDLE"
+                    }
+                },
+                "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)"
+            }
+        })
+        
+        # Apply colors to legend (D4:I4)
         for i, color in enumerate(color_steps):
             requests.append({
                 "repeatCell": {
                     "range": {
                         "sheetId": 0,
-                        "startRowIndex": 4 + i,
-                        "endRowIndex": 5 + i,
-                        "startColumnIndex": 10,
-                        "endColumnIndex": 11
+                        "startRowIndex": 3,
+                        "endRowIndex": 4,
+                        "startColumnIndex": 3 + i,
+                        "endColumnIndex": 4 + i
                     },
                     "cell": {
                         "userEnteredFormat": {
-                            "backgroundColor": color
+                            "backgroundColor": color,
+                            "textFormat": {
+                                "bold": True,
+                                "fontSize": 9
+                            },
+                            "horizontalAlignment": "CENTER",
+                            "verticalAlignment": "MIDDLE"
                         }
                     },
-                    "fields": "userEnteredFormat.backgroundColor"
+                    "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)"
                 }
             })
+        
         sheets_service.spreadsheets().batchUpdate(
             spreadsheetId=spreadsheet_id,
             body={"requests": requests}
@@ -925,7 +1009,9 @@ class BatchManagementDialog(QDialog):
     def apply_batch_queue_sheet_formatting(self, sheets_service, spreadsheet_id):
         from datetime import datetime
         header, data, _ = self.get_batch_queue_data_and_header()
+        
         requests = [
+            # Title (Row 1) - Large, Bold, Center
             {
                 "repeatCell": {
                     "range": {
@@ -937,15 +1023,20 @@ class BatchManagementDialog(QDialog):
                     },
                     "cell": {
                         "userEnteredFormat": {
+                            "backgroundColor": {"red": 0.2, "green": 0.2, "blue": 0.2},
                             "textFormat": {
-                                "fontSize": 16,
+                                "foregroundColor": {"red": 1, "green": 1, "blue": 1},
+                                "fontSize": 18,
                                 "bold": True
-                            }
+                            },
+                            "horizontalAlignment": "CENTER",
+                            "verticalAlignment": "MIDDLE"
                         }
                     },
-                    "fields": "userEnteredFormat.textFormat"
+                    "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)"
                 }
             },
+            # Date (Row 2) - Center, Medium
             {
                 "repeatCell": {
                     "range": {
@@ -957,55 +1048,162 @@ class BatchManagementDialog(QDialog):
                     },
                     "cell": {
                         "userEnteredFormat": {
+                            "backgroundColor": {"red": 0.3, "green": 0.3, "blue": 0.3},
                             "textFormat": {
+                                "foregroundColor": {"red": 1, "green": 1, "blue": 1},
+                                "fontSize": 11,
                                 "bold": True
                             },
-                            "horizontalAlignment": "CENTER"
+                            "horizontalAlignment": "CENTER",
+                            "verticalAlignment": "MIDDLE"
                         }
                     },
-                    "fields": "userEnteredFormat.textFormat,userEnteredFormat.horizontalAlignment"
+                    "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)"
                 }
             },
+            # Header (Row 8) - Dark background, white text
             {
                 "repeatCell": {
                     "range": {
                         "sheetId": 0,
-                        "startRowIndex": 4,
-                        "endRowIndex": 5,
+                        "startRowIndex": 7,
+                        "endRowIndex": 8,
                         "startColumnIndex": 0,
                         "endColumnIndex": 9
                     },
                     "cell": {
                         "userEnteredFormat": {
-                            "backgroundColor": {"red": 0, "green": 0, "blue": 0},
+                            "backgroundColor": {"red": 0.1, "green": 0.1, "blue": 0.1},
                             "textFormat": {
                                 "foregroundColor": {"red": 1, "green": 1, "blue": 1},
-                                "bold": True
+                                "bold": True,
+                                "fontSize": 10
                             },
-                            "horizontalAlignment": "CENTER"
+                            "horizontalAlignment": "CENTER",
+                            "verticalAlignment": "MIDDLE"
                         }
                     },
-                    "fields": "userEnteredFormat.backgroundColor,userEnteredFormat.textFormat,userEnteredFormat.horizontalAlignment"
+                    "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)"
                 }
             },
+            # Data rows (Row 9+) - Center aligned
             {
                 "repeatCell": {
                     "range": {
                         "sheetId": 0,
-                        "startRowIndex": 5,
+                        "startRowIndex": 8,
                         "endRowIndex": 1000,
                         "startColumnIndex": 0,
                         "endColumnIndex": 9
                     },
                     "cell": {
                         "userEnteredFormat": {
-                            "horizontalAlignment": "CENTER"
+                            "horizontalAlignment": "CENTER",
+                            "verticalAlignment": "MIDDLE",
+                            "textFormat": {
+                                "fontSize": 9
+                            }
                         }
                     },
-                    "fields": "userEnteredFormat.horizontalAlignment"
+                    "fields": "userEnteredFormat(horizontalAlignment,verticalAlignment,textFormat)"
+                }
+            },
+            # Batch Number column - Bold
+            {
+                "repeatCell": {
+                    "range": {
+                        "sheetId": 0,
+                        "startRowIndex": 8,
+                        "endRowIndex": 1000,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 1
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "textFormat": {
+                                "bold": True,
+                                "fontSize": 9
+                            }
+                        }
+                    },
+                    "fields": "userEnteredFormat.textFormat"
+                }
+            },
+            # Set row heights
+            {
+                "updateDimensionProperties": {
+                    "range": {
+                        "sheetId": 0,
+                        "dimension": "ROWS",
+                        "startIndex": 0,
+                        "endIndex": 1
+                    },
+                    "properties": {
+                        "pixelSize": 40
+                    },
+                    "fields": "pixelSize"
+                }
+            },
+            {
+                "updateDimensionProperties": {
+                    "range": {
+                        "sheetId": 0,
+                        "dimension": "ROWS",
+                        "startIndex": 3,
+                        "endIndex": 6
+                    },
+                    "properties": {
+                        "pixelSize": 30
+                    },
+                    "fields": "pixelSize"
+                }
+            },
+            # Set column widths
+            {
+                "updateDimensionProperties": {
+                    "range": {
+                        "sheetId": 0,
+                        "dimension": "COLUMNS",
+                        "startIndex": 0,
+                        "endIndex": 1
+                    },
+                    "properties": {
+                        "pixelSize": 100
+                    },
+                    "fields": "pixelSize"
+                }
+            },
+            {
+                "updateDimensionProperties": {
+                    "range": {
+                        "sheetId": 0,
+                        "dimension": "COLUMNS",
+                        "startIndex": 1,
+                        "endIndex": 8
+                    },
+                    "properties": {
+                        "pixelSize": 80
+                    },
+                    "fields": "pixelSize"
+                }
+            },
+            {
+                "updateDimensionProperties": {
+                    "range": {
+                        "sheetId": 0,
+                        "dimension": "COLUMNS",
+                        "startIndex": 8,
+                        "endIndex": 9
+                    },
+                    "properties": {
+                        "pixelSize": 120
+                    },
+                    "fields": "pixelSize"
                 }
             }
         ]
+        
+        # Apply age-based colors to Created At column
         now = datetime.now()
         color_steps = [
             {"red": 0.992, "green": 0.733, "blue": 0.733},  # merah (oldest)
@@ -1017,15 +1215,14 @@ class BatchManagementDialog(QDialog):
         ]
         max_days = 30
         step = 5
+        
         for idx, row in enumerate(data):
-            # Get created_at from last column position (index 8 for "Created At" text)
-            # We need to get this from original data since we process it
+            # Get created_at from database
             created_at_str = ""
             try:
-                # Get the original data to find created_at
                 batches_with_status = self.db_manager.get_all_batches_with_status_counts()
                 for batch in batches_with_status:
-                    if batch.get("batch_number") == row[0]:  # Match batch number
+                    if batch.get("batch_number") == row[0]:
                         created_at_str = batch.get("created_at", "")
                         break
             except Exception:
@@ -1038,6 +1235,7 @@ class BatchManagementDialog(QDialog):
                     created_at = datetime.strptime(created_at_str, "%Y-%m-%d")
                 except Exception:
                     created_at = None
+                    
             color = None
             if created_at:
                 days_diff = (now - created_at).days
@@ -1050,29 +1248,36 @@ class BatchManagementDialog(QDialog):
                     elif color_idx >= len(color_steps):
                         color_idx = len(color_steps) - 1
                     color = color_steps[color_idx]
+                    
             if color:
-                # Apply color only to Created At column (index 8)
+                # Apply color only to Created At column (index 8), starting from row 9 (index 8)
                 requests.append({
                     "repeatCell": {
                         "range": {
                             "sheetId": 0,
-                            "startRowIndex": 5 + idx,
-                            "endRowIndex": 6 + idx,
+                            "startRowIndex": 8 + idx,
+                            "endRowIndex": 9 + idx,
                             "startColumnIndex": 8,
                             "endColumnIndex": 9
                         },
                         "cell": {
                             "userEnteredFormat": {
-                                "backgroundColor": color
+                                "backgroundColor": color,
+                                "textFormat": {
+                                    "bold": True,
+                                    "fontSize": 9
+                                }
                             }
                         },
-                        "fields": "userEnteredFormat.backgroundColor"
+                        "fields": "userEnteredFormat(backgroundColor,textFormat)"
                     }
                 })
+        
         sheets_service.spreadsheets().batchUpdate(
             spreadsheetId=spreadsheet_id,
             body={"requests": requests}
         ).execute()
+        
         self.add_color_legend(sheets_service, spreadsheet_id)
 
     def create_batch_queue_spreadsheet(self):
