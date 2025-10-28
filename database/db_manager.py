@@ -506,3 +506,9 @@ class DatabaseManager(QObject):
 
     def get_batch_list(self, search_text=None, sort_field="Created At", sort_order="Ascending", offset=0, limit=20):
         return self.batch_manager_helper.get_batch_list(search_text, sort_field, sort_order, offset, limit)
+
+    def get_batch_status_breakdown(self, batch_number):
+        return self.batch_manager_helper.get_batch_status_breakdown(batch_number)
+
+    def get_all_batches_with_status_counts(self):
+        return self.batch_manager_helper.get_all_batches_with_status_counts()

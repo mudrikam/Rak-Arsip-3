@@ -163,3 +163,71 @@ class DatabaseBatchManagerHelper:
         self.db_manager.connection.commit()
         self.db_manager.create_temp_file()
         self.db_manager.close()
+
+    def get_batch_status_breakdown(self, batch_number):
+        """Get specific status counts for a batch"""
+        self.db_manager.connect(write=False)
+        cursor = self.db_manager.connection.cursor()
+        cursor.execute("""
+            SELECT s.name, COUNT(f.id) as count
+            FROM file_client_batch fcb
+            JOIN files f ON fcb.file_id = f.id  
+            JOIN statuses s ON f.status_id = s.id
+            WHERE fcb.batch_number = ? 
+            AND s.name IN ('Draft', 'Modelling', 'Rendering', 'Photoshop', 'Need Upload', 'Pending')
+            GROUP BY s.name
+        """, (batch_number,))
+        
+        status_counts = {}
+        for row in cursor.fetchall():
+            status_counts[row["name"]] = row["count"]
+        
+        self.db_manager.close()
+        return status_counts
+
+    def get_all_batches_with_status_counts(self):
+        """Get all batches with status breakdown for selected statuses"""
+        self.db_manager.connect(write=False)
+        cursor = self.db_manager.connection.cursor()
+        cursor.execute("""
+            SELECT 
+                b.batch_number,
+                b.client_id,
+                c.client_name,
+                b.note,
+                b.created_at,
+                COUNT(fcb.file_id) as total_files,
+                SUM(CASE WHEN s.name = 'Draft' THEN 1 ELSE 0 END) as draft_count,
+                SUM(CASE WHEN s.name = 'Modelling' THEN 1 ELSE 0 END) as modelling_count,
+                SUM(CASE WHEN s.name = 'Rendering' THEN 1 ELSE 0 END) as rendering_count,
+                SUM(CASE WHEN s.name = 'Photoshop' THEN 1 ELSE 0 END) as photoshop_count,
+                SUM(CASE WHEN s.name = 'Need Upload' THEN 1 ELSE 0 END) as need_upload_count,
+                SUM(CASE WHEN s.name = 'Pending' THEN 1 ELSE 0 END) as pending_count
+            FROM batch_list b
+            JOIN client c ON b.client_id = c.id
+            LEFT JOIN file_client_batch fcb ON b.batch_number = fcb.batch_number
+            LEFT JOIN files f ON fcb.file_id = f.id
+            LEFT JOIN statuses s ON f.status_id = s.id
+            GROUP BY b.batch_number, b.client_id, c.client_name, b.note, b.created_at
+            ORDER BY b.created_at DESC
+        """)
+        
+        batches = []
+        for row in cursor.fetchall():
+            batches.append({
+                "batch_number": row["batch_number"],
+                "client_id": row["client_id"],
+                "client_name": row["client_name"],
+                "note": row["note"],
+                "created_at": row["created_at"],
+                "total_files": row["total_files"] or 0,
+                "draft_count": row["draft_count"] or 0,
+                "modelling_count": row["modelling_count"] or 0,
+                "rendering_count": row["rendering_count"] or 0,
+                "photoshop_count": row["photoshop_count"] or 0,
+                "need_upload_count": row["need_upload_count"] or 0,
+                "pending_count": row["pending_count"] or 0
+            })
+        
+        self.db_manager.close()
+        return batches

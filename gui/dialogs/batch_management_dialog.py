@@ -752,23 +752,45 @@ class BatchManagementDialog(QDialog):
         """Prepare header and data for Batch Queue spreadsheet."""
         from datetime import datetime
         header = [
-            "Batch Number", "File Count", "Created At"
+            "Batch Number", "File Count", "Draft", "Modelling", "Rendering", "Photoshop", "Need Upload", "Pending", "Created At"
         ]
         data = []
-        for row in self._batch_data_all:
-            note = row[2]
+        
+        # Get batches with status breakdown
+        batches_with_status = self.db_manager.get_all_batches_with_status_counts() if self.db_manager else []
+        
+        for batch in batches_with_status:
+            note = batch.get("note", "")
             note_lower = str(note).strip().lower()
             # Skip batch if note contains "finished" or "hold"
             if note_lower == "finished" or "hold" in note_lower:
                 continue
-            batch_number = row[1]
-            file_count = row[3]
-            created_at = row[4]
-            created_at_ago = time_ago(created_at)
-            data.append((batch_number, file_count, created_at_ago, created_at))
+                
+            batch_number = batch.get("batch_number", "")
+            total_files = batch.get("total_files", 0)
+            created_at = batch.get("created_at", "")
+            created_at_ago = time_ago(created_at) if created_at else ""
+            
+            # Status counts
+            draft_count = batch.get("draft_count", 0)
+            modelling_count = batch.get("modelling_count", 0)
+            rendering_count = batch.get("rendering_count", 0)
+            photoshop_count = batch.get("photoshop_count", 0)
+            need_upload_count = batch.get("need_upload_count", 0)
+            pending_count = batch.get("pending_count", 0)
+            
+            data.append((
+                batch_number, total_files, draft_count, modelling_count, 
+                rendering_count, photoshop_count, need_upload_count, pending_count,
+                created_at_ago, created_at
+            ))
+            
         # Sort ascending by created_at (oldest at top)
-        data.sort(key=lambda x: x[3] if x[3] else "", reverse=False)
-        data = [[d[0], d[1], d[2], d[3]] for d in data]
+        data.sort(key=lambda x: x[9] if x[9] else "", reverse=False)
+        
+        # Remove the raw created_at from data for sheet output
+        data = [[d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8]] for d in data]
+        
         today_str = datetime.now().strftime("%Y-%m-%d")
         return header, data, today_str
 
@@ -789,7 +811,7 @@ class BatchManagementDialog(QDialog):
             spreadsheetId=spreadsheet_id,
             range="A5",
             valueInputOption="USER_ENTERED",
-            body={"values": [header] + [row[:3] for row in data]}
+            body={"values": [header] + data}
         ).execute()
         self.add_color_legend(sheets_service, spreadsheet_id)
 
@@ -813,25 +835,37 @@ class BatchManagementDialog(QDialog):
         
         legend_values = [["", desc] for desc in legend_labels]
         
+        # Place legend starting from column K (index 10) to avoid conflict with data
         sheets_service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
-            range="E5",
+            range="K5",
             valueInputOption="USER_ENTERED",
             body={"values": legend_values}
         ).execute()
+        
+        # Calculate totals including draft count
         total_queue, total_file_queue = self._get_total_queue_and_files()
+        total_draft_count = self._get_total_draft_count()
+        
         sheets_service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
-            range="E11",
+            range="K11",
             valueInputOption="USER_ENTERED",
             body={"values": [["Total Queue", total_queue]]}
         ).execute()
         sheets_service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
-            range="E12",
+            range="K12",
             valueInputOption="USER_ENTERED",
             body={"values": [["Total File Queue", total_file_queue]]}
         ).execute()
+        sheets_service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range="K13",
+            valueInputOption="USER_ENTERED",
+            body={"values": [["Total Draft Items", total_draft_count]]}
+        ).execute()
+        
         requests = []
         for i, color in enumerate(color_steps):
             requests.append({
@@ -840,8 +874,8 @@ class BatchManagementDialog(QDialog):
                         "sheetId": 0,
                         "startRowIndex": 4 + i,
                         "endRowIndex": 5 + i,
-                        "startColumnIndex": 4,
-                        "endColumnIndex": 5
+                        "startColumnIndex": 10,
+                        "endColumnIndex": 11
                     },
                     "cell": {
                         "userEnteredFormat": {
@@ -870,6 +904,24 @@ class BatchManagementDialog(QDialog):
                     pass
         return total_queue, total_file_queue
 
+    def _get_total_draft_count(self):
+        """Calculate total draft items across all active batches"""
+        total_draft_count = 0
+        try:
+            batches_with_status = self.db_manager.get_all_batches_with_status_counts() if self.db_manager else []
+            for batch in batches_with_status:
+                note = batch.get("note", "")
+                note_lower = str(note).strip().lower()
+                # Skip batch if note contains "finished" or "hold"
+                if note_lower == "finished" or "hold" in note_lower:
+                    continue
+                draft_count = batch.get("draft_count", 0)
+                total_draft_count += draft_count
+        except Exception as e:
+            print(f"Error calculating draft count: {e}")
+            total_draft_count = 0
+        return total_draft_count
+
     def apply_batch_queue_sheet_formatting(self, sheets_service, spreadsheet_id):
         from datetime import datetime
         header, data, _ = self.get_batch_queue_data_and_header()
@@ -881,7 +933,7 @@ class BatchManagementDialog(QDialog):
                         "startRowIndex": 0,
                         "endRowIndex": 1,
                         "startColumnIndex": 0,
-                        "endColumnIndex": 3
+                        "endColumnIndex": 9
                     },
                     "cell": {
                         "userEnteredFormat": {
@@ -901,7 +953,7 @@ class BatchManagementDialog(QDialog):
                         "startRowIndex": 1,
                         "endRowIndex": 2,
                         "startColumnIndex": 0,
-                        "endColumnIndex": 3
+                        "endColumnIndex": 9
                     },
                     "cell": {
                         "userEnteredFormat": {
@@ -921,7 +973,7 @@ class BatchManagementDialog(QDialog):
                         "startRowIndex": 4,
                         "endRowIndex": 5,
                         "startColumnIndex": 0,
-                        "endColumnIndex": 3
+                        "endColumnIndex": 9
                     },
                     "cell": {
                         "userEnteredFormat": {
@@ -943,7 +995,7 @@ class BatchManagementDialog(QDialog):
                         "startRowIndex": 5,
                         "endRowIndex": 1000,
                         "startColumnIndex": 0,
-                        "endColumnIndex": 3
+                        "endColumnIndex": 9
                     },
                     "cell": {
                         "userEnteredFormat": {
@@ -966,7 +1018,19 @@ class BatchManagementDialog(QDialog):
         max_days = 30
         step = 5
         for idx, row in enumerate(data):
-            created_at_str = row[3]
+            # Get created_at from last column position (index 8 for "Created At" text)
+            # We need to get this from original data since we process it
+            created_at_str = ""
+            try:
+                # Get the original data to find created_at
+                batches_with_status = self.db_manager.get_all_batches_with_status_counts()
+                for batch in batches_with_status:
+                    if batch.get("batch_number") == row[0]:  # Match batch number
+                        created_at_str = batch.get("created_at", "")
+                        break
+            except Exception:
+                created_at_str = ""
+                
             try:
                 created_at = datetime.strptime(created_at_str, "%Y-%m-%d %H:%M:%S")
             except Exception:
@@ -987,14 +1051,15 @@ class BatchManagementDialog(QDialog):
                         color_idx = len(color_steps) - 1
                     color = color_steps[color_idx]
             if color:
+                # Apply color only to Created At column (index 8)
                 requests.append({
                     "repeatCell": {
                         "range": {
                             "sheetId": 0,
                             "startRowIndex": 5 + idx,
                             "endRowIndex": 6 + idx,
-                            "startColumnIndex": 0,
-                            "endColumnIndex": 3
+                            "startColumnIndex": 8,
+                            "endColumnIndex": 9
                         },
                         "cell": {
                             "userEnteredFormat": {
