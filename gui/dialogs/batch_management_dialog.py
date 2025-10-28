@@ -102,6 +102,7 @@ class BatchManagementDialog(QDialog):
         self._batch_rows_per_page = 20
         self._batch_total_pages = 1
         self._hide_finished = False
+        self._hide_hold = False
         self._rak_arsip_folder_id = None
         self._batch_folder_id = None
         self._drive_service = None
@@ -140,9 +141,17 @@ class BatchManagementDialog(QDialog):
         self.batch_sort_order_combo = QComboBox()
         self.batch_sort_order_combo.addItems(["Ascending", "Descending"])
         self.batch_sort_order_combo.setCurrentText("Ascending")
+        
+        # Status filter
+        self.status_filter_combo = QComboBox()
+        self.status_filter_combo.addItems(["All Status", "Finished", "Hold", "In Progress", "Review", "Urgent", "Low Priority", "Custom", "Empty"])
+        self.status_filter_combo.setCurrentText("All Status")
+        
         row.addWidget(QLabel("Sort by:"))
         row.addWidget(self.batch_sort_combo)
         row.addWidget(self.batch_sort_order_combo)
+        row.addWidget(QLabel("Filter:"))
+        row.addWidget(self.status_filter_combo)
         row.addStretch()
 
         self.batch_refresh_btn = QPushButton(qta.icon("fa6s.arrows-rotate"), "Refresh")
@@ -192,6 +201,10 @@ class BatchManagementDialog(QDialog):
         self.hide_finished_checkbox.setChecked(False)
         pagination_layout.addWidget(self.hide_finished_checkbox)
 
+        self.hide_hold_checkbox = QCheckBox("Hide Hold")
+        self.hide_hold_checkbox.setChecked(False)
+        pagination_layout.addWidget(self.hide_hold_checkbox)
+
         self.batch_sync_drive_btn = QPushButton(qta.icon("fa6s.cloud-arrow-up"), "Sync to Drive")
         pagination_layout.addWidget(self.batch_sync_drive_btn)
 
@@ -218,10 +231,38 @@ class BatchManagementDialog(QDialog):
         stats_layout.addStretch()
         layout.addLayout(stats_layout)
 
+        # Color legend
+        legend_layout = QHBoxLayout()
+        legend_layout.addWidget(QLabel("Status Colors:"))
+        
+        # Create color legend items
+        color_items = [
+            ("Finished", "#43a047"),
+            ("Hold", "#ff9800"), 
+            ("In Progress", "#2196f3"),
+            ("Review", "#9c27b0"),
+            ("Urgent", "#f44336"),
+            ("Low Priority", "#9e9e9e"),
+            ("Custom", "#00bcd4")
+        ]
+        
+        for status, color_hex in color_items:
+            color_label = QLabel("●")
+            color_label.setStyleSheet(f"color: {color_hex}; font-size: 14px; font-weight: bold;")
+            text_label = QLabel(status)
+            text_label.setStyleSheet("font-size: 10px;")
+            legend_layout.addWidget(color_label)
+            legend_layout.addWidget(text_label)
+            legend_layout.addSpacing(10)
+        
+        legend_layout.addStretch()
+        layout.addLayout(legend_layout)
+
         self.batch_refresh_btn.clicked.connect(self.load_batch_data)
         self.batch_search_edit.textChanged.connect(self.update_batch_table)
         self.batch_sort_combo.currentIndexChanged.connect(self.on_sort_changed)
         self.batch_sort_order_combo.currentIndexChanged.connect(self.on_sort_changed)
+        self.status_filter_combo.currentIndexChanged.connect(self.on_status_filter_changed)
         self.batch_prev_btn.clicked.connect(self.on_prev_page)
         self.batch_next_btn.clicked.connect(self.on_next_page)
         self.batch_rows_per_page_combo.currentIndexChanged.connect(self.on_rows_per_page_changed)
@@ -232,6 +273,7 @@ class BatchManagementDialog(QDialog):
         self.batch_table.cellDoubleClicked.connect(self.on_batch_edit)
         self.batch_table.customContextMenuRequested.connect(self.show_batch_context_menu)
         self.hide_finished_checkbox.stateChanged.connect(self.on_hide_finished_changed)
+        self.hide_hold_checkbox.stateChanged.connect(self.on_hide_hold_changed)
         self.batch_sync_drive_btn.clicked.connect(self.on_sync_drive_clicked)
 
     def on_open_batch_queue_sheet(self):
@@ -257,7 +299,10 @@ class BatchManagementDialog(QDialog):
 
     def update_batch_table(self):
         search_text = self.batch_search_edit.text().strip().lower()
+        status_filter = self.status_filter_combo.currentText()
         hide_finished = self.hide_finished_checkbox.isChecked()
+        hide_hold = self.hide_hold_checkbox.isChecked()
+        
         if search_text:
             filtered = [
                 (client_name, batch_number, note, file_count, created_at, client_id)
@@ -268,8 +313,26 @@ class BatchManagementDialog(QDialog):
             ]
         else:
             filtered = list(self._batch_data_all)
+            
+        # Apply status filter first
+        if status_filter != "All Status":
+            if status_filter == "Empty":
+                filtered = [row for row in filtered if not str(row[2]).strip()]
+            elif status_filter == "Custom":
+                predefined_statuses = ["finished", "hold", "in progress", "progress", "review", "urgent", "low priority", "low"]
+                filtered = [row for row in filtered 
+                          if str(row[2]).strip().lower() not in predefined_statuses and str(row[2]).strip()]
+            else:
+                status_lower = status_filter.lower()
+                filtered = [row for row in filtered 
+                          if status_lower in str(row[2]).strip().lower()]
+        
+        # Apply hide checkboxes after status filter
         if hide_finished:
             filtered = [row for row in filtered if str(row[2]).strip().lower() != "finished"]
+        if hide_hold:
+            filtered = [row for row in filtered if "hold" not in str(row[2]).strip().lower()]
+            
         self._batch_data_filtered = filtered
 
         self._apply_batch_sorting()
@@ -296,11 +359,37 @@ class BatchManagementDialog(QDialog):
             note_item = QTableWidgetItem(str(note))
             count_item = QTableWidgetItem(str(file_count))
             created_item = QTableWidgetItem(str(created_at) if created_at else "")
-            if str(note).strip().lower() == "finished":
-                green = QColor("#43a047")
-                green.setAlpha(80)
+            
+            note_lower = str(note).strip().lower()
+            color = None
+            
+            if note_lower == "finished":
+                # Green color for finished
+                color = QColor("#43a047")
+            elif "hold" in note_lower:
+                # Orange/amber color for hold
+                color = QColor("#ff9800")
+            elif "in progress" in note_lower or "progress" in note_lower:
+                # Blue color for in progress
+                color = QColor("#2196f3")
+            elif "review" in note_lower:
+                # Purple color for review
+                color = QColor("#9c27b0")
+            elif "urgent" in note_lower:
+                # Red color for urgent
+                color = QColor("#f44336")
+            elif "low priority" in note_lower or "low" in note_lower:
+                # Gray color for low priority
+                color = QColor("#9e9e9e")
+            elif note_lower and note_lower != "":
+                # Light blue for other custom notes
+                color = QColor("#00bcd4")
+            
+            if color:
+                color.setAlpha(80)
                 for item in (client_item, batch_item, note_item, count_item, created_item):
-                    item.setBackground(green)
+                    item.setBackground(color)
+                    
             self.batch_table.setItem(row_idx, 0, client_item)
             self.batch_table.setItem(row_idx, 1, batch_item)
             self.batch_table.setItem(row_idx, 2, note_item)
@@ -323,17 +412,34 @@ class BatchManagementDialog(QDialog):
         queue_files = 0
         for row in self._batch_data_all:
             total_files += int(row[3]) if row[3] else 0
-            if str(row[2]).strip().lower() != "finished":
+            note_lower = str(row[2]).strip().lower()
+            if note_lower != "finished" and "hold" not in note_lower:
                 queue_batches.append(row)
                 queue_files += int(row[3]) if row[3] else 0
         self.stats_total_files_label.setText(f"Total Batches: {total_batch} ({total_files} files)")
         self.stats_batch_queue_label.setText(f"Batch Queue: {len(queue_batches)} ({queue_files} files)")
 
+        # Use both filter dropdown and checkboxes for stats
         hide_finished = self.hide_finished_checkbox.isChecked()
-        if hide_finished:
-            filtered_rows = [row for row in self._batch_data_all if str(row[2]).strip().lower() != "finished"]
+        hide_hold = self.hide_hold_checkbox.isChecked()
+        status_filter = self.status_filter_combo.currentText()
+        
+        if status_filter != "All Status":
+            # Use filtered data from current filter
+            filtered_rows = self._batch_data_filtered if hasattr(self, '_batch_data_filtered') else self._batch_data_all
         else:
-            filtered_rows = self._batch_data_all
+            # Apply checkbox filters when no specific status filter is active
+            if hide_finished and hide_hold:
+                filtered_rows = [row for row in self._batch_data_all 
+                               if str(row[2]).strip().lower() != "finished" 
+                               and "hold" not in str(row[2]).strip().lower()]
+            elif hide_finished:
+                filtered_rows = [row for row in self._batch_data_all if str(row[2]).strip().lower() != "finished"]
+            elif hide_hold:
+                filtered_rows = [row for row in self._batch_data_all if "hold" not in str(row[2]).strip().lower()]
+            else:
+                filtered_rows = self._batch_data_all
+                
         created_dates = [row[4] for row in filtered_rows if row[4]]
         if created_dates:
             oldest_date = min(created_dates)
@@ -407,7 +513,13 @@ class BatchManagementDialog(QDialog):
             self._batch_page = value
             self.update_batch_table()
 
+    def on_status_filter_changed(self, index):
+        self.update_batch_table()
+
     def on_hide_finished_changed(self, state):
+        self.update_batch_table()
+
+    def on_hide_hold_changed(self, state):
         self.update_batch_table()
 
     def get_selected_row_data(self):
@@ -645,7 +757,9 @@ class BatchManagementDialog(QDialog):
         data = []
         for row in self._batch_data_all:
             note = row[2]
-            if str(note).strip().lower() == "finished":
+            note_lower = str(note).strip().lower()
+            # Skip batch if note contains "finished" or "hold"
+            if note_lower == "finished" or "hold" in note_lower:
                 continue
             batch_number = row[1]
             file_count = row[3]
@@ -696,7 +810,17 @@ class BatchManagementDialog(QDialog):
             "Incoming batch (just added)",
             "New batch (newest, lowest priority)",
         ]
+        
+        # Add note about excluded statuses
+        note_labels = [
+            "",
+            "Note: Batches with 'Hold' or 'Finished' status",
+            "are excluded from this queue list."
+        ]
+        
         legend_values = [["", desc] for desc in legend_labels]
+        legend_values.extend([["", note] for note in note_labels])
+        
         sheets_service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
             range="E5",
@@ -706,13 +830,13 @@ class BatchManagementDialog(QDialog):
         total_queue, total_file_queue = self._get_total_queue_and_files()
         sheets_service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
-            range="E11",
+            range="E14",
             valueInputOption="USER_ENTERED",
             body={"values": [["Total Queue", total_queue]]}
         ).execute()
         sheets_service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
-            range="E12",
+            range="E15",
             valueInputOption="USER_ENTERED",
             body={"values": [["Total File Queue", total_file_queue]]}
         ).execute()
@@ -745,7 +869,8 @@ class BatchManagementDialog(QDialog):
         total_file_queue = 0
         for row in self._batch_data_all:
             note = row[2]
-            if str(note).strip().lower() != "finished":
+            note_lower = str(note).strip().lower()
+            if note_lower != "finished" and "hold" not in note_lower:
                 total_queue += 1
                 try:
                     total_file_queue += int(row[3]) if row[3] else 0

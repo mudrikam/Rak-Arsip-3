@@ -55,8 +55,25 @@ class BatchEditDialog(QDialog):
             self.created_at_edit.setDateTime(QDateTime.currentDateTime())
         layout.addRow("Created At:", self.created_at_edit)
 
-        self.note_edit = QLineEdit(note)
-        layout.addRow("Note:", self.note_edit)
+        # Note ComboBox with editable option
+        self.note_combo = QComboBox(self)
+        self.note_combo.setEditable(True)
+        # Add predefined note options with color coding
+        note_options = ["", "Finished", "Hold", "In Progress", "Review", "Urgent", "Low Priority"]
+        self.note_combo.addItems(note_options)
+        
+        # Set current note value
+        if note:
+            # Check if note exists in options
+            index = self.note_combo.findText(note)
+            if index >= 0:
+                self.note_combo.setCurrentIndex(index)
+            else:
+                # If note is custom, add it and select it
+                self.note_combo.addItem(note)
+                self.note_combo.setCurrentText(note)
+        
+        layout.addRow("Note:", self.note_combo)
 
         self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         layout.addWidget(self.button_box)
@@ -68,14 +85,14 @@ class BatchEditDialog(QDialog):
         if self._show_client_combo and self.client_combo:
             return (
                 self.batch_number_edit.text().strip(),
-                self.note_edit.text().strip(),
+                self.note_combo.currentText().strip(),
                 self.client_combo.currentData(),
                 created_at_str
             )
         else:
             return (
                 self.batch_number_edit.text().strip(),
-                self.note_edit.text().strip(),
+                self.note_combo.currentText().strip(),
                 self._client_id,
                 created_at_str
             )
