@@ -81,7 +81,9 @@ class MainMenu(QMenuBar):
 
     def show_teams_attendance(self):
         from gui.dialogs.teams_attendance_dialog import TeamsAttendanceDialog
-        dialog = TeamsAttendanceDialog(self)
+        parent = self.parent()
+        db_manager = getattr(parent, 'db_manager', None)
+        dialog = TeamsAttendanceDialog(self, db_manager=db_manager)
         dialog.exec()
 
     def show_client_dialog(self):

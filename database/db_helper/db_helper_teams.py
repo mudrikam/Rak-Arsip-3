@@ -253,6 +253,7 @@ class DatabaseTeamsHelper:
             self.db_manager.connection.commit()
             self.db_manager.close()
             self.db_manager.create_temp_file()
+            self.db_manager.data_changed.emit()
             return True, "Checked in."
         elif mode == "checkout":
             self.db_manager.connect(write=False)
@@ -275,6 +276,7 @@ class DatabaseTeamsHelper:
                 self.db_manager.connection.commit()
                 self.db_manager.close()
                 self.db_manager.create_temp_file()
+                self.db_manager.data_changed.emit()
                 return True, "Checked out."
             else:
                 return False, "No open attendance to check out."

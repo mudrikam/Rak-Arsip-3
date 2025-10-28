@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QFormLayout, 
                                QLineEdit, QPushButton, QLabel, QComboBox, QTextEdit, 
                                QScrollArea, QWidget, QFrame)
-from PySide6.QtGui import QFont, QPixmap, QIcon
+from PySide6.QtGui import QFont, QPixmap, QIcon, QPainter, QPainterPath
 from PySide6.QtCore import Qt, Signal
 import qtawesome as qta
 from database.db_manager import DatabaseManager
@@ -35,8 +35,9 @@ def format_date_indonesian(date_str, with_time=False):
         return date_str
 
 class TeamsAttendanceDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, db_manager=None):
         super().__init__(parent)
+        self.db_manager = db_manager
         self.setWindowTitle("Teams Attendance")
         self.setMinimumSize(700, 500)
         
@@ -61,6 +62,27 @@ class TeamsAttendanceDialog(QDialog):
         
         self._populate_users()
         self.live_update_attendance_state()
+    
+    def create_circular_pixmap(self, pixmap, size):
+        """Create circular clipped pixmap."""
+        circular = QPixmap(size, size)
+        circular.fill(Qt.transparent)
+        
+        painter = QPainter(circular)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        
+        path = QPainterPath()
+        path.addEllipse(0, 0, size, size)
+        painter.setClipPath(path)
+        
+        scaled = pixmap.scaled(size, size, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+        x_offset = (scaled.width() - size) // 2
+        y_offset = (scaled.height() - size) // 2
+        painter.drawPixmap(-x_offset, -y_offset, scaled)
+        
+        painter.end()
+        return circular
     
     def _create_user_grid_panel(self):
         panel = QFrame()
@@ -121,8 +143,9 @@ class TeamsAttendanceDialog(QDialog):
                 btn.setFont(QFont("Segoe UI", 14, QFont.Bold))
                 btn.setMinimumSize(60, 60)
                 btn.setStyleSheet("padding: 5px; border-radius: 5px;")
+                btn.setFocusPolicy(Qt.NoFocus)
                 if text == '⌫':
-                    btn.clicked.connect(lambda: self.pin_edit.backspace())
+                    btn.clicked.connect(lambda checked=False: self.pin_edit.backspace())
                 else:
                     btn.clicked.connect(lambda checked=False, t=text: self.pin_edit.insert(t))
                 numpad_layout.addWidget(btn, row, col)
@@ -139,6 +162,7 @@ class TeamsAttendanceDialog(QDialog):
         self.toggle_button.setFont(QFont("Segoe UI", 14, QFont.Bold))
         self.toggle_button.setMinimumHeight(48)
         self.toggle_button.setStyleSheet("padding: 8px; border-radius: 8px;")
+        self.toggle_button.setFocusPolicy(Qt.NoFocus)
         self.toggle_button.clicked.connect(self.toggle_check)
         layout.addWidget(self.toggle_button)
         
@@ -146,11 +170,15 @@ class TeamsAttendanceDialog(QDialog):
         return panel
 
     def _populate_users(self):
-        basedir = Path(__file__).parent.parent.parent
-        db_config_path = basedir / "configs" / "db_config.json"
-        config_manager = ConfigManager(str(db_config_path))
-        db_manager = DatabaseManager(config_manager, config_manager)
-        teams = db_manager.get_team_profile_data()
+        if self.db_manager:
+            teams = self.db_manager.get_team_profile_data()
+        else:
+            basedir = Path(__file__).parent.parent.parent
+            db_config_path = basedir / "configs" / "db_config.json"
+            config_manager = ConfigManager(str(db_config_path))
+            db_manager = DatabaseManager(config_manager, config_manager)
+            teams = db_manager.get_team_profile_data()
+        
         self._teams_data = teams["teams"]
         self._attendance_map = teams.get("attendance_map", {})
         
@@ -233,8 +261,8 @@ class TeamsAttendanceDialog(QDialog):
                 pixmap = QPixmap()
                 pixmap.loadFromData(image_data)
                 if not pixmap.isNull():
-                    scaled_pixmap = pixmap.scaled(80, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                    profile_label.setPixmap(scaled_pixmap)
+                    circular_pixmap = self.create_circular_pixmap(pixmap, 80)
+                    profile_label.setPixmap(circular_pixmap)
                 else:
                     icon = qta.icon('fa5s.user-circle', color='#888')
                     profile_label.setPixmap(icon.pixmap(80, 80))
@@ -367,11 +395,16 @@ class TeamsAttendanceDialog(QDialog):
             self.current_mode = "checkin"
             self._update_toggle_button_style(enabled=False)
             return
-        basedir = Path(__file__).parent.parent.parent
-        db_config_path = basedir / "configs" / "db_config.json"
-        config_manager = ConfigManager(str(db_config_path))
-        db_manager = DatabaseManager(config_manager, config_manager)
-        open_attendance = db_manager.get_latest_open_attendance(username, pin)
+        
+        if self.db_manager:
+            open_attendance = self.db_manager.get_latest_open_attendance(username, pin)
+        else:
+            basedir = Path(__file__).parent.parent.parent
+            db_config_path = basedir / "configs" / "db_config.json"
+            config_manager = ConfigManager(str(db_config_path))
+            db_manager = DatabaseManager(config_manager, config_manager)
+            open_attendance = db_manager.get_latest_open_attendance(username, pin)
+        
         if open_attendance:
             self.status_label.setText(
                 f"Name: {full_name}\n"
@@ -385,7 +418,11 @@ class TeamsAttendanceDialog(QDialog):
             self.current_mode = "checkout"
             self._update_toggle_button_style(enabled=True if pin_valid else False)
         else:
-            latest_attendance = db_manager.get_attendance_by_username_pin(username, pin)
+            if self.db_manager:
+                latest_attendance = self.db_manager.get_attendance_by_username_pin(username, pin)
+            else:
+                latest_attendance = db_manager.get_attendance_by_username_pin(username, pin)
+            
             if latest_attendance:
                 if latest_attendance["check_out"]:
                     self.status_label.setText(
@@ -422,26 +459,32 @@ class TeamsAttendanceDialog(QDialog):
             return
         pin = self.pin_edit.text().strip()
         note = self.note_edit.toPlainText().strip()
-        basedir = Path(__file__).parent.parent.parent
-        db_config_path = basedir / "configs" / "db_config.json"
-        config_manager = ConfigManager(str(db_config_path))
-        db_manager = DatabaseManager(config_manager, config_manager)
-        if self.current_mode == "checkin":
-            success, msg = db_manager.add_attendance_record(username, pin, note, mode="checkin")
-            self.status_label.setText(msg)
-            self.pin_edit.clear()
-            self.note_edit.clear()
-        elif self.current_mode == "checkout":
-            success, msg = db_manager.add_attendance_record(username, pin, note, mode="checkout")
-            self.status_label.setText(msg)
-            self.pin_edit.clear()
-            self.note_edit.clear()
         
+        if self.db_manager:
+            if self.current_mode == "checkin":
+                success, msg = self.db_manager.add_attendance_record(username, pin, note, mode="checkin")
+                self.status_label.setText(msg)
+            elif self.current_mode == "checkout":
+                success, msg = self.db_manager.add_attendance_record(username, pin, note, mode="checkout")
+                self.status_label.setText(msg)
+        else:
+            basedir = Path(__file__).parent.parent.parent
+            db_config_path = basedir / "configs" / "db_config.json"
+            config_manager = ConfigManager(str(db_config_path))
+            db_manager = DatabaseManager(config_manager, config_manager)
+            if self.current_mode == "checkin":
+                success, msg = db_manager.add_attendance_record(username, pin, note, mode="checkin")
+                self.status_label.setText(msg)
+            elif self.current_mode == "checkout":
+                success, msg = db_manager.add_attendance_record(username, pin, note, mode="checkout")
+                self.status_label.setText(msg)
+        # Clear PIN and note, then remove focus from PIN field
+        self.pin_edit.clear()
+        self.pin_edit.clearFocus()
+        self.note_edit.clear()
         self._populate_users()
-        
         for btn in self.user_grid_widget.findChildren(QPushButton):
             if btn.property("username") == username:
                 btn.setChecked(True)
                 break
-        
         self.live_update_attendance_state()

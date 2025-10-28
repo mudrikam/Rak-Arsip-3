@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QLabel, QHBoxLayout, QLineEdit, QComboBox, QPushButton, QSpinBox, QSpacerItem, QSizePolicy, QHeaderView, QMenu, QApplication, QToolTip
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QAction, QCursor, QKeySequence, QShortcut, QPixmap
+from PySide6.QtGui import QColor, QAction, QCursor, QKeySequence, QShortcut, QPixmap, QPainter, QPainterPath
 import qtawesome as qta
 from database.db_manager import DatabaseManager
 from manager.config_manager import ConfigManager
@@ -36,6 +36,27 @@ class EarningsHelper:
         self._earnings_total_pages = 1
         self._earnings_status_filter_value = None
 
+    def create_circular_pixmap(self, pixmap, size):
+        """Create circular clipped pixmap."""
+        circular = QPixmap(size, size)
+        circular.fill(Qt.transparent)
+        
+        painter = QPainter(circular)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        
+        path = QPainterPath()
+        path.addEllipse(0, 0, size, size)
+        painter.setClipPath(path)
+        
+        scaled = pixmap.scaled(size, size, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+        x_offset = (scaled.width() - size) // 2
+        y_offset = (scaled.height() - size) // 2
+        painter.drawPixmap(-x_offset, -y_offset, scaled)
+        
+        painter.end()
+        return circular
+
     def init_earnings_tab(self, tab_widget):
         tab = QWidget()
         tab_layout = QVBoxLayout(tab)
@@ -45,7 +66,7 @@ class EarningsHelper:
         self.dialog.earnings_profile_image = QLabel()
         self.dialog.earnings_profile_image.setFixedSize(100, 100)
         self.dialog.earnings_profile_image.setAlignment(Qt.AlignCenter)
-        self.dialog.earnings_profile_image.setStyleSheet("border-radius: 8px; background-color: rgba(128, 128, 128, 0.05);")
+        self.dialog.earnings_profile_image.setStyleSheet("border: none; background-color: transparent;")
         default_icon = qta.icon('fa5s.user-circle', color='#888')
         self.dialog.earnings_profile_image.setPixmap(default_icon.pixmap(100, 100))
         profile_summary_row.addWidget(self.dialog.earnings_profile_image)
@@ -222,7 +243,8 @@ class EarningsHelper:
                 pixmap = QPixmap()
                 pixmap.loadFromData(image_data)
                 if not pixmap.isNull():
-                    self.dialog.earnings_profile_image.setPixmap(pixmap.scaled(100, 100, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                    circular_pixmap = self.create_circular_pixmap(pixmap, 100)
+                    self.dialog.earnings_profile_image.setPixmap(circular_pixmap)
                 else:
                     default_icon = qta.icon('fa5s.user-circle', color='#888')
                     self.dialog.earnings_profile_image.setPixmap(default_icon.pixmap(100, 100))

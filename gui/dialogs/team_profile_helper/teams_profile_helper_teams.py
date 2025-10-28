@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QFormLayout, QLineEdit, QPushButton, QDateEdit, QHBoxLayout, QLabel, QMessageBox, QInputDialog, QFrame, QFileDialog
 from PySide6.QtCore import Qt, QDate, QBuffer, QIODevice
-from PySide6.QtGui import QColor, QPixmap, QImage
+from PySide6.QtGui import QColor, QPixmap, QImage, QPainter, QPainterPath
 import qtawesome as qta
 from database.db_manager import DatabaseManager
 from manager.config_manager import ConfigManager
@@ -16,6 +16,27 @@ class TeamsHelper:
         self._earnings_map = {}
         self._selected_team_index = None
         self._add_mode = False
+
+    def create_circular_pixmap(self, pixmap, size):
+        """Create circular clipped pixmap."""
+        circular = QPixmap(size, size)
+        circular.fill(Qt.transparent)
+        
+        painter = QPainter(circular)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        
+        path = QPainterPath()
+        path.addEllipse(0, 0, size, size)
+        painter.setClipPath(path)
+        
+        scaled = pixmap.scaled(size, size, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+        x_offset = (scaled.width() - size) // 2
+        y_offset = (scaled.height() - size) // 2
+        painter.drawPixmap(-x_offset, -y_offset, scaled)
+        
+        painter.end()
+        return circular
 
     def init_teams_tab(self, tab_widget):
         tab = QWidget()
@@ -182,7 +203,7 @@ class TeamsHelper:
         self.profile_image_label = QLabel()
         self.profile_image_label.setFixedSize(100, 100)
         self.profile_image_label.setAlignment(Qt.AlignCenter)
-        self.profile_image_label.setStyleSheet("border-radius: 8px; background-color: rgba(128, 128, 128, 0.05);")
+        self.profile_image_label.setStyleSheet("border: none; background-color: transparent;")
         default_icon = qta.icon('fa5s.user-circle', color='#888')
         self.profile_image_label.setPixmap(default_icon.pixmap(100, 100))
         left_profile_layout.addWidget(self.profile_image_label)
@@ -283,20 +304,12 @@ class TeamsHelper:
         if file_path:
             pixmap = QPixmap(file_path)
             if not pixmap.isNull():
-                scaled_pixmap = pixmap.scaled(100, 100, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
-                
-                cropped_pixmap = scaled_pixmap.copy(
-                    (scaled_pixmap.width() - 100) // 2,
-                    (scaled_pixmap.height() - 100) // 2,
-                    100,
-                    100
-                )
-                
-                self.profile_image_label.setPixmap(cropped_pixmap)
+                circular_pixmap = self.create_circular_pixmap(pixmap, 100)
+                self.profile_image_label.setPixmap(circular_pixmap)
                 
                 buffer = QBuffer()
                 buffer.open(QIODevice.WriteOnly)
-                cropped_pixmap.save(buffer, "PNG")
+                circular_pixmap.save(buffer, "PNG")
                 self.current_profile_image_base64 = base64.b64encode(buffer.data()).decode('utf-8')
                 buffer.close()
             else:
@@ -359,7 +372,8 @@ class TeamsHelper:
                     pixmap = QPixmap()
                     pixmap.loadFromData(image_data)
                     if not pixmap.isNull():
-                        self.profile_image_label.setPixmap(pixmap.scaled(100, 100, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                        circular_pixmap = self.create_circular_pixmap(pixmap, 100)
+                        self.profile_image_label.setPixmap(circular_pixmap)
                         self.current_profile_image_base64 = team["profile_image"]
                     else:
                         default_icon = qta.icon('fa5s.user-circle', color='#888')
