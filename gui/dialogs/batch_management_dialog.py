@@ -999,9 +999,17 @@ class BatchManagementDialog(QDialog):
                 self.batch_sync_drive_btn.setStyleSheet("")
 
     def on_sync_drive_clicked(self):
-        if self._sync_thread and self._sync_thread.isRunning():
-            logging.warning("Sync already in progress, skipping new sync request.")
-            return
+        # Check if thread exists and is still running
+        if self._sync_thread is not None:
+            try:
+                if self._sync_thread.isRunning():
+                    logging.warning("Sync already in progress, skipping new sync request.")
+                    return
+            except RuntimeError:
+                # Thread object was deleted, reset reference
+                self._sync_thread = None
+                self._sync_worker = None
+        
         self.start_sync_btn_blink()
         self._sync_thread = QThread()
         self._sync_worker = SyncDriveWorker(self)
@@ -1012,12 +1020,18 @@ class BatchManagementDialog(QDialog):
         self._sync_worker.finished.connect(self._sync_thread.quit)
         self._sync_worker.finished.connect(self._sync_worker.deleteLater)
         self._sync_thread.finished.connect(self._sync_thread.deleteLater)
+        self._sync_thread.finished.connect(self._on_thread_cleanup)
         self._sync_thread.start()
         logging.debug("BatchManagementDialog: Sync thread started.")
 
     def _on_sync_drive_finished(self):
         self.stop_sync_btn_blink()
         logging.debug("BatchManagementDialog: Sync thread finished.")
+
+    def _on_thread_cleanup(self):
+        self._sync_thread = None
+        self._sync_worker = None
+        logging.debug("BatchManagementDialog: Thread cleanup completed.")
 
     def _on_sync_drive_message(self, msg):
         print(msg)
