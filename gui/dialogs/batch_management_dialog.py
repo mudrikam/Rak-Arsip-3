@@ -811,15 +811,7 @@ class BatchManagementDialog(QDialog):
             "New batch (newest, lowest priority)",
         ]
         
-        # Add note about excluded statuses
-        note_labels = [
-            "",
-            "Note: Batches with 'Hold' or 'Finished' status",
-            "are excluded from this queue list."
-        ]
-        
         legend_values = [["", desc] for desc in legend_labels]
-        legend_values.extend([["", note] for note in note_labels])
         
         sheets_service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
@@ -830,13 +822,13 @@ class BatchManagementDialog(QDialog):
         total_queue, total_file_queue = self._get_total_queue_and_files()
         sheets_service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
-            range="E14",
+            range="E11",
             valueInputOption="USER_ENTERED",
             body={"values": [["Total Queue", total_queue]]}
         ).execute()
         sheets_service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
-            range="E15",
+            range="E12",
             valueInputOption="USER_ENTERED",
             body={"values": [["Total File Queue", total_file_queue]]}
         ).execute()
