@@ -662,6 +662,7 @@ class BatchManagementDialog(QDialog):
             from google.oauth2 import service_account
             from googleapiclient.discovery import build
             import os
+            import datetime
 
             if self._drive_service and (not require_sheets or self._sheets_service):
                 return self._drive_service, self._sheets_service
@@ -674,15 +675,31 @@ class BatchManagementDialog(QDialog):
             scopes = ["https://www.googleapis.com/auth/drive"]
             if require_sheets:
                 scopes.append("https://www.googleapis.com/auth/spreadsheets")
-            credentials = service_account.Credentials.from_service_account_file(creds_path, scopes=scopes)
-            drive_service = build('drive', 'v3', credentials=credentials)
-            sheets_service = None
-            if require_sheets:
-                sheets_service = build('sheets', 'v4', credentials=credentials)
-            self._drive_service = drive_service
-            self._sheets_service = sheets_service
-            self._credentials = credentials
-            return drive_service, sheets_service
+            
+            try:
+                credentials = service_account.Credentials.from_service_account_file(creds_path, scopes=scopes)
+                
+                # Force refresh credentials to ensure valid token with current timestamp
+                import google.auth.transport.requests
+                request = google.auth.transport.requests.Request()
+                credentials.refresh(request)
+                
+                drive_service = build('drive', 'v3', credentials=credentials)
+                sheets_service = None
+                if require_sheets:
+                    sheets_service = build('sheets', 'v4', credentials=credentials)
+                self._drive_service = drive_service
+                self._sheets_service = sheets_service
+                self._credentials = credentials
+                return drive_service, sheets_service
+            except Exception as auth_error:
+                print(f"Authentication error: {auth_error}")
+                print("Possible causes:")
+                print("1. System clock is not synchronized - please sync your system time")
+                print("2. Service account credentials may be expired or invalid")
+                print("3. Check if credentials_config.json is correct and not corrupted")
+                return None, None
+                
         except Exception as e:
             print(f"Google API init error: {e}")
             return None, None
@@ -1272,6 +1289,35 @@ class BatchManagementDialog(QDialog):
                         "fields": "userEnteredFormat(backgroundColor,textFormat)"
                     }
                 })
+            
+            # Apply light green color to non-zero status columns (Draft, Modelling, Rendering, Photoshop, Need Upload, Pending)
+            # Columns: Draft=2, Modelling=3, Rendering=4, Photoshop=5, Need Upload=6, Pending=7
+            status_columns = [2, 3, 4, 5, 6, 7]
+            light_green = {"red": 0.85, "green": 0.95, "blue": 0.85}
+            
+            for col_idx in status_columns:
+                try:
+                    value = row[col_idx]
+                    if value and int(value) != 0:
+                        requests.append({
+                            "repeatCell": {
+                                "range": {
+                                    "sheetId": 0,
+                                    "startRowIndex": 8 + idx,
+                                    "endRowIndex": 9 + idx,
+                                    "startColumnIndex": col_idx,
+                                    "endColumnIndex": col_idx + 1
+                                },
+                                "cell": {
+                                    "userEnteredFormat": {
+                                        "backgroundColor": light_green
+                                    }
+                                },
+                                "fields": "userEnteredFormat.backgroundColor"
+                            }
+                        })
+                except (ValueError, TypeError):
+                    pass
         
         sheets_service.spreadsheets().batchUpdate(
             spreadsheetId=spreadsheet_id,
