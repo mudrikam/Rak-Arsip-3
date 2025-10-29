@@ -2,6 +2,7 @@ from PySide6.QtWidgets import QDialog, QFormLayout, QLineEdit, QComboBox, QDialo
 from PySide6.QtGui import QCursor
 from PySide6.QtCore import Qt
 import qtawesome as qta
+import webbrowser
 
 
 class AssignFileUrlDialog(QDialog):
@@ -42,6 +43,13 @@ class AssignFileUrlDialog(QDialog):
         self.copy_btn.setToolTip("Copy to clipboard")
         self.copy_btn.clicked.connect(self._copy_url)
         url_layout.addWidget(self.copy_btn)
+
+        self.open_btn = QPushButton()
+        self.open_btn.setIcon(qta.icon("fa6s.globe"))
+        self.open_btn.setFixedWidth(40)
+        self.open_btn.setToolTip("Open URL in browser")
+        self.open_btn.clicked.connect(self._open_url)
+        url_layout.addWidget(self.open_btn)
         
         form_layout.addRow(QLabel("URL:"), url_layout)
         
@@ -125,6 +133,14 @@ class AssignFileUrlDialog(QDialog):
             QToolTip.showText(QCursor.pos(), f"{url_text}\nCopied to clipboard")
         else:
             QMessageBox.information(self, "Info", "No URL to copy")
+
+    def _open_url(self):
+        """Open URL in default browser"""
+        url_text = self.url_edit.text().strip()
+        if url_text:
+            webbrowser.open(url_text)
+        else:
+            QMessageBox.information(self, "Info", "No URL to open")
             
     def _on_accept(self):
         """Handle dialog acceptance and save URL assignment"""
