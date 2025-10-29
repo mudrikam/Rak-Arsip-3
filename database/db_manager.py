@@ -29,9 +29,12 @@ class DatabaseManager(QObject):
         super().__init__()
         self.config_manager = config_manager
         self.window_config_manager = window_config_manager
+        
         self.db_config = config_manager.get("database")
         self.tables_config = config_manager.get("tables")
-        self.db_path = self.db_config["path"]
+        
+        self.db_path = self.db_config.get("path") if isinstance(self.db_config, dict) else "database/archieve_database.db"
+        
         self.connection = None
         self.session_id = str(int(time.time() * 1000))
         self.temp_dir = os.path.join(os.path.dirname(self.db_path), "temp")
@@ -40,7 +43,6 @@ class DatabaseManager(QObject):
         self._wal_shm_debounce_seconds = 5
         self._wal_shm_handled = False
 
-        # Initialize helper classes
         self.connection_helper = DatabaseConnectionHelper(self)
         self.categories_helper = DatabaseCategoriesHelper(self)
         self.templates_helper = DatabaseTemplatesHelper(self)
@@ -52,7 +54,6 @@ class DatabaseManager(QObject):
         self.urls_helper = DatabaseUrlsHelper(self)
         self.batch_manager_helper = DatabaseBatchManagerHelper(self)
 
-        # Initialize database
         self.connection_helper.ensure_database_exists()
         self.connection_helper.setup_file_watcher()
         if first_launch:
@@ -458,6 +459,7 @@ class DatabaseManager(QObject):
     def update_files_status_by_batch(self, batch_number, client_id, status_id):
         """Update status of all files in a batch."""
         return self.clients_helper.update_files_status_by_batch(batch_number, client_id, status_id)
+    
     def rename_category(self, old_name, new_name):
         """Rename a category (delegated to categories helper)"""
         return DatabaseCategoriesHelper(self).rename_category(old_name, new_name)

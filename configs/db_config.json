@@ -113,6 +113,15 @@
             "FOREIGN KEY (item_price_id)": "REFERENCES item_price(id)",
             "FOREIGN KEY (client_id)": "REFERENCES client(id)"
         },
+        "batch_list": {
+            "id": "INTEGER PRIMARY KEY AUTOINCREMENT",
+            "batch_number": "TEXT NOT NULL UNIQUE",
+            "client_id": "INTEGER NOT NULL",
+            "note": "TEXT",
+            "created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+            "updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+            "FOREIGN KEY (client_id)": "REFERENCES client(id)"
+        },
         "file_client_batch": {
             "id": "INTEGER PRIMARY KEY AUTOINCREMENT",
             "batch_number": "TEXT NOT NULL",
@@ -125,14 +134,15 @@
             "FOREIGN KEY (client_id)": "REFERENCES client(id)",
             "FOREIGN KEY (file_id)": "REFERENCES files(id)"
         },
-        "batch_list": {
+        "url_provider": {
             "id": "INTEGER PRIMARY KEY AUTOINCREMENT",
-            "batch_number": "TEXT NOT NULL UNIQUE",
-            "client_id": "INTEGER NOT NULL",
-            "note": "TEXT",
+            "name": "TEXT NOT NULL UNIQUE",
+            "description": "TEXT",
+            "status": "TEXT",
+            "email": "TEXT",
+            "password": "TEXT",
             "created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
-            "updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
-            "FOREIGN KEY (client_id)": "REFERENCES client(id)"
+            "updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP"
         },
         "file_url": {
             "id": "INTEGER PRIMARY KEY AUTOINCREMENT",
@@ -144,16 +154,6 @@
             "updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
             "FOREIGN KEY (file_id)": "REFERENCES files(id)",
             "FOREIGN KEY (provider_id)": "REFERENCES url_provider(id)"
-        },
-        "url_provider": {
-            "id": "INTEGER PRIMARY KEY AUTOINCREMENT",
-            "name": "TEXT NOT NULL UNIQUE",
-            "description": "TEXT",
-            "status": "TEXT",
-            "email": "TEXT",
-            "password": "TEXT",
-            "created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
-            "updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP"
         },
         "wallet_pockets": {
             "id": "INTEGER PRIMARY KEY AUTOINCREMENT",
@@ -185,7 +185,7 @@
             "phone": "TEXT",
             "email": "TEXT",
             "country": "TEXT",
-            "limit": "REAL",
+            "card_limit": "REAL",
             "balance": "REAL",
             "image": "TEXT",
             "color": "TEXT",
@@ -240,6 +240,11 @@
         },
         "wallet_transactions": {
             "id": "INTEGER PRIMARY KEY AUTOINCREMENT",
+            "pocket_id": "INTEGER NOT NULL",
+            "category_id": "INTEGER NOT NULL",
+            "status_id": "INTEGER NOT NULL",
+            "currency_id": "INTEGER NOT NULL",
+            "location_id": "INTEGER NOT NULL",
             "transaction_name": "TEXT NOT NULL",
             "transaction_date": "DATETIME NOT NULL",
             "transaction_type": "TEXT NOT NULL",
@@ -247,11 +252,6 @@
             "note": "TEXT",
             "created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
             "updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
-            "pocket_id": "INTEGER NOT NULL",
-            "category_id": "INTEGER NOT NULL",
-            "status_id": "INTEGER NOT NULL",
-            "currency_id": "INTEGER NOT NULL",
-            "location_id": "INTEGER NOT NULL",
             "FOREIGN KEY (pocket_id)": "REFERENCES wallet_pockets(id)",
             "FOREIGN KEY (category_id)": "REFERENCES wallet_categories(id)",
             "FOREIGN KEY (status_id)": "REFERENCES wallet_transaction_statuses(id)",
