@@ -217,3 +217,5 @@ archieve_database.db-shm
 archieve_database.db-wal
 Thumbs.db
 credentials_config.json
+
+/images

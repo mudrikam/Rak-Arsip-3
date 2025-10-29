@@ -103,7 +103,8 @@ class MainMenu(QMenuBar):
         from gui.dialogs.wallet_management_dialog import WalletManagementDialog
         parent = self.parent()
         db_manager = getattr(parent, 'db_manager', None)
-        dialog = WalletManagementDialog(self, db_manager=db_manager)
+        basedir = getattr(parent, 'basedir', None)
+        dialog = WalletManagementDialog(self, db_manager=db_manager, basedir=basedir)
         dialog.exec()
 
     def _get_central_widget(self):

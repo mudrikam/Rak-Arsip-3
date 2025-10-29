@@ -9,9 +9,10 @@ from gui.dialogs.wallet_management_helper.wallet_settings_tabs.wallet_settings i
 
 
 class WalletCentral(QWidget):
-    def __init__(self, db_manager=None, parent=None):
+    def __init__(self, db_manager=None, basedir=None, parent=None):
         super().__init__(parent)
         self.db_manager = db_manager
+        self.basedir = basedir
         self.init_ui()
     
     def init_ui(self):
@@ -21,10 +22,12 @@ class WalletCentral(QWidget):
         self.stacked_widget = QStackedWidget()
 
         self.overview_tab = WalletOverviewTab()
-        self.transaction_tab = WalletTransactionTab()
+        self.transaction_tab = WalletTransactionTab(db_manager=self.db_manager, basedir=self.basedir)
         self.pocket_tab = WalletPocketTab(db_manager=self.db_manager)
         self.report_tab = WalletReportTab()
         self.settings_tab = WalletSettingsTab(db_manager=self.db_manager)
+        if self.basedir:
+            self.settings_tab.set_basedir(self.basedir)
 
         self.stacked_widget.addWidget(self.overview_tab)
         self.stacked_widget.addWidget(self.transaction_tab)

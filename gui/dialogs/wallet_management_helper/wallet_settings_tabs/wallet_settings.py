@@ -1,15 +1,73 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                                QTableWidget, QTableWidgetItem, QPushButton, 
                                QLineEdit, QTextEdit, QMessageBox, QHeaderView,
-                               QTabWidget, QGroupBox, QFormLayout)
+                               QTabWidget, QGroupBox, QFormLayout, QDialog, QFileDialog)
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QPixmap, QDragEnterEvent, QDropEvent
 import qtawesome as qta
+
+
+class LocationImageLabel(QLabel):
+    """Custom QLabel that accepts drag and drop for location images."""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAcceptDrops(True)
+        self.parent_widget = parent
+        self.is_hovered = False
+        self.update_style()
+    
+    def update_style(self):
+        """Update style based on hover state."""
+        if self.is_hovered:
+            style = "border: 2px dashed #007acc; border-radius: 6px; color: #007acc;"
+        else:
+            style = "border: 1px dashed #999; border-radius: 6px; color: #666;"
+        self.setStyleSheet(style)
+    
+    def enterEvent(self, event):
+        """Handle mouse enter for hover effect."""
+        self.is_hovered = True
+        self.update_style()
+        super().enterEvent(event)
+    
+    def leaveEvent(self, event):
+        """Handle mouse leave for hover effect."""
+        self.is_hovered = False
+        self.update_style()
+        super().leaveEvent(event)
+    
+    def dragEnterEvent(self, event: QDragEnterEvent):
+        if event.mimeData().hasUrls():
+            self.is_hovered = True
+            self.update_style()
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+    
+    def dragLeaveEvent(self, event):
+        """Handle drag leave."""
+        self.is_hovered = False
+        self.update_style()
+        super().dragLeaveEvent(event)
+    
+    def dropEvent(self, event: QDropEvent):
+        self.is_hovered = False
+        self.update_style()
+        files = [url.toLocalFile() for url in event.mimeData().urls()]
+        if files and self.parent_widget:
+            self.parent_widget.upload_location_image(files[0])
+    
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton and self.parent_widget:
+            self.parent_widget.upload_location_image()
 
 
 class WalletSettingsTab(QWidget):
 	def __init__(self, db_manager=None, parent=None):
 		super().__init__(parent)
 		self.db_manager = db_manager
+		self.basedir = None
 		self.init_ui()
 
 	def init_ui(self):
@@ -20,6 +78,7 @@ class WalletSettingsTab(QWidget):
 		self.tab_widget.addTab(self.create_categories_tab(), "Categories")
 		self.tab_widget.addTab(self.create_currency_tab(), "Currency")
 		self.tab_widget.addTab(self.create_transaction_status_tab(), "Transaction Status")
+		self.tab_widget.addTab(self.create_transaction_locations_tab(), "Transaction Locations")
 		
 		layout.addWidget(self.tab_widget)
 		self.setLayout(layout)
@@ -245,6 +304,10 @@ class WalletSettingsTab(QWidget):
 		self.db_manager = db_manager
 		if self.db_manager:
 			self.load_categories()
+	
+	def set_basedir(self, basedir):
+		"""Set base directory for image paths."""
+		self.basedir = basedir
 	
 	def create_currency_tab(self):
 		widget = QWidget()
@@ -677,3 +740,418 @@ class WalletSettingsTab(QWidget):
 			
 			except Exception as e:
 				QMessageBox.critical(self, "Error", f"Failed to delete status: {str(e)}")
+	
+	def create_transaction_locations_tab(self):
+		widget = QWidget()
+		main_layout = QHBoxLayout()
+		main_layout.setContentsMargins(10, 10, 10, 10)
+		main_layout.setSpacing(10)
+		
+		left_layout = QVBoxLayout()
+		left_layout.setSpacing(10)
+		
+		list_label = QLabel("Transaction Locations List")
+		list_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+		left_layout.addWidget(list_label)
+		
+		self.location_table = QTableWidget()
+		self.location_table.setColumnCount(3)
+		self.location_table.setHorizontalHeaderLabels(["Name", "Type", "Address"])
+		self.location_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+		self.location_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+		self.location_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+		self.location_table.setSelectionBehavior(QTableWidget.SelectRows)
+		self.location_table.setSelectionMode(QTableWidget.SingleSelection)
+		self.location_table.setEditTriggers(QTableWidget.NoEditTriggers)
+		self.location_table.itemSelectionChanged.connect(self.on_location_selected)
+		left_layout.addWidget(self.location_table)
+		
+		table_buttons_layout = QHBoxLayout()
+		self.btn_refresh_location = QPushButton(qta.icon("fa6s.arrows-rotate"), " Refresh")
+		self.btn_refresh_location.clicked.connect(self.load_locations)
+		table_buttons_layout.addWidget(self.btn_refresh_location)
+		table_buttons_layout.addStretch()
+		left_layout.addLayout(table_buttons_layout)
+		
+		main_layout.addLayout(left_layout, 2)
+		
+		right_layout = QVBoxLayout()
+		right_layout.setSpacing(10)
+		
+		form_label = QLabel("Transaction Location Details")
+		form_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+		right_layout.addWidget(form_label)
+		
+		form_layout = QFormLayout()
+		form_layout.setSpacing(10)
+		
+		self.input_location_id = QLineEdit()
+		self.input_location_id.setVisible(False)
+		
+		# Image upload area
+		image_row = QHBoxLayout()
+		image_row.setSpacing(8)
+		
+		self.location_image_label = LocationImageLabel(self)
+		self.location_image_label.setText("Drop Image Here\nor Click to Upload")
+		self.location_image_label.setAlignment(Qt.AlignCenter)
+		self.location_image_label.setFixedSize(120, 120)
+		image_row.addWidget(self.location_image_label)
+		
+		image_buttons = QVBoxLayout()
+		self.btn_location_upload_image = QPushButton(qta.icon("fa6s.upload"), " Upload")
+		self.btn_location_upload_image.clicked.connect(self.upload_location_image)
+		image_buttons.addWidget(self.btn_location_upload_image)
+		
+		self.btn_location_clear_image = QPushButton(qta.icon("fa6s.xmark"), " Clear")
+		self.btn_location_clear_image.clicked.connect(self.clear_location_image)
+		image_buttons.addWidget(self.btn_location_clear_image)
+		image_buttons.addStretch()
+		image_row.addLayout(image_buttons)
+		
+		form_layout.addRow("Image:", image_row)
+		
+		self.location_image_path = None
+		self.basedir = None
+		
+		self.input_location_name = QLineEdit()
+		self.input_location_name.setPlaceholderText("Enter location name")
+		form_layout.addRow("Name:", self.input_location_name)
+		
+		self.input_location_type = QLineEdit()
+		self.input_location_type.setPlaceholderText("e.g., Store, Online, Restaurant")
+		form_layout.addRow("Type:", self.input_location_type)
+		
+		self.input_location_address = QLineEdit()
+		self.input_location_address.setPlaceholderText("Enter physical address")
+		form_layout.addRow("Address:", self.input_location_address)
+		
+		self.input_location_city = QLineEdit()
+		self.input_location_city.setPlaceholderText("Enter city")
+		form_layout.addRow("City:", self.input_location_city)
+		
+		self.input_location_country = QLineEdit()
+		self.input_location_country.setPlaceholderText("Enter country")
+		form_layout.addRow("Country:", self.input_location_country)
+		
+		self.input_location_postal_code = QLineEdit()
+		self.input_location_postal_code.setPlaceholderText("Enter postal code")
+		form_layout.addRow("Postal Code:", self.input_location_postal_code)
+		
+		self.input_location_online_url = QLineEdit()
+		self.input_location_online_url.setPlaceholderText("Enter website URL")
+		form_layout.addRow("Website URL:", self.input_location_online_url)
+		
+		self.input_location_contact = QLineEdit()
+		self.input_location_contact.setPlaceholderText("Enter contact name")
+		form_layout.addRow("Contact:", self.input_location_contact)
+		
+		self.input_location_phone = QLineEdit()
+		self.input_location_phone.setPlaceholderText("Enter phone number")
+		form_layout.addRow("Phone:", self.input_location_phone)
+		
+		self.input_location_email = QLineEdit()
+		self.input_location_email.setPlaceholderText("Enter email address")
+		form_layout.addRow("Email:", self.input_location_email)
+		
+		self.input_location_status = QLineEdit()
+		self.input_location_status.setPlaceholderText("e.g., Active, Closed")
+		form_layout.addRow("Status:", self.input_location_status)
+		
+		self.input_location_note = QTextEdit()
+		self.input_location_note.setPlaceholderText("Enter location note (optional)")
+		self.input_location_note.setMaximumHeight(100)
+		form_layout.addRow("Note:", self.input_location_note)
+		
+		right_layout.addLayout(form_layout)
+		
+		buttons_layout = QVBoxLayout()
+		buttons_layout.setSpacing(8)
+		
+		self.btn_add_location = QPushButton(qta.icon("fa6s.plus"), " Add Location")
+		self.btn_add_location.clicked.connect(self.add_location)
+		buttons_layout.addWidget(self.btn_add_location)
+		
+		self.btn_update_location = QPushButton(qta.icon("fa6s.pen-to-square"), " Update Location")
+		self.btn_update_location.clicked.connect(self.update_location)
+		self.btn_update_location.setEnabled(False)
+		buttons_layout.addWidget(self.btn_update_location)
+		
+		self.btn_delete_location = QPushButton(qta.icon("fa6s.trash"), " Delete Location")
+		self.btn_delete_location.clicked.connect(self.delete_location)
+		self.btn_delete_location.setEnabled(False)
+		buttons_layout.addWidget(self.btn_delete_location)
+		
+		self.btn_clear_location = QPushButton(qta.icon("fa6s.xmark"), " Clear Form")
+		self.btn_clear_location.clicked.connect(self.clear_location_form)
+		buttons_layout.addWidget(self.btn_clear_location)
+		
+		buttons_layout.addStretch()
+		right_layout.addLayout(buttons_layout)
+		
+		main_layout.addLayout(right_layout, 1)
+		widget.setLayout(main_layout)
+		
+		if self.db_manager:
+			self.load_locations()
+		
+		return widget
+	
+	def load_locations(self):
+		if not self.db_manager:
+			return
+		
+		try:
+			locations = self.db_manager.wallet_helper.get_all_locations()
+			self.location_table.setRowCount(0)
+			
+			for location in locations:
+				row = self.location_table.rowCount()
+				self.location_table.insertRow(row)
+				
+				item_name = QTableWidgetItem(location.get('name', ''))
+				item_name.setData(Qt.UserRole, location.get('id'))
+				self.location_table.setItem(row, 0, item_name)
+				self.location_table.setItem(row, 1, QTableWidgetItem(location.get('location_type', '')))
+				self.location_table.setItem(row, 2, QTableWidgetItem(location.get('address', '')))
+		
+		except Exception as e:
+			QMessageBox.critical(self, "Error", f"Failed to load locations: {str(e)}")
+	
+	def on_location_selected(self):
+		selected_rows = self.location_table.selectedItems()
+		if selected_rows:
+			row = self.location_table.currentRow()
+			location_id = self.location_table.item(row, 0).data(Qt.UserRole)
+			
+			if not self.db_manager:
+				return
+			
+			try:
+				from helpers.image_helper import ImageHelper
+				import os
+				
+				self.db_manager.connect(write=False)
+				cursor = self.db_manager.connection.cursor()
+				cursor.execute("SELECT * FROM wallet_transaction_locations WHERE id = ?", (location_id,))
+				location = cursor.fetchone()
+				self.db_manager.close()
+				
+				if location:
+					self.input_location_id.setText(str(location['id']))
+					self.input_location_name.setText(location['name'] or '')
+					self.input_location_type.setText(location['location_type'] or '')
+					self.input_location_address.setText(location['address'] or '')
+					self.input_location_city.setText(location['city'] or '')
+					self.input_location_country.setText(location['country'] or '')
+					self.input_location_postal_code.setText(location['postal_code'] or '')
+					self.input_location_online_url.setText(location['online_url'] or '')
+					self.input_location_contact.setText(location['contact'] or '')
+					self.input_location_phone.setText(location['phone'] or '')
+					self.input_location_email.setText(location['email'] or '')
+					self.input_location_status.setText(location['status'] or '')
+					self.input_location_note.setPlainText(location['note'] or '')
+					
+					self.location_image_path = location['image']
+					if self.location_image_path and self.basedir:
+						full_path = os.path.join(self.basedir, self.location_image_path)
+						if os.path.exists(full_path):
+							pixmap = QPixmap(full_path)
+							self.location_image_label.setPixmap(
+								pixmap.scaled(120, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+							)
+						else:
+							self.location_image_label.clear()
+							self.location_image_label.setText("No Image")
+					else:
+						self.location_image_label.clear()
+						self.location_image_label.setText("No Image")
+					
+					self.btn_update_location.setEnabled(True)
+					self.btn_delete_location.setEnabled(True)
+					self.btn_add_location.setEnabled(False)
+			
+			except Exception as e:
+				QMessageBox.critical(self, "Error", f"Failed to load location details: {str(e)}")
+		else:
+			self.clear_location_form()
+	
+	def clear_location_form(self):
+		self.input_location_id.clear()
+		self.input_location_name.clear()
+		self.input_location_type.clear()
+		self.input_location_address.clear()
+		self.input_location_city.clear()
+		self.input_location_country.clear()
+		self.input_location_postal_code.clear()
+		self.input_location_online_url.clear()
+		self.input_location_contact.clear()
+		self.input_location_phone.clear()
+		self.input_location_email.clear()
+		self.input_location_status.clear()
+		self.input_location_note.clear()
+		self.location_table.clearSelection()
+		
+		self.location_image_path = None
+		self.location_image_label.clear()
+		self.location_image_label.setText("No Image")
+		
+		self.btn_add_location.setEnabled(True)
+		self.btn_update_location.setEnabled(False)
+		self.btn_delete_location.setEnabled(False)
+	
+	def add_location(self):
+		if not self.db_manager:
+			QMessageBox.warning(self, "Warning", "Database manager not available")
+			return
+		
+		name = self.input_location_name.text().strip()
+		location_type = self.input_location_type.text().strip()
+		address = self.input_location_address.text().strip()
+		city = self.input_location_city.text().strip()
+		country = self.input_location_country.text().strip()
+		postal_code = self.input_location_postal_code.text().strip()
+		online_url = self.input_location_online_url.text().strip()
+		contact = self.input_location_contact.text().strip()
+		phone = self.input_location_phone.text().strip()
+		email = self.input_location_email.text().strip()
+		status = self.input_location_status.text().strip()
+		note = self.input_location_note.toPlainText().strip()
+		
+		if not name:
+			QMessageBox.warning(self, "Warning", "Location name is required")
+			return
+		
+		try:
+			self.db_manager.connect(write=True)
+			cursor = self.db_manager.connection.cursor()
+			cursor.execute("""
+				INSERT INTO wallet_transaction_locations 
+				(name, location_type, address, city, country, postal_code, online_url, contact, phone, email, status, note, image)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			""", (name, location_type, address, city, country, postal_code, online_url, contact, phone, email, status, note, self.location_image_path))
+			self.db_manager.connection.commit()
+			self.db_manager.close()
+			
+			QMessageBox.information(self, "Success", "Location added successfully")
+			self.clear_location_form()
+			self.load_locations()
+		
+		except Exception as e:
+			QMessageBox.critical(self, "Error", f"Failed to add location: {str(e)}")
+	
+	def update_location(self):
+		if not self.db_manager:
+			QMessageBox.warning(self, "Warning", "Database manager not available")
+			return
+		
+		location_id = self.input_location_id.text().strip()
+		name = self.input_location_name.text().strip()
+		location_type = self.input_location_type.text().strip()
+		address = self.input_location_address.text().strip()
+		city = self.input_location_city.text().strip()
+		country = self.input_location_country.text().strip()
+		postal_code = self.input_location_postal_code.text().strip()
+		online_url = self.input_location_online_url.text().strip()
+		contact = self.input_location_contact.text().strip()
+		phone = self.input_location_phone.text().strip()
+		email = self.input_location_email.text().strip()
+		status = self.input_location_status.text().strip()
+		note = self.input_location_note.toPlainText().strip()
+		
+		if not location_id or not name:
+			QMessageBox.warning(self, "Warning", "Location ID and name are required")
+			return
+		
+		try:
+			self.db_manager.connect(write=True)
+			cursor = self.db_manager.connection.cursor()
+			cursor.execute("""
+				UPDATE wallet_transaction_locations 
+				SET name = ?, location_type = ?, address = ?, city = ?, country = ?, postal_code = ?, 
+				    online_url = ?, contact = ?, phone = ?, email = ?, status = ?, note = ?, image = ?
+				WHERE id = ?
+			""", (name, location_type, address, city, country, postal_code, online_url, contact, phone, email, status, note, self.location_image_path, location_id))
+			self.db_manager.connection.commit()
+			self.db_manager.close()
+			
+			QMessageBox.information(self, "Success", "Location updated successfully")
+			self.clear_location_form()
+			self.load_locations()
+		
+		except Exception as e:
+			QMessageBox.critical(self, "Error", f"Failed to update location: {str(e)}")
+	
+	def delete_location(self):
+		if not self.db_manager:
+			QMessageBox.warning(self, "Warning", "Database manager not available")
+			return
+		
+		location_id = self.input_location_id.text().strip()
+		location_name = self.input_location_name.text().strip()
+		
+		if not location_id:
+			QMessageBox.warning(self, "Warning", "No location selected")
+			return
+		
+		reply = QMessageBox.question(
+			self, 
+			"Confirm Delete", 
+			f"Are you sure you want to delete location '{location_name}'?",
+			QMessageBox.Yes | QMessageBox.No
+		)
+		
+		if reply == QMessageBox.Yes:
+			try:
+				self.db_manager.connect(write=True)
+				cursor = self.db_manager.connection.cursor()
+				cursor.execute("DELETE FROM wallet_transaction_locations WHERE id = ?", (location_id,))
+				self.db_manager.connection.commit()
+				self.db_manager.close()
+				
+				QMessageBox.information(self, "Success", "Location deleted successfully")
+				self.clear_location_form()
+				self.load_locations()
+			
+			except Exception as e:
+				QMessageBox.critical(self, "Error", f"Failed to delete location: {str(e)}")
+	
+	def upload_location_image(self, file_path=None):
+		"""Upload image for location."""
+		from helpers.image_helper import ImageHelper
+		import os
+		from datetime import datetime
+		
+		if not file_path:
+			file_path, _ = QFileDialog.getOpenFileName(
+				self,
+				"Select Location Image",
+				"",
+				"Images (*.png *.jpg *.jpeg *.bmp *.gif)"
+			)
+		
+		if file_path:
+			if not self.basedir:
+				QMessageBox.warning(self, "Error", "Base directory not set")
+				return
+			
+			timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+			dir_path = os.path.join(self.basedir, "images", "locations")
+			filename = f"location_{timestamp}.jpg"
+			output_path = os.path.join(dir_path, filename)
+			
+			if ImageHelper.save_image_to_file(file_path, output_path):
+				self.location_image_path = os.path.relpath(output_path, self.basedir)
+				
+				pixmap = QPixmap(output_path)
+				self.location_image_label.setPixmap(
+					pixmap.scaled(120, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+				)
+			else:
+				QMessageBox.warning(self, "Error", "Failed to process image")
+	
+	def clear_location_image(self):
+		"""Clear location image."""
+		self.location_image_path = None
+		self.location_image_label.clear()
+		self.location_image_label.setText("No Image")

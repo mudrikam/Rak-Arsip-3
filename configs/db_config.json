@@ -281,6 +281,17 @@
             "created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
             "updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
             "FOREIGN KEY (wallet_transaction_id)": "REFERENCES wallet_transactions(id)"
+        },
+        "wallet_transactions_invoice_prove": {
+            "id": "INTEGER PRIMARY KEY AUTOINCREMENT",
+            "wallet_transaction_id": "INTEGER NOT NULL",
+            "image_path": "TEXT NOT NULL",
+            "image_name": "TEXT",
+            "image_size": "INTEGER",
+            "image_type": "TEXT",
+            "description": "TEXT",
+            "uploaded_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+            "FOREIGN KEY (wallet_transaction_id)": "REFERENCES wallet_transactions(id)"
         }
     }
 }

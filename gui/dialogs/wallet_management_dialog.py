@@ -6,12 +6,13 @@ from gui.dialogs.wallet_management_helper.wallet_management_helper_central impor
 
 
 class WalletManagementDialog(QDialog):
-    def __init__(self, parent=None, db_manager=None):
+    def __init__(self, parent=None, db_manager=None, basedir=None):
         super().__init__(parent)
         self.db_manager = db_manager
+        self.basedir = basedir
         self.setWindowTitle("Wallet Management")
         self.setModal(True)
-        self.setMinimumSize(900, 600)
+        self.setMinimumSize(900, 900)
         
         self.init_ui()
     
@@ -35,7 +36,7 @@ class WalletManagementDialog(QDialog):
         self.sidebar.section_changed.connect(self.on_section_changed)
         content_layout.addWidget(self.sidebar)
         
-        self.central = WalletCentral(db_manager=self.db_manager, parent=self)
+        self.central = WalletCentral(db_manager=self.db_manager, basedir=self.basedir, parent=self)
         content_layout.addWidget(self.central, 1)
         
         main_layout.addLayout(content_layout)
