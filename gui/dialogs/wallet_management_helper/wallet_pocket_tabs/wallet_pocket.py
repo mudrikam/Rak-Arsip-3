@@ -12,6 +12,7 @@ from .card_widget import CardWidget
 from .view_dialogs import PocketViewDialog, CardViewDialog
 from .pocket_dialog import PocketDialog
 from .card_dialog import CardDialog
+from ..wallet_signal_manager import WalletSignalManager
 
 
 class WalletPocketTab(QWidget):
@@ -19,7 +20,24 @@ class WalletPocketTab(QWidget):
 		super().__init__(parent)
 		self.db_manager = db_manager
 		self.selected_pocket = None
+		self.signal_manager = WalletSignalManager.get_instance()
 		self.init_ui()
+		self.connect_signals()
+	
+	def connect_signals(self):
+		"""Connect to signal manager for auto-refresh."""
+		self.signal_manager.pocket_changed.connect(self.load_pockets)
+		self.signal_manager.card_changed.connect(self.on_card_changed)
+		self.signal_manager.transaction_changed.connect(self.on_transaction_changed)
+	
+	def on_card_changed(self):
+		"""Reload cards when card data changes."""
+		if self.selected_pocket:
+			self.load_cards(self.selected_pocket.get('id'))
+	
+	def on_transaction_changed(self):
+		"""Reload pockets to update balance when transaction changes."""
+		self.load_pockets()
 	
 	def init_ui(self):
 		main_layout = QVBoxLayout()
@@ -120,7 +138,7 @@ class WalletPocketTab(QWidget):
 			pockets = self.db_manager.wallet_helper.get_all_pockets()
 			row, col = 0, 0
 			for pocket in pockets:
-				card = PocketCard(pocket)
+				card = PocketCard(pocket, self.db_manager)
 				card.pocket_clicked.connect(self.on_pocket_selected)
 				card.view_clicked.connect(self.view_pocket)
 				card.edit_clicked.connect(self.edit_pocket)
@@ -141,7 +159,7 @@ class WalletPocketTab(QWidget):
 		self.load_cards(pocket_data.get('id'))
 	
 	def view_pocket(self, pocket_data):
-		dialog = PocketViewDialog(pocket_data, self)
+		dialog = PocketViewDialog(pocket_data, self.db_manager, self)
 		dialog.exec()
 	
 	def edit_pocket(self, pocket_data):

@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea, QFrame
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap, QPainter, QPainterPath, QBrush, QPen, QCursor
 import qtawesome as qta
 from database.db_manager import DatabaseManager
@@ -38,20 +38,8 @@ class AttendanceBar(QWidget):
         self.profile_labels = []
         
         if self.db_manager:
-            self.db_manager.data_changed.connect(self.auto_refresh_attendance)
+            self.db_manager.data_changed.connect(self.refresh_attendance)
         
-        self._refresh_timer = QTimer(self)
-        self._refresh_timer.setSingleShot(True)
-        self._refresh_timer.setInterval(500)
-        self._refresh_timer.timeout.connect(self._do_refresh)
-        
-        self.refresh_attendance()
-    
-    def auto_refresh_attendance(self):
-        if not self._refresh_timer.isActive():
-            self._refresh_timer.start()
-    
-    def _do_refresh(self):
         self.refresh_attendance()
     
     def create_circular_pixmap(self, pixmap, size):

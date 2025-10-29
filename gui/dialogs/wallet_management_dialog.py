@@ -12,7 +12,7 @@ class WalletManagementDialog(QDialog):
         self.basedir = basedir
         self.setWindowTitle("Wallet Management")
         self.setModal(True)
-        self.setMinimumSize(900, 900)
+        self.setMinimumSize(900, 400)
         
         self.init_ui()
     

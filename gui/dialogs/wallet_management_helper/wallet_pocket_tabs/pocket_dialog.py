@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushB
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPixmap
 import qtawesome as qta
+from ..wallet_signal_manager import WalletSignalManager
 
 
 class PocketDialog(QDialog):
@@ -265,6 +266,7 @@ class PocketDialog(QDialog):
 				self.db_manager.wallet_helper.add_pocket(name, pocket_type, icon, color, image, settings, note)
 				QMessageBox.information(self, "Success", "Pocket added successfully")
 			
+			WalletSignalManager.get_instance().emit_pocket_changed()
 			self.accept()
 		
 		except Exception as e:

@@ -63,6 +63,8 @@ class WalletAddTransactionItemDialog(QDialog):
         self.input_amount.setMaximum(9999999999.99)
         self.input_amount.setDecimals(2)
         self.input_amount.setSingleStep(0.01)
+        self.input_amount.setSpecialValueText("")  # Show empty when 0
+        self.input_amount.setValue(0.0)
         form_layout.addRow("Amount*:", self.input_amount)
 
         dimensions_layout = QHBoxLayout()
@@ -70,18 +72,21 @@ class WalletAddTransactionItemDialog(QDialog):
         self.input_width.setMaximum(99999.99)
         self.input_width.setDecimals(2)
         self.input_width.setPrefix("W: ")
+        self.input_width.setSpecialValueText("W: -")
         dimensions_layout.addWidget(self.input_width)
 
         self.input_height = QDoubleSpinBox()
         self.input_height.setMaximum(99999.99)
         self.input_height.setDecimals(2)
         self.input_height.setPrefix("H: ")
+        self.input_height.setSpecialValueText("H: -")
         dimensions_layout.addWidget(self.input_height)
 
         self.input_depth = QDoubleSpinBox()
         self.input_depth.setMaximum(99999.99)
         self.input_depth.setDecimals(2)
         self.input_depth.setPrefix("D: ")
+        self.input_depth.setSpecialValueText("D: -")
         dimensions_layout.addWidget(self.input_depth)
         form_layout.addRow("Dimensions:", dimensions_layout)
 
@@ -89,6 +94,7 @@ class WalletAddTransactionItemDialog(QDialog):
         self.input_weight.setMaximum(99999.99)
         self.input_weight.setDecimals(2)
         self.input_weight.setSuffix(" kg")
+        self.input_weight.setSpecialValueText("- kg")
         form_layout.addRow("Weight:", self.input_weight)
 
         self.input_material = QLineEdit()

@@ -6,9 +6,10 @@ import qtawesome as qta
 
 
 class PocketViewDialog(QDialog):
-	def __init__(self, pocket_data, parent=None):
+	def __init__(self, pocket_data, db_manager=None, parent=None):
 		super().__init__(parent)
 		self.pocket_data = pocket_data
+		self.db_manager = db_manager
 		self.setWindowTitle("Pocket Details")
 		self.setMinimumWidth(500)
 		self.setMinimumHeight(400)
@@ -74,6 +75,28 @@ class PocketViewDialog(QDialog):
 			type_layout.addWidget(btn_copy_type)
 			type_layout.addStretch()
 			preview_layout.addLayout(type_layout)
+		
+		# Add real balance from transactions
+		balance = 0.0
+		if self.db_manager and self.pocket_data.get('id'):
+			try:
+				balance = self.db_manager.wallet_helper.get_pocket_balance(self.pocket_data['id'])
+			except Exception as e:
+				print(f"Error getting pocket balance: {e}")
+				balance = 0.0
+		
+		balance_layout = QHBoxLayout()
+		balance_label = QLabel(f"Rp {balance:,.2f}")
+		balance_label.setStyleSheet("font-size: 28px; font-weight: bold; color: white; margin-top: 10px;")
+		balance_layout.addWidget(balance_label)
+		btn_copy_balance = QPushButton(qta.icon('fa6s.copy', color='white'), "")
+		btn_copy_balance.setMaximumWidth(30)
+		btn_copy_balance.setMaximumHeight(30)
+		btn_copy_balance.setStyleSheet("background: rgba(255,255,255,0.2); border-radius: 5px; padding: 5px;")
+		btn_copy_balance.clicked.connect(lambda: self.copy_to_clipboard(f"Rp {balance:,.2f}"))
+		balance_layout.addWidget(btn_copy_balance)
+		balance_layout.addStretch()
+		preview_layout.addLayout(balance_layout)
 		
 		preview_layout.addStretch()
 		preview_frame.setLayout(preview_layout)

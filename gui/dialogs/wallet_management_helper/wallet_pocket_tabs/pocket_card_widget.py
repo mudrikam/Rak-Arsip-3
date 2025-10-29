@@ -9,9 +9,10 @@ class PocketCard(QFrame):
 	view_clicked = Signal(dict)
 	edit_clicked = Signal(dict)
 	
-	def __init__(self, pocket_data, parent=None):
+	def __init__(self, pocket_data, db_manager=None, parent=None):
 		super().__init__(parent)
 		self.pocket_data = pocket_data
+		self.db_manager = db_manager
 		self.setFrameShape(QFrame.StyledPanel)
 		self.setMinimumSize(280, 180)
 		self.setMaximumSize(350, 220)
@@ -95,7 +96,15 @@ class PocketCard(QFrame):
 		name_label.setStyleSheet("font-weight: bold; font-size: 18px;")
 		layout.addWidget(name_label)
 		
-		balance = 1250000.00
+		# Get real balance from database
+		balance = 0.0
+		if self.db_manager and self.pocket_data.get('id'):
+			try:
+				balance = self.db_manager.wallet_helper.get_pocket_balance(self.pocket_data['id'])
+			except Exception as e:
+				print(f"Error getting pocket balance: {e}")
+				balance = 0.0
+		
 		balance_label = QLabel(f"Rp {balance:,.2f}")
 		balance_label.setStyleSheet("font-size: 24px; font-weight: bold; margin-top: 5px;")
 		layout.addWidget(balance_label)

@@ -3,12 +3,13 @@ from PySide6.QtWidgets import (
     QPushButton, QLineEdit, QComboBox, QDateEdit, QMessageBox, QHeaderView,
     QMenu, QGroupBox, QFormLayout, QInputDialog, QSpinBox
 )
-from PySide6.QtCore import Qt, QDate, QTimer
+from PySide6.QtCore import Qt, QDate
 from PySide6.QtGui import QAction
 import qtawesome as qta
 from datetime import datetime
 
 from .transaction_view_dialog import TransactionViewDialog
+from ..wallet_signal_manager import WalletSignalManager
 
 
 class WalletTransactionListWidget(QWidget):
@@ -24,15 +25,19 @@ class WalletTransactionListWidget(QWidget):
         self.total_items = 0
         self.total_pages = 0
         
-        # Timer for delayed refresh
-        self.refresh_timer = QTimer()
-        self.refresh_timer.setSingleShot(True)
-        self.refresh_timer.timeout.connect(self.load_transactions)
-        
+        self.signal_manager = WalletSignalManager.get_instance()
         self.init_ui()
         
         if self.db_manager:
             self.load_transactions()
+        
+        self.connect_signals()
+    
+    def connect_signals(self):
+        """Connect to signal manager for auto-refresh."""
+        self.signal_manager.transaction_changed.connect(self.load_transactions)
+        self.signal_manager.pocket_changed.connect(self.load_filter_data)
+        self.signal_manager.category_changed.connect(self.load_filter_data)
     
     def init_ui(self):
         main_layout = QVBoxLayout()
@@ -234,15 +239,15 @@ class WalletTransactionListWidget(QWidget):
             return
         
         try:
-            # Load pockets using wallet helper
-            pockets = self.db_manager.wallet_helper.get_all_pockets()
+            # Load only pockets that have transactions
+            pockets = self.db_manager.wallet_helper.get_pockets_with_transactions()
             self.filter_pocket.clear()
             self.filter_pocket.addItem("All Pockets", None)
             for pocket in pockets:
                 self.filter_pocket.addItem(pocket['name'], pocket['id'])
             
-            # Load categories using wallet helper
-            categories = self.db_manager.wallet_helper.get_all_categories()
+            # Load only categories that have transactions
+            categories = self.db_manager.wallet_helper.get_categories_with_transactions()
             self.filter_category.clear()
             self.filter_category.addItem("All Categories", None)
             for category in categories:
@@ -255,17 +260,12 @@ class WalletTransactionListWidget(QWidget):
         """Handle items per page change."""
         self.items_per_page = int(per_page_text)
         self.current_page = 1
-        self.delayed_refresh()
+        self.load_transactions()
     
     def on_page_changed(self, page):
-        """Handle page change with delay."""
+        """Handle page change."""
         self.current_page = page
-        self.delayed_refresh()
-    
-    def delayed_refresh(self):
-        """Refresh with delay to allow spinner to finish."""
-        self.refresh_timer.stop()
-        self.refresh_timer.start(500)  # 500ms delay
+        self.load_transactions()
     
     def go_to_first_page(self):
         """Go to first page."""
@@ -573,27 +573,22 @@ class WalletTransactionListWidget(QWidget):
         """Update pagination controls with current state."""
         try:
             # Update page spinner
-            self.page_spinner.blockSignals(True)
-            self.page_spinner.setMaximum(max(1, self.total_pages))
-            self.page_spinner.setValue(self.current_page)
-            self.page_spinner.blockSignals(False)
+            self.spin_page.blockSignals(True)
+            self.spin_page.setMaximum(max(1, self.total_pages))
+            self.spin_page.setValue(self.current_page)
+            self.spin_page.blockSignals(False)
             
             # Update navigation buttons
-            self.btn_first.setEnabled(self.current_page > 1)
-            self.btn_prev.setEnabled(self.current_page > 1)
-            self.btn_next.setEnabled(self.current_page < self.total_pages)
-            self.btn_last.setEnabled(self.current_page < self.total_pages)
+            self.btn_first_page.setEnabled(self.current_page > 1)
+            self.btn_prev_page.setEnabled(self.current_page > 1)
+            self.btn_next_page.setEnabled(self.current_page < self.total_pages)
+            self.btn_last_page.setEnabled(self.current_page < self.total_pages)
             
-            # Update page info
-            start_item = (self.current_page - 1) * self.items_per_page + 1
-            end_item = min(self.current_page * self.items_per_page, self.total_items)
+            # Update page info label
+            self.lbl_page_info.setText(f"of {self.total_pages}")
             
-            if self.total_items == 0:
-                page_info = "No transactions found"
-            else:
-                page_info = f"Showing {start_item}-{end_item} of {self.total_items} transactions"
-            
-            self.page_info_label.setText(page_info)
+            # Update total info
+            self.label_total.setText(f"Total: {self.total_items} transactions")
             
             print(f"Pagination updated - Page {self.current_page}/{self.total_pages}, Items: {self.total_items}")
             
@@ -626,19 +621,13 @@ class WalletTransactionListWidget(QWidget):
 
     def on_page_changed(self):
         """Handle page spinner value change."""
-        new_page = self.page_spinner.value()
+        new_page = self.spin_page.value()
         if new_page != self.current_page:
             self.current_page = new_page
-            # Use timer for delayed refresh
-            self.pagination_timer.stop()
-            self.pagination_timer.start(500)
+            self.load_transactions()
 
     def on_per_page_changed(self):
         """Handle per page combo change."""
-        self.items_per_page = self.per_page_combo.currentData()
-        self.current_page = 1  # Reset to first page
-        self.load_transactions()
-
-    def delayed_refresh(self):
-        """Delayed refresh after spinner stops."""
+        self.items_per_page = int(self.combo_per_page.currentText())
+        self.current_page = 1
         self.load_transactions()

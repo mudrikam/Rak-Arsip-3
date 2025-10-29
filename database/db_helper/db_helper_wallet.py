@@ -348,7 +348,7 @@ class DatabaseWalletHelper:
     def add_card(self, pocket_id, card_name, card_number, card_type="", vendor="", issuer="", 
                  status="", virtual=0, issue_date="", expiry_date="", holder_name="", 
                  cvv="", billing_address="", phone="", email="", country="", 
-                 card_limit=0.0, balance=0.0, image="", color="", note=""):
+                 card_limit=0.0, image="", color="", note=""):
         """Add a new wallet card."""
         self.db_manager.connect(write=True)
         cursor = self.db_manager.connection.cursor()
@@ -356,11 +356,11 @@ class DatabaseWalletHelper:
             """INSERT INTO wallet_cards 
             (pocket_id, card_name, card_number, card_type, vendor, issuer, status, virtual, 
              issue_date, expiry_date, holder_name, cvv, billing_address, phone, email, 
-             country, card_limit, balance, image, color, note) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+             country, card_limit, image, color, note) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (pocket_id, card_name, card_number, card_type, vendor, issuer, status, virtual,
              issue_date, expiry_date, holder_name, cvv, billing_address, phone, email,
-             country, card_limit, balance, image, color, note)
+             country, card_limit, image, color, note)
         )
         card_id = cursor.lastrowid
         self.db_manager.connection.commit()
@@ -370,7 +370,7 @@ class DatabaseWalletHelper:
     def update_card(self, card_id, pocket_id, card_name, card_number, card_type="", vendor="", 
                     issuer="", status="", virtual=0, issue_date="", expiry_date="", 
                     holder_name="", cvv="", billing_address="", phone="", email="", 
-                    country="", card_limit=0.0, balance=0.0, image="", color="", note=""):
+                    country="", card_limit=0.0, image="", color="", note=""):
         """Update an existing wallet card."""
         self.db_manager.connect(write=True)
         cursor = self.db_manager.connection.cursor()
@@ -379,11 +379,11 @@ class DatabaseWalletHelper:
             pocket_id = ?, card_name = ?, card_number = ?, card_type = ?, vendor = ?, 
             issuer = ?, status = ?, virtual = ?, issue_date = ?, expiry_date = ?, 
             holder_name = ?, cvv = ?, billing_address = ?, phone = ?, email = ?, 
-            country = ?, card_limit = ?, balance = ?, image = ?, color = ?, note = ? 
+            country = ?, card_limit = ?, image = ?, color = ?, note = ? 
             WHERE id = ?""",
             (pocket_id, card_name, card_number, card_type, vendor, issuer, status, virtual,
              issue_date, expiry_date, holder_name, cvv, billing_address, phone, email,
-             country, card_limit, balance, image, color, note, card_id)
+             country, card_limit, image, color, note, card_id)
         )
         self.db_manager.connection.commit()
         self.db_manager.close()
@@ -510,16 +510,16 @@ class DatabaseWalletHelper:
             self.db_manager.close()
     
     def add_transaction(self, pocket_id, category_id, status_id, currency_id, location_id,
-                       transaction_name, transaction_date, transaction_type, tags="", note=""):
+                       transaction_name, transaction_date, transaction_type, tags="", note="", destination_pocket_id=None):
         """Add a new transaction."""
         self.db_manager.connect(write=True)
         cursor = self.db_manager.connection.cursor()
         cursor.execute("""
             INSERT INTO wallet_transactions 
-            (pocket_id, category_id, status_id, currency_id, location_id, 
+            (pocket_id, destination_pocket_id, category_id, status_id, currency_id, location_id, 
              transaction_name, transaction_date, transaction_type, tags, note)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (pocket_id, category_id, status_id, currency_id, location_id,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (pocket_id, destination_pocket_id, category_id, status_id, currency_id, location_id,
               transaction_name, transaction_date, transaction_type, tags, note))
         
         transaction_id = cursor.lastrowid
@@ -548,6 +548,33 @@ class DatabaseWalletHelper:
         self.db_manager.connection.commit()
         self.db_manager.close()
         return item_id
+    
+    def update_transaction_item(self, item_id, item_type, sku, item_name, 
+                               item_description, quantity, unit, amount, width=None, height=None,
+                               depth=None, weight=None, material="", color="", file_url="",
+                               license_key="", expiry_date=None, digital_type="", note=""):
+        """Update a transaction item."""
+        try:
+            self.db_manager.connect(write=True)
+            cursor = self.db_manager.connection.cursor()
+            cursor.execute("""
+                UPDATE wallet_transaction_items
+                SET item_type = ?, sku = ?, item_name = ?, item_description = ?,
+                    quantity = ?, unit = ?, amount = ?, width = ?, height = ?, 
+                    depth = ?, weight = ?, material = ?, color = ?,
+                    file_url = ?, license_key = ?, expiry_date = ?, digital_type = ?, note = ?
+                WHERE id = ?
+            """, (item_type, sku, item_name, item_description,
+                  quantity, unit, amount, width, height, depth, weight, material, color,
+                  file_url, license_key, expiry_date, digital_type, note, item_id))
+            
+            self.db_manager.connection.commit()
+            
+        except Exception as e:
+            print(f"Error updating transaction item: {e}")
+            raise
+        finally:
+            self.db_manager.close()
     
     def delete_transaction(self, transaction_id):
         """Delete a transaction and its items and invoice images."""
@@ -644,7 +671,7 @@ class DatabaseWalletHelper:
     
     def update_transaction(self, transaction_id, pocket_id, category_id, status_id, 
                           currency_id, location_id, transaction_name, transaction_date, 
-                          transaction_type, tags="", note=""):
+                          transaction_type, tags="", note="", destination_pocket_id=None):
         """Update an existing transaction."""
         try:
             self.db_manager.connect(write=True)
@@ -652,10 +679,10 @@ class DatabaseWalletHelper:
             
             cursor.execute("""
                 UPDATE wallet_transactions 
-                SET pocket_id=?, category_id=?, status_id=?, currency_id=?, location_id=?,
+                SET pocket_id=?, destination_pocket_id=?, category_id=?, status_id=?, currency_id=?, location_id=?,
                     transaction_name=?, transaction_date=?, transaction_type=?, tags=?, note=?
                 WHERE id=?
-            """, (pocket_id, category_id, status_id, currency_id, location_id,
+            """, (pocket_id, destination_pocket_id, category_id, status_id, currency_id, location_id,
                   transaction_name, transaction_date, transaction_type, tags, note, transaction_id))
             
             self.db_manager.connection.commit()
@@ -680,6 +707,23 @@ class DatabaseWalletHelper:
             
         except Exception as e:
             print(f"Error deleting transaction items: {e}")
+            raise
+        finally:
+            self.db_manager.close()
+    
+    def delete_transaction_item(self, item_id):
+        """Delete a single transaction item by its ID."""
+        try:
+            self.db_manager.connect(write=True)
+            cursor = self.db_manager.connection.cursor()
+            
+            cursor.execute("DELETE FROM wallet_transaction_items WHERE id = ?", 
+                          (item_id,))
+            
+            self.db_manager.connection.commit()
+            
+        except Exception as e:
+            print(f"Error deleting transaction item: {e}")
             raise
         finally:
             self.db_manager.close()
@@ -826,5 +870,151 @@ class DatabaseWalletHelper:
         except Exception as e:
             print(f"Error deleting transaction invoice image: {e}")
             raise
+        finally:
+            self.db_manager.close()
+    
+    def get_pocket_balance(self, pocket_id, exclude_transaction_id=None):
+        """Calculate real balance for a pocket based on transactions.
+        Logic:
+        - Income: adds to balance
+        - Expense: subtracts from balance
+        - Transfer OUT (pocket_id): subtracts from balance
+        - Transfer IN (destination_pocket_id): adds to balance
+        
+        Args:
+            pocket_id: ID of the pocket
+            exclude_transaction_id: Optional transaction ID to exclude from calculation (for edit mode)
+        """
+        try:
+            self.db_manager.connect(write=False)
+            cursor = self.db_manager.connection.cursor()
+            
+            # Build WHERE clause for excluding transaction
+            exclude_clause = ""
+            params_income = [pocket_id]
+            if exclude_transaction_id:
+                exclude_clause = " AND t.id != ?"
+                params_income.append(exclude_transaction_id)
+            
+            # Get income total
+            cursor.execute(f"""
+                SELECT COALESCE(SUM(ti.quantity * ti.amount), 0) as total
+                FROM wallet_transactions t
+                LEFT JOIN wallet_transaction_items ti ON t.id = ti.wallet_transaction_id
+                WHERE t.pocket_id = ? AND t.transaction_type = 'income'{exclude_clause}
+            """, tuple(params_income))
+            income_total = cursor.fetchone()[0]
+            
+            # Build params for expense query
+            params_expense = [pocket_id]
+            if exclude_transaction_id:
+                params_expense.append(exclude_transaction_id)
+            
+            # Get expense total
+            cursor.execute(f"""
+                SELECT COALESCE(SUM(ti.quantity * ti.amount), 0) as total
+                FROM wallet_transactions t
+                LEFT JOIN wallet_transaction_items ti ON t.id = ti.wallet_transaction_id
+                WHERE t.pocket_id = ? AND t.transaction_type = 'expense'{exclude_clause}
+            """, tuple(params_expense))
+            expense_total = cursor.fetchone()[0]
+            
+            # Build params for transfer OUT query
+            params_transfer_out = [pocket_id]
+            if exclude_transaction_id:
+                params_transfer_out.append(exclude_transaction_id)
+            
+            # Get transfer OUT total (money leaving this pocket)
+            cursor.execute(f"""
+                SELECT COALESCE(SUM(ti.quantity * ti.amount), 0) as total
+                FROM wallet_transactions t
+                LEFT JOIN wallet_transaction_items ti ON t.id = ti.wallet_transaction_id
+                WHERE t.pocket_id = ? AND t.transaction_type = 'transfer'{exclude_clause}
+            """, tuple(params_transfer_out))
+            transfer_out_total = cursor.fetchone()[0]
+            
+            # Build params for transfer IN query
+            params_transfer_in = [pocket_id]
+            if exclude_transaction_id:
+                params_transfer_in.append(exclude_transaction_id)
+            
+            # Get transfer IN total (money coming to this pocket)
+            cursor.execute(f"""
+                SELECT COALESCE(SUM(ti.quantity * ti.amount), 0) as total
+                FROM wallet_transactions t
+                LEFT JOIN wallet_transaction_items ti ON t.id = ti.wallet_transaction_id
+                WHERE t.destination_pocket_id = ? AND t.transaction_type = 'transfer'{exclude_clause}
+            """, tuple(params_transfer_in))
+            transfer_in_total = cursor.fetchone()[0]
+            
+            # Calculate balance: income + transfer_in - expense - transfer_out
+            balance = income_total + transfer_in_total - expense_total - transfer_out_total
+            
+            return balance
+            
+        except Exception as e:
+            print(f"Error calculating pocket balance: {e}")
+            return 0.0
+        finally:
+            self.db_manager.close()
+    
+    def get_currency_symbol(self, currency_id):
+        """Get currency symbol by currency ID."""
+        try:
+            self.db_manager.connect(write=False)
+            cursor = self.db_manager.connection.cursor()
+            cursor.execute("""
+                SELECT symbol
+                FROM wallet_currency
+                WHERE id = ?
+            """, (currency_id,))
+            row = cursor.fetchone()
+            return row[0] if row and row[0] else "Rp"
+            
+        except Exception as e:
+            print(f"Error getting currency symbol: {e}")
+            return "Rp"
+        finally:
+            self.db_manager.close()
+    
+    def get_pockets_with_transactions(self):
+        """Get only pockets that have transactions."""
+        try:
+            self.db_manager.connect(write=False)
+            cursor = self.db_manager.connection.cursor()
+            cursor.execute("""
+                SELECT DISTINCT p.id, p.name
+                FROM wallet_pockets p
+                INNER JOIN wallet_transactions t ON p.id = t.pocket_id
+                ORDER BY p.name
+            """)
+            rows = cursor.fetchall()
+            pockets = [dict(row) for row in rows]
+            return pockets
+            
+        except Exception as e:
+            print(f"Error getting pockets with transactions: {e}")
+            return []
+        finally:
+            self.db_manager.close()
+    
+    def get_categories_with_transactions(self):
+        """Get only categories that have transactions."""
+        try:
+            self.db_manager.connect(write=False)
+            cursor = self.db_manager.connection.cursor()
+            cursor.execute("""
+                SELECT DISTINCT c.id, c.name
+                FROM wallet_categories c
+                INNER JOIN wallet_transactions t ON c.id = t.category_id
+                ORDER BY c.name
+            """)
+            rows = cursor.fetchall()
+            categories = [dict(row) for row in rows]
+            return categories
+            
+        except Exception as e:
+            print(f"Error getting categories with transactions: {e}")
+            return []
         finally:
             self.db_manager.close()

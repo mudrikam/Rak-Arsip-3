@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushB
 from PySide6.QtCore import Qt, QDate
 from PySide6.QtGui import QColor, QPixmap
 import qtawesome as qta
+from ..wallet_signal_manager import WalletSignalManager
 
 
 class CardDialog(QDialog):
@@ -232,6 +233,7 @@ class CardDialog(QDialog):
 		self.input_card_limit = QDoubleSpinBox()
 		self.input_card_limit.setMaximum(999999999.99)
 		self.input_card_limit.setDecimals(2)
+		self.input_card_limit.setSpecialValueText("")
 		self.input_card_limit.setToolTip("Credit limit or maximum balance")
 		limit_layout.addWidget(self.input_card_limit)
 		buttons_widget_l = QWidget()
@@ -239,20 +241,6 @@ class CardDialog(QDialog):
 		buttons_widget_l.setLayout(buttons_layout_l)
 		limit_layout.addWidget(buttons_widget_l)
 		form_layout.addRow("Card Limit:", limit_widget)
-		
-		balance_widget = QWidget()
-		balance_layout = QHBoxLayout(balance_widget)
-		balance_layout.setContentsMargins(0, 0, 0, 0)
-		self.input_balance = QDoubleSpinBox()
-		self.input_balance.setMaximum(999999999.99)
-		self.input_balance.setDecimals(2)
-		self.input_balance.setToolTip("Current balance")
-		balance_layout.addWidget(self.input_balance)
-		buttons_widget_bal = QWidget()
-		buttons_layout_bal = self.create_copy_paste_buttons(self.input_balance)
-		buttons_widget_bal.setLayout(buttons_layout_bal)
-		balance_layout.addWidget(buttons_widget_bal)
-		form_layout.addRow("Balance:", balance_widget)
 		
 		image_widget = QWidget()
 		image_layout = QHBoxLayout(image_widget)
@@ -373,7 +361,6 @@ class CardDialog(QDialog):
 		self.input_email.setText(self.card_data.get('email', ''))
 		self.input_country.setText(self.card_data.get('country', ''))
 		self.input_card_limit.setValue(float(self.card_data.get('card_limit', 0)))
-		self.input_balance.setValue(float(self.card_data.get('balance', 0)))
 		
 		color = self.card_data.get('color', '#1E3A8A')
 		self.selected_color = color
@@ -407,7 +394,6 @@ class CardDialog(QDialog):
 		email = self.input_email.text().strip()
 		country = self.input_country.text().strip()
 		card_limit = self.input_card_limit.value()
-		balance = self.input_balance.value()
 		image = self.image_data if self.image_data else b''
 		color = self.selected_color
 		note = self.input_note.toPlainText().strip()
@@ -422,21 +408,27 @@ class CardDialog(QDialog):
 					self.card_data.get('id'), self.pocket_id, card_name, card_number,
 					card_type, vendor, issuer, status, virtual, issue_date, expiry_date,
 					holder_name, cvv, billing_address, phone, email, country,
-					card_limit, balance, image, color, note
+					card_limit, image, color, note
 				)
+				print(f"Card updated successfully: {card_name}")
 				QMessageBox.information(self, "Success", "Card updated successfully")
 			else:
 				self.db_manager.wallet_helper.add_card(
 					self.pocket_id, card_name, card_number, card_type, vendor, issuer,
 					status, virtual, issue_date, expiry_date, holder_name, cvv,
-					billing_address, phone, email, country, card_limit, balance,
+					billing_address, phone, email, country, card_limit,
 					image, color, note
 				)
+				print(f"Card added successfully: {card_name}")
 				QMessageBox.information(self, "Success", "Card added successfully")
 			
+			WalletSignalManager.get_instance().emit_card_changed()
 			self.accept()
 		
 		except Exception as e:
+			print(f"ERROR saving card: {e}")
+			import traceback
+			traceback.print_exc()
 			QMessageBox.critical(self, "Error", f"Failed to save card: {str(e)}")
 	
 	def delete_card(self):

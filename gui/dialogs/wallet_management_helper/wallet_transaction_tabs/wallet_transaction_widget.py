@@ -9,6 +9,7 @@ import qtawesome as qta
 import os
 
 from .wallet_add_transaction_item_dialog import WalletAddTransactionItemDialog
+from ..wallet_signal_manager import WalletSignalManager
 
 
 class TransactionImageLabel(QLabel):
@@ -76,15 +77,25 @@ class WalletTransactionWidget(QWidget):
         self.transaction_items = []
         self.transaction_image_path = None
         self.basedir = None
-        self.current_transaction_id = None  # For edit mode
+        self.current_transaction_id = None
         self.edit_mode = False
+        self.signal_manager = WalletSignalManager.get_instance()
         self.init_ui()
         
         if self.db_manager:
             self.load_data_from_db()
         
-        # Set initial UI mode
         self.update_ui_for_mode()
+        self.connect_signals()
+    
+    def connect_signals(self):
+        """Connect to signal manager for auto-refresh."""
+        self.signal_manager.pocket_changed.connect(self.on_pocket_data_changed)
+        self.signal_manager.card_changed.connect(self.on_card_data_changed)
+        self.signal_manager.category_changed.connect(self.on_category_data_changed)
+        self.signal_manager.currency_changed.connect(self.on_currency_data_changed)
+        self.signal_manager.location_changed.connect(self.on_location_data_changed)
+        self.signal_manager.status_changed.connect(self.on_status_data_changed)
 
     def init_ui(self):
         main_layout = QVBoxLayout()
@@ -207,8 +218,24 @@ class WalletTransactionWidget(QWidget):
         self.combo_type.addItem("Income", "income")
         self.combo_type.addItem("Expense", "expense")
         self.combo_type.addItem("Transfer", "transfer")
+        self.combo_type.currentIndexChanged.connect(self.on_type_changed)
         type_row.addWidget(self.combo_type)
         form_layout.addLayout(type_row)
+        
+        # Destination Pocket (only visible for transfer)
+        self.destination_row = QHBoxLayout()
+        self.destination_row.setSpacing(8)
+        destination_label = QLabel("To Pocket:")
+        destination_label.setMinimumWidth(100)
+        self.destination_row.addWidget(destination_label)
+        self.combo_destination_pocket = QComboBox()
+        self.combo_destination_pocket.setEditable(False)
+        self.combo_destination_pocket.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.destination_row.addWidget(self.combo_destination_pocket)
+        self.destination_widget = QWidget()
+        self.destination_widget.setLayout(self.destination_row)
+        self.destination_widget.setVisible(False)
+        form_layout.addWidget(self.destination_widget)
 
     # NOTE: Add Item button moved below (above items table)
 
@@ -230,6 +257,12 @@ class WalletTransactionWidget(QWidget):
         self.btn_add_item.clicked.connect(self.on_add_item_clicked)
         items_button_row.addWidget(self.btn_add_item)
         items_layout.addLayout(items_button_row)
+        
+        # Warning label for add item
+        self.label_add_item_warning = QLabel("Save transaction first to add items")
+        self.label_add_item_warning.setStyleSheet("color: #666; font-style: italic; font-size: 11px;")
+        self.label_add_item_warning.setAlignment(Qt.AlignRight)
+        items_layout.addWidget(self.label_add_item_warning)
 
         self.items_table = QTableWidget()
         self.items_table.setColumnCount(7)
@@ -241,7 +274,7 @@ class WalletTransactionWidget(QWidget):
         header.setSectionResizeMode(0, QHeaderView.Stretch)           # Item Name (priority)
         header.setSectionResizeMode(1, QHeaderView.ResizeToContents)  # Quantity
         header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # Unit
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # Unit Price
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # Unit okePrice
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)  # Total (will be sized to contents)
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # Note
         # Keep Actions column fixed and very small (only two icon buttons)
@@ -312,6 +345,12 @@ class WalletTransactionWidget(QWidget):
             for pocket in pockets:
                 self.combo_pocket.addItem(pocket['name'], pocket['id'])
             
+            # Also populate destination pocket combo
+            self.combo_destination_pocket.clear()
+            self.combo_destination_pocket.addItem("Select Destination Pocket", None)
+            for pocket in pockets:
+                self.combo_destination_pocket.addItem(pocket['name'], pocket['id'])
+            
             currencies = self.db_manager.get_all_wallet_currencies()
             self.combo_currency.clear()
             self.combo_currency.addItem("Select Currency", None)
@@ -347,16 +386,138 @@ class WalletTransactionWidget(QWidget):
         except Exception as e:
             print(f"Error loading wallet data: {e}")
     
+    def on_pocket_data_changed(self):
+        """Reload pockets when data changes."""
+        if not self.db_manager:
+            return
+        try:
+            current_pocket = self.combo_pocket.currentData()
+            current_dest = self.combo_destination_pocket.currentData()
+            
+            pockets = self.db_manager.get_all_wallet_pockets()
+            self.combo_pocket.clear()
+            self.combo_pocket.addItem("Select Pocket", None)
+            self.combo_destination_pocket.clear()
+            self.combo_destination_pocket.addItem("Select Destination Pocket", None)
+            
+            for pocket in pockets:
+                self.combo_pocket.addItem(pocket['name'], pocket['id'])
+                self.combo_destination_pocket.addItem(pocket['name'], pocket['id'])
+            
+            # Restore selection
+            if current_pocket:
+                idx = self.combo_pocket.findData(current_pocket)
+                if idx >= 0:
+                    self.combo_pocket.setCurrentIndex(idx)
+            if current_dest:
+                idx = self.combo_destination_pocket.findData(current_dest)
+                if idx >= 0:
+                    self.combo_destination_pocket.setCurrentIndex(idx)
+        except Exception as e:
+            print(f"Error reloading pockets: {e}")
+    
+    def on_card_data_changed(self):
+        """Reload cards when data changes."""
+        pocket_idx = self.combo_pocket.currentIndex()
+        if pocket_idx > 0:
+            self.on_pocket_changed(pocket_idx)
+    
+    def on_category_data_changed(self):
+        """Reload categories when data changes."""
+        if not self.db_manager:
+            return
+        try:
+            current_category = self.combo_category.currentData()
+            categories = self.db_manager.get_all_wallet_categories()
+            self.combo_category.clear()
+            self.combo_category.addItem("Select Category", None)
+            for category in categories:
+                self.combo_category.addItem(category['name'], category['id'])
+            
+            if current_category:
+                idx = self.combo_category.findData(current_category)
+                if idx >= 0:
+                    self.combo_category.setCurrentIndex(idx)
+        except Exception as e:
+            print(f"Error reloading categories: {e}")
+    
+    def on_currency_data_changed(self):
+        """Reload currencies when data changes."""
+        if not self.db_manager:
+            return
+        try:
+            current_currency = self.combo_currency.currentData()
+            currencies = self.db_manager.get_all_wallet_currencies()
+            self.combo_currency.clear()
+            self.combo_currency.addItem("Select Currency", None)
+            for currency in currencies:
+                display_text = f"{currency['code']} - {currency['symbol']}"
+                self.combo_currency.addItem(display_text, currency['id'])
+            
+            if current_currency:
+                idx = self.combo_currency.findData(current_currency)
+                if idx >= 0:
+                    self.combo_currency.setCurrentIndex(idx)
+        except Exception as e:
+            print(f"Error reloading currencies: {e}")
+    
+    def on_location_data_changed(self):
+        """Reload locations when data changes."""
+        if not self.db_manager:
+            return
+        try:
+            current_location = self.combo_location.currentData()
+            locations = self.db_manager.get_all_wallet_locations()
+            self.combo_location.clear()
+            self.combo_location.addItem("Select Location", None)
+            for location in locations:
+                self.combo_location.addItem(location['name'], location['id'])
+            
+            if current_location:
+                idx = self.combo_location.findData(current_location)
+                if idx >= 0:
+                    self.combo_location.setCurrentIndex(idx)
+        except Exception as e:
+            print(f"Error reloading locations: {e}")
+    
+    def on_status_data_changed(self):
+        """Reload statuses when data changes."""
+        if not self.db_manager:
+            return
+        try:
+            current_status = self.combo_status.currentData()
+            statuses = self.db_manager.get_all_wallet_transaction_statuses()
+            self.combo_status.clear()
+            self.combo_status.addItem("Select Status", None)
+            for status in statuses:
+                self.combo_status.addItem(status['name'], status['id'])
+            
+            if current_status:
+                idx = self.combo_status.findData(current_status)
+                if idx >= 0:
+                    self.combo_status.setCurrentIndex(idx)
+        except Exception as e:
+            print(f"Error reloading statuses: {e}")
+    
+    def on_type_changed(self, index):
+        """Show/hide destination pocket combo based on transaction type."""
+        transaction_type = self.combo_type.itemData(index)
+        is_transfer = transaction_type == "transfer"
+        self.destination_widget.setVisible(is_transfer)
+        self.update_total_amount()
+    
     def on_pocket_changed(self, index):
         """Load cards when pocket is selected."""
         self.combo_card.clear()
         self.combo_card.addItem("Select Card", None)
         
         if index <= 0:
+            self.update_total_amount()
             return
         
         pocket_id = self.combo_pocket.itemData(index)
         if not pocket_id or not self.db_manager:
+            self.update_total_amount()
             return
         
         try:
@@ -365,15 +526,55 @@ class WalletTransactionWidget(QWidget):
                 self.combo_card.addItem(card['card_name'], card['id'])
         except Exception as e:
             print(f"Error loading cards: {e}")
+        
+        self.update_total_amount()
     
     def on_add_item_clicked(self):
         """Open dialog to add a new transaction item."""
+        if not self.edit_mode or not self.current_transaction_id:
+            QMessageBox.warning(self, "Warning", "Please save the transaction first before adding items")
+            return
+        
         dialog = WalletAddTransactionItemDialog(self)
         if dialog.exec():
             item_data = dialog.get_item_data()
-            self.transaction_items.append(item_data)
-            self.refresh_items_table()
-            self.update_total_amount()
+            
+            # Save item directly to database
+            try:
+                self.db_manager.wallet_helper.add_transaction_item(
+                    wallet_transaction_id=self.current_transaction_id,
+                    item_type=item_data['item_type'],
+                    sku=item_data['sku'],
+                    item_name=item_data['item_name'],
+                    item_description=item_data['item_description'],
+                    quantity=item_data['quantity'],
+                    unit=item_data['unit'],
+                    amount=item_data['amount'],
+                    width=item_data['width'],
+                    height=item_data['height'],
+                    depth=item_data['depth'],
+                    weight=item_data['weight'],
+                    material=item_data['material'],
+                    color=item_data['color'],
+                    file_url=item_data['file_url'],
+                    license_key=item_data['license_key'],
+                    expiry_date=item_data['expiry_date'],
+                    digital_type=item_data['digital_type'],
+                    note=item_data['note']
+                )
+                print("Item added to database successfully")
+                
+                # Reload items from database
+                self.load_transaction_items()
+                
+                # Emit signal for balance update
+                self.signal_manager.emit_transaction_changed()
+                
+            except Exception as e:
+                print(f"ERROR adding item: {e}")
+                import traceback
+                traceback.print_exc()
+                QMessageBox.critical(self, "Error", f"Failed to add item: {str(e)}")
     
     def refresh_items_table(self):
         """Refresh the items table with current transaction_items."""
@@ -441,23 +642,73 @@ class WalletTransactionWidget(QWidget):
     
     def edit_item_by_index(self, item_idx):
         """Edit item by index from action button."""
+        if not self.edit_mode or not self.current_transaction_id:
+            QMessageBox.warning(self, "Warning", "Transaction must be saved first")
+            return
+            
         if item_idx < 0 or item_idx >= len(self.transaction_items):
             return
         
         item_data = self.transaction_items[item_idx]
+        item_id = item_data.get('id')
+        if not item_id:
+            QMessageBox.warning(self, "Warning", "Item ID not found")
+            return
+        
         dialog = WalletAddTransactionItemDialog(self, item_data=item_data)
         if dialog.exec():
             updated_data = dialog.get_item_data()
-            self.transaction_items[item_idx] = updated_data
-            self.refresh_items_table()
-            self.update_total_amount()
+            
+            # Update item directly in database
+            try:
+                self.db_manager.wallet_helper.update_transaction_item(
+                    item_id=item_id,
+                    item_type=updated_data['item_type'],
+                    sku=updated_data['sku'],
+                    item_name=updated_data['item_name'],
+                    item_description=updated_data['item_description'],
+                    quantity=updated_data['quantity'],
+                    unit=updated_data['unit'],
+                    amount=updated_data['amount'],
+                    width=updated_data['width'],
+                    height=updated_data['height'],
+                    depth=updated_data['depth'],
+                    weight=updated_data['weight'],
+                    material=updated_data['material'],
+                    color=updated_data['color'],
+                    file_url=updated_data['file_url'],
+                    license_key=updated_data['license_key'],
+                    expiry_date=updated_data['expiry_date'],
+                    digital_type=updated_data['digital_type'],
+                    note=updated_data['note']
+                )
+                print("Item updated in database successfully")
+                
+                # Reload items from database
+                self.load_transaction_items()
+                
+                # Emit signal for balance update
+                self.signal_manager.emit_transaction_changed()
+                
+            except Exception as e:
+                print(f"ERROR updating item: {e}")
+                import traceback
+                traceback.print_exc()
+                QMessageBox.critical(self, "Error", f"Failed to update item: {str(e)}")
     
     def delete_item_by_index(self, item_idx):
         """Delete item by index from action button."""
+        if not self.edit_mode or not self.current_transaction_id:
+            QMessageBox.warning(self, "Warning", "Transaction must be saved first")
+            return
+            
         if item_idx < 0 or item_idx >= len(self.transaction_items):
             return
         
-        item_name = self.transaction_items[item_idx]['item_name']
+        item_data = self.transaction_items[item_idx]
+        item_id = item_data.get('id')
+        item_name = item_data['item_name']
+        
         reply = QMessageBox.question(
             self,
             "Confirm Delete",
@@ -466,9 +717,25 @@ class WalletTransactionWidget(QWidget):
         )
         
         if reply == QMessageBox.Yes:
-            del self.transaction_items[item_idx]
-            self.refresh_items_table()
-            self.update_total_amount()
+            if not item_id:
+                QMessageBox.warning(self, "Warning", "Item ID not found")
+                return
+            
+            try:
+                self.db_manager.wallet_helper.delete_transaction_item(item_id)
+                print(f"Item {item_id} deleted from database successfully")
+                
+                # Reload items from database
+                self.load_transaction_items()
+                
+                # Emit signal for balance update
+                self.signal_manager.emit_transaction_changed()
+                
+            except Exception as e:
+                print(f"ERROR deleting item: {e}")
+                import traceback
+                traceback.print_exc()
+                QMessageBox.critical(self, "Error", f"Failed to delete item: {str(e)}")
     
     def edit_selected_item(self):
         """Edit the selected item."""
@@ -522,7 +789,33 @@ class WalletTransactionWidget(QWidget):
             if " - " in currency_text:
                 currency_symbol = currency_text.split(" - ")[1] + " "
         
-        self.label_amount.setText(f"{currency_symbol}{total:,.2f}")
+        # Check if transfer and validate balance
+        is_transfer = False
+        insufficient_balance = False
+        type_idx = self.combo_type.currentIndex()
+        if type_idx > 0:
+            transaction_type = self.combo_type.itemData(type_idx)
+            if transaction_type == "transfer":
+                is_transfer = True
+                pocket_idx = self.combo_pocket.currentIndex()
+                if pocket_idx > 0 and self.db_manager:
+                    pocket_id = self.combo_pocket.itemData(pocket_idx)
+                    try:
+                        source_balance = self.db_manager.wallet_helper.get_pocket_balance(pocket_id)
+                        if total > source_balance:
+                            insufficient_balance = True
+                    except Exception as e:
+                        print(f"ERROR checking balance: {e}")
+        
+        # Update label with appropriate styling (but don't disable save button)
+        if insufficient_balance:
+            self.label_amount.setText(f"{currency_symbol}{total:,.2f}")
+            self.label_amount.setStyleSheet("color: red; font-weight: bold; font-size: 16px;")
+        else:
+            self.label_amount.setText(f"{currency_symbol}{total:,.2f}")
+            self.label_amount.setStyleSheet("font-weight: bold; font-size: 16px;")
+        
+        return total
     
     def set_db_manager(self, db_manager):
         """Set database manager and reload data."""
@@ -539,6 +832,8 @@ class WalletTransactionWidget(QWidget):
         self.combo_location.setCurrentIndex(0)
         self.combo_category.setCurrentIndex(0)
         self.combo_type.setCurrentIndex(0)
+        self.combo_destination_pocket.setCurrentIndex(0)
+        self.destination_widget.setVisible(False)
         self.combo_status.setCurrentIndex(0)
         self.transaction_items.clear()
         self.refresh_items_table()
@@ -662,33 +957,72 @@ class WalletTransactionWidget(QWidget):
             QMessageBox.warning(self, "Warning", "Please select a currency")
             return
         
-        location_idx = self.combo_location.currentIndex()
-        if location_idx <= 0:
-            QMessageBox.warning(self, "Warning", "Please select a location")
-            return
-        
-        category_idx = self.combo_category.currentIndex()
-        if category_idx <= 0:
-            QMessageBox.warning(self, "Warning", "Please select a category")
-            return
-        
-        status_idx = self.combo_status.currentIndex()
-        if status_idx <= 0:
-            QMessageBox.warning(self, "Warning", "Please select a status")
-            return
-        
         type_idx = self.combo_type.currentIndex()
         if type_idx <= 0:
             QMessageBox.warning(self, "Warning", "Please select a transaction type")
             return
         
-        # Get data
-        pocket_id = self.combo_pocket.itemData(pocket_idx)
-        currency_id = self.combo_currency.itemData(currency_idx)
-        location_id = self.combo_location.itemData(location_idx)
-        category_id = self.combo_category.itemData(category_idx)
-        status_id = self.combo_status.itemData(status_idx)
         transaction_type = self.combo_type.itemData(type_idx)
+        
+        # Get pocket_id first for validation
+        pocket_id = self.combo_pocket.itemData(pocket_idx)
+        
+        # Validate destination pocket if transfer
+        destination_pocket_id = None
+        if transaction_type == "transfer":
+            dest_idx = self.combo_destination_pocket.currentIndex()
+            if dest_idx <= 0:
+                QMessageBox.warning(self, "Warning", "Please select a destination pocket for transfer")
+                return
+            destination_pocket_id = self.combo_destination_pocket.itemData(dest_idx)
+            if destination_pocket_id == pocket_id:
+                QMessageBox.warning(self, "Warning", "Source and destination pocket cannot be the same")
+                return
+            
+            # Validate transfer amount vs source balance - ONLY IF HAS ITEMS
+            # Allow saving transfer without items first (items added after save)
+            total_amount = sum(item['quantity'] * item['amount'] for item in self.transaction_items)
+            
+            # Only validate balance if there are items
+            if total_amount > 0 and self.db_manager:
+                try:
+                    # Exclude current transaction from balance calculation if editing
+                    exclude_id = self.current_transaction_id if self.edit_mode else None
+                    source_balance = self.db_manager.wallet_helper.get_pocket_balance(pocket_id, exclude_id)
+                    
+                    # Get currency symbol from transaction currency_id
+                    currency_id = self.combo_currency.itemData(currency_idx)
+                    currency_symbol = self.db_manager.wallet_helper.get_currency_symbol(currency_id)
+                    
+                    if total_amount > source_balance:
+                        reply = QMessageBox.critical(
+                            self, 
+                            "Insufficient Balance", 
+                            f"<b>Cannot save transaction!</b><br><br>"
+                            f"Transfer amount: <b>{currency_symbol} {total_amount:,.2f}</b><br>"
+                            f"Source pocket balance: <b>{currency_symbol} {source_balance:,.2f}</b><br>"
+                            f"Deficit: <b style='color: red;'>{currency_symbol} {(total_amount - source_balance):,.2f}</b><br><br>"
+                            f"Please reduce the item amounts to match available balance.",
+                            QMessageBox.Ok
+                        )
+                        return
+                except Exception as e:
+                    print(f"ERROR checking balance: {e}")
+                    import traceback
+                    traceback.print_exc()
+        
+        # Get data (location, category, status are optional)
+        currency_id = self.combo_currency.itemData(currency_idx)
+        
+        location_idx = self.combo_location.currentIndex()
+        location_id = self.combo_location.itemData(location_idx) if location_idx > 0 else None
+        
+        category_idx = self.combo_category.currentIndex()
+        category_id = self.combo_category.itemData(category_idx) if category_idx > 0 else None
+        
+        status_idx = self.combo_status.currentIndex()
+        status_id = self.combo_status.itemData(status_idx) if status_idx > 0 else None
+        
         transaction_date = datetime.now()
         
         print(f"Transaction Name: {transaction_name}")
@@ -715,6 +1049,7 @@ class WalletTransactionWidget(QWidget):
                 transaction_id = self.db_manager.wallet_helper.update_transaction(
                     transaction_id=self.current_transaction_id,
                     pocket_id=pocket_id,
+                    destination_pocket_id=destination_pocket_id,
                     category_id=category_id, 
                     status_id=status_id,
                     currency_id=currency_id,
@@ -735,6 +1070,7 @@ class WalletTransactionWidget(QWidget):
                 # Create new transaction
                 transaction_id = self.db_manager.wallet_helper.add_transaction(
                     pocket_id=pocket_id,
+                    destination_pocket_id=destination_pocket_id,
                     category_id=category_id, 
                     status_id=status_id,
                     currency_id=currency_id,
@@ -801,21 +1137,17 @@ class WalletTransactionWidget(QWidget):
                     print("Failed to save image")
             
             QMessageBox.information(self, "Success", 
-                f"Transaction {'updated' if self.edit_mode else 'saved'} successfully!\nTransaction ID: {transaction_id}")
+                f"Transaction '{transaction_name}' {'updated' if self.edit_mode else 'saved'} successfully!")
             
-            # Reset edit mode after save
-            if self.edit_mode:
-                self.edit_mode = False
-                self.current_transaction_id = None
+            # Emit signal for transaction change
+            self.signal_manager.emit_transaction_changed()
+            
+            # After first save, switch to edit mode so items can be added
+            if not self.edit_mode:
+                self.edit_mode = True
+                self.current_transaction_id = transaction_id
                 self.update_ui_for_mode()
-            
-            # Signal parent to refresh transaction list
-            parent = self.parent()
-            while parent:
-                if hasattr(parent, 'transaction_list_widget') and parent.transaction_list_widget:
-                    parent.transaction_list_widget.load_transactions()
-                    break
-                parent = parent.parent()
+                print(f"Switched to edit mode with transaction ID: {transaction_id}")
             
             print("=== DEBUG: Save Complete ===\n")
             
@@ -858,6 +1190,10 @@ class WalletTransactionWidget(QWidget):
                     self.combo_type.setCurrentIndex(i)
                     break
             
+            # Set destination pocket if transfer
+            if type_text == 'transfer' and transaction.get('destination_pocket_id'):
+                self.set_combo_value_by_id(self.combo_destination_pocket, transaction['destination_pocket_id'])
+            
             # Load cards for selected pocket
             self.on_pocket_changed(self.combo_pocket.currentIndex())
             
@@ -865,6 +1201,7 @@ class WalletTransactionWidget(QWidget):
             self.transaction_items = []
             for item in items:
                 self.transaction_items.append({
+                    'id': item['id'],  # Include item ID for updates
                     'item_type': item['item_type'] or '',
                     'sku': item['sku'] or '',
                     'item_name': item['item_name'] or '',
@@ -899,7 +1236,48 @@ class WalletTransactionWidget(QWidget):
             
         except Exception as e:
             print(f"Error loading transaction for edit: {e}")
+            import traceback
+            traceback.print_exc()
             QMessageBox.critical(self, "Error", f"Failed to load transaction: {str(e)}")
+    
+    def load_transaction_items(self):
+        """Reload transaction items from database."""
+        if not self.current_transaction_id or not self.db_manager:
+            return
+        
+        try:
+            items = self.db_manager.wallet_helper.get_transaction_items(self.current_transaction_id)
+            self.transaction_items = []
+            for item in items:
+                self.transaction_items.append({
+                    'id': item['id'],
+                    'item_type': item['item_type'] or '',
+                    'sku': item['sku'] or '',
+                    'item_name': item['item_name'] or '',
+                    'item_description': item['item_description'] or '',
+                    'quantity': item['quantity'] or 1,
+                    'unit': item['unit'] or '',
+                    'amount': item['amount'] or 0.0,
+                    'width': item['width'] or 0.0,
+                    'height': item['height'] or 0.0,
+                    'depth': item['depth'] or 0.0,
+                    'weight': item['weight'] or 0.0,
+                    'material': item['material'] or '',
+                    'color': item['color'] or '',
+                    'file_url': item['file_url'] or '',
+                    'license_key': item['license_key'] or '',
+                    'expiry_date': item['expiry_date'] or '',
+                    'digital_type': item['digital_type'] or '',
+                    'note': item['note'] or ''
+                })
+            
+            self.refresh_items_table()
+            self.update_total_amount()
+            
+        except Exception as e:
+            print(f"ERROR reloading items: {e}")
+            import traceback
+            traceback.print_exc()
     
     def load_transaction_invoice_image(self, transaction_id):
         """Load invoice image for transaction."""
@@ -949,14 +1327,18 @@ class WalletTransactionWidget(QWidget):
     
     def update_ui_for_mode(self):
         """Update UI elements based on current mode (new/edit)."""
-        if self.edit_mode:
+        if self.edit_mode and self.current_transaction_id:
             self.btn_save.setText(" Update Transaction")
             self.btn_save.setIcon(qta.icon("fa6s.pen-to-square"))
             self.btn_delete.setEnabled(True)
+            self.btn_add_item.setEnabled(True)
+            self.label_add_item_warning.setVisible(False)
         else:
             self.btn_save.setText(" Save Transaction")
             self.btn_save.setIcon(qta.icon("fa6s.floppy-disk"))
             self.btn_delete.setEnabled(False)
+            self.btn_add_item.setEnabled(False)
+            self.label_add_item_warning.setVisible(True)
     
     def clear_form(self):
         """Clear all form fields."""
@@ -1005,7 +1387,7 @@ class WalletTransactionWidget(QWidget):
         dialog.setLayout(layout)
         
         if dialog.exec():
-            self.load_data_from_db()
+            self.signal_manager.emit_location_changed()
     
     def open_add_category_dialog(self):
         """Open settings dialog to add new category."""
@@ -1032,7 +1414,7 @@ class WalletTransactionWidget(QWidget):
         dialog.setLayout(layout)
         
         if dialog.exec():
-            self.load_data_from_db()
+            self.signal_manager.emit_category_changed()
     
     def open_add_status_dialog(self):
         """Open settings dialog to add new status."""
@@ -1059,7 +1441,7 @@ class WalletTransactionWidget(QWidget):
         dialog.setLayout(layout)
         
         if dialog.exec():
-            self.load_data_from_db()
+            self.signal_manager.emit_status_changed()
     
     def open_image_dialog(self):
         """Open file dialog to select transaction image."""

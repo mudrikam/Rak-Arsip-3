@@ -1,10 +1,11 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                                QTableWidget, QTableWidgetItem, QPushButton, 
                                QLineEdit, QTextEdit, QMessageBox, QHeaderView,
-                               QTabWidget, QGroupBox, QFormLayout, QDialog, QFileDialog)
+                               QTabWidget, QGroupBox, QFormLayout, QDialog, QFileDialog, QScrollArea)
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap, QDragEnterEvent, QDropEvent
 import qtawesome as qta
+from ..wallet_signal_manager import WalletSignalManager
 
 
 class LocationImageLabel(QLabel):
@@ -68,6 +69,7 @@ class WalletSettingsTab(QWidget):
 		super().__init__(parent)
 		self.db_manager = db_manager
 		self.basedir = None
+		self.signal_manager = WalletSignalManager.get_instance()
 		self.init_ui()
 
 	def init_ui(self):
@@ -85,49 +87,12 @@ class WalletSettingsTab(QWidget):
 	
 	def create_categories_tab(self):
 		widget = QWidget()
-		main_layout = QHBoxLayout()
+		main_layout = QVBoxLayout()
 		main_layout.setContentsMargins(10, 10, 10, 10)
 		main_layout.setSpacing(10)
 		
-		# Left side: Category list
-		left_layout = QVBoxLayout()
-		left_layout.setSpacing(10)
-		
-		list_label = QLabel("Category List")
-		list_label.setStyleSheet("font-weight: bold; font-size: 14px;")
-		left_layout.addWidget(list_label)
-		
-		self.category_table = QTableWidget()
-		self.category_table.setColumnCount(2)
-		self.category_table.setHorizontalHeaderLabels(["Name", "Note"])
-		self.category_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-		self.category_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-		self.category_table.setSelectionBehavior(QTableWidget.SelectRows)
-		self.category_table.setSelectionMode(QTableWidget.SingleSelection)
-		self.category_table.setEditTriggers(QTableWidget.NoEditTriggers)
-		self.category_table.itemSelectionChanged.connect(self.on_category_selected)
-		left_layout.addWidget(self.category_table)
-		
-		# Buttons below table
-		table_buttons_layout = QHBoxLayout()
-		
-		self.btn_refresh = QPushButton(qta.icon("fa6s.arrows-rotate"), " Refresh")
-		self.btn_refresh.clicked.connect(self.load_categories)
-		table_buttons_layout.addWidget(self.btn_refresh)
-		
-		table_buttons_layout.addStretch()
-		left_layout.addLayout(table_buttons_layout)
-		
-		main_layout.addLayout(left_layout, 2)
-		
-		# Right side: Form for CRUD operations
-		right_layout = QVBoxLayout()
-		right_layout.setSpacing(10)
-		
-		form_label = QLabel("Category Details")
-		form_label.setStyleSheet("font-weight: bold; font-size: 14px;")
-		right_layout.addWidget(form_label)
-
+		form_group = QGroupBox("Category Details")
+		form_widget = QWidget()
 		form_layout = QFormLayout()
 		form_layout.setSpacing(10)
 
@@ -142,11 +107,8 @@ class WalletSettingsTab(QWidget):
 		self.input_category_note.setPlaceholderText("Enter category note (optional)")
 		self.input_category_note.setMaximumHeight(100)
 		form_layout.addRow("Note:", self.input_category_note)
-
-		right_layout.addLayout(form_layout)
 		
-		# Action buttons
-		buttons_layout = QVBoxLayout()
+		buttons_layout = QHBoxLayout()
 		buttons_layout.setSpacing(8)
 		
 		self.btn_add = QPushButton(qta.icon("fa6s.plus"), " Add Category")
@@ -168,9 +130,45 @@ class WalletSettingsTab(QWidget):
 		buttons_layout.addWidget(self.btn_clear)
 		
 		buttons_layout.addStretch()
-		right_layout.addLayout(buttons_layout)
+		form_layout.addRow(buttons_layout)
 		
-		main_layout.addLayout(right_layout, 1)
+		form_widget.setLayout(form_layout)
+		
+		form_scroll = QScrollArea()
+		form_scroll.setWidget(form_widget)
+		form_scroll.setWidgetResizable(True)
+		form_scroll.setMaximumHeight(250)
+		
+		form_group_layout = QVBoxLayout()
+		form_group_layout.addWidget(form_scroll)
+		form_group.setLayout(form_group_layout)
+		
+		main_layout.addWidget(form_group)
+		
+		table_group = QGroupBox("Category List")
+		table_layout = QVBoxLayout()
+		table_layout.setSpacing(10)
+		
+		self.category_table = QTableWidget()
+		self.category_table.setColumnCount(2)
+		self.category_table.setHorizontalHeaderLabels(["Name", "Note"])
+		self.category_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+		self.category_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+		self.category_table.setSelectionBehavior(QTableWidget.SelectRows)
+		self.category_table.setSelectionMode(QTableWidget.SingleSelection)
+		self.category_table.setEditTriggers(QTableWidget.NoEditTriggers)
+		self.category_table.itemSelectionChanged.connect(self.on_category_selected)
+		table_layout.addWidget(self.category_table)
+		
+		table_buttons_layout = QHBoxLayout()
+		self.btn_refresh = QPushButton(qta.icon("fa6s.arrows-rotate"), " Refresh")
+		self.btn_refresh.clicked.connect(self.load_categories)
+		table_buttons_layout.addWidget(self.btn_refresh)
+		table_buttons_layout.addStretch()
+		table_layout.addLayout(table_buttons_layout)
+		
+		table_group.setLayout(table_layout)
+		main_layout.addWidget(table_group)
 		
 		widget.setLayout(main_layout)
 		
@@ -242,11 +240,16 @@ class WalletSettingsTab(QWidget):
 		
 		try:
 			self.db_manager.wallet_helper.add_category(name, note)
+			print(f"Category added successfully: {name}")
 			QMessageBox.information(self, "Success", "Category added successfully")
 			self.clear_form()
 			self.load_categories()
+			self.signal_manager.emit_category_changed()
 		
 		except Exception as e:
+			print(f"ERROR adding category: {e}")
+			import traceback
+			traceback.print_exc()
 			QMessageBox.critical(self, "Error", f"Failed to add category: {str(e)}")
 	
 	def update_category(self):
@@ -264,11 +267,16 @@ class WalletSettingsTab(QWidget):
 		
 		try:
 			self.db_manager.wallet_helper.update_category(category_id, name, note)
+			print(f"Category updated successfully: {name}")
 			QMessageBox.information(self, "Success", "Category updated successfully")
 			self.clear_form()
 			self.load_categories()
+			self.signal_manager.emit_category_changed()
 		
 		except Exception as e:
+			print(f"ERROR updating category: {e}")
+			import traceback
+			traceback.print_exc()
 			QMessageBox.critical(self, "Error", f"Failed to update category: {str(e)}")
 	
 	def delete_category(self):
@@ -293,11 +301,16 @@ class WalletSettingsTab(QWidget):
 		if reply == QMessageBox.Yes:
 			try:
 				self.db_manager.wallet_helper.delete_category(category_id)
+				print(f"Category deleted successfully: {category_name}")
 				QMessageBox.information(self, "Success", "Category deleted successfully")
 				self.clear_form()
 				self.load_categories()
+				self.signal_manager.emit_category_changed()
 			
 			except Exception as e:
+				print(f"ERROR deleting category: {e}")
+				import traceback
+				traceback.print_exc()
 				QMessageBox.critical(self, "Error", f"Failed to delete category: {str(e)}")
 	
 	def set_db_manager(self, db_manager):
@@ -311,46 +324,12 @@ class WalletSettingsTab(QWidget):
 	
 	def create_currency_tab(self):
 		widget = QWidget()
-		main_layout = QHBoxLayout()
+		main_layout = QVBoxLayout()
 		main_layout.setContentsMargins(10, 10, 10, 10)
 		main_layout.setSpacing(10)
 		
-		left_layout = QVBoxLayout()
-		left_layout.setSpacing(10)
-		
-		list_label = QLabel("Currency List")
-		list_label.setStyleSheet("font-weight: bold; font-size: 14px;")
-		left_layout.addWidget(list_label)
-		
-		self.currency_table = QTableWidget()
-		self.currency_table.setColumnCount(4)
-		self.currency_table.setHorizontalHeaderLabels(["Code", "Name", "Symbol", "Note"])
-		self.currency_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-		self.currency_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-		self.currency_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
-		self.currency_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
-		self.currency_table.setSelectionBehavior(QTableWidget.SelectRows)
-		self.currency_table.setSelectionMode(QTableWidget.SingleSelection)
-		self.currency_table.setEditTriggers(QTableWidget.NoEditTriggers)
-		self.currency_table.itemSelectionChanged.connect(self.on_currency_selected)
-		left_layout.addWidget(self.currency_table)
-		
-		table_buttons_layout = QHBoxLayout()
-		self.btn_refresh_currency = QPushButton(qta.icon("fa6s.arrows-rotate"), " Refresh")
-		self.btn_refresh_currency.clicked.connect(self.load_currencies)
-		table_buttons_layout.addWidget(self.btn_refresh_currency)
-		table_buttons_layout.addStretch()
-		left_layout.addLayout(table_buttons_layout)
-		
-		main_layout.addLayout(left_layout, 2)
-		
-		right_layout = QVBoxLayout()
-		right_layout.setSpacing(10)
-		
-		form_label = QLabel("Currency Details")
-		form_label.setStyleSheet("font-weight: bold; font-size: 14px;")
-		right_layout.addWidget(form_label)
-		
+		form_group = QGroupBox("Currency Details")
+		form_widget = QWidget()
 		form_layout = QFormLayout()
 		form_layout.setSpacing(10)
 		
@@ -374,9 +353,7 @@ class WalletSettingsTab(QWidget):
 		self.input_currency_note.setMaximumHeight(100)
 		form_layout.addRow("Note:", self.input_currency_note)
 		
-		right_layout.addLayout(form_layout)
-		
-		buttons_layout = QVBoxLayout()
+		buttons_layout = QHBoxLayout()
 		buttons_layout.setSpacing(8)
 		
 		self.btn_add_currency = QPushButton(qta.icon("fa6s.plus"), " Add Currency")
@@ -398,9 +375,48 @@ class WalletSettingsTab(QWidget):
 		buttons_layout.addWidget(self.btn_clear_currency)
 		
 		buttons_layout.addStretch()
-		right_layout.addLayout(buttons_layout)
+		form_layout.addRow(buttons_layout)
 		
-		main_layout.addLayout(right_layout, 1)
+		form_widget.setLayout(form_layout)
+		
+		form_scroll = QScrollArea()
+		form_scroll.setWidget(form_widget)
+		form_scroll.setWidgetResizable(True)
+		form_scroll.setMaximumHeight(250)
+		
+		form_group_layout = QVBoxLayout()
+		form_group_layout.addWidget(form_scroll)
+		form_group.setLayout(form_group_layout)
+		
+		main_layout.addWidget(form_group)
+		
+		table_group = QGroupBox("Currency List")
+		table_layout = QVBoxLayout()
+		table_layout.setSpacing(10)
+		
+		self.currency_table = QTableWidget()
+		self.currency_table.setColumnCount(4)
+		self.currency_table.setHorizontalHeaderLabels(["Code", "Name", "Symbol", "Note"])
+		self.currency_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+		self.currency_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+		self.currency_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+		self.currency_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+		self.currency_table.setSelectionBehavior(QTableWidget.SelectRows)
+		self.currency_table.setSelectionMode(QTableWidget.SingleSelection)
+		self.currency_table.setEditTriggers(QTableWidget.NoEditTriggers)
+		self.currency_table.itemSelectionChanged.connect(self.on_currency_selected)
+		table_layout.addWidget(self.currency_table)
+		
+		table_buttons_layout = QHBoxLayout()
+		self.btn_refresh_currency = QPushButton(qta.icon("fa6s.arrows-rotate"), " Refresh")
+		self.btn_refresh_currency.clicked.connect(self.load_currencies)
+		table_buttons_layout.addWidget(self.btn_refresh_currency)
+		table_buttons_layout.addStretch()
+		table_layout.addLayout(table_buttons_layout)
+		
+		table_group.setLayout(table_layout)
+		main_layout.addWidget(table_group)
+		
 		widget.setLayout(main_layout)
 		
 		if self.db_manager:
@@ -475,11 +491,16 @@ class WalletSettingsTab(QWidget):
 		
 		try:
 			self.db_manager.wallet_helper.add_currency(code, name, symbol, note)
+			print(f"Currency added successfully: {code}")
 			QMessageBox.information(self, "Success", "Currency added successfully")
 			self.clear_currency_form()
 			self.load_currencies()
+			self.signal_manager.emit_currency_changed()
 		
 		except Exception as e:
+			print(f"ERROR adding currency: {e}")
+			import traceback
+			traceback.print_exc()
 			QMessageBox.critical(self, "Error", f"Failed to add currency: {str(e)}")
 	
 	def update_currency(self):
@@ -499,11 +520,16 @@ class WalletSettingsTab(QWidget):
 		
 		try:
 			self.db_manager.wallet_helper.update_currency(currency_id, code, name, symbol, note)
+			print(f"Currency updated successfully: {code}")
 			QMessageBox.information(self, "Success", "Currency updated successfully")
 			self.clear_currency_form()
 			self.load_currencies()
+			self.signal_manager.emit_currency_changed()
 		
 		except Exception as e:
+			print(f"ERROR updating currency: {e}")
+			import traceback
+			traceback.print_exc()
 			QMessageBox.critical(self, "Error", f"Failed to update currency: {str(e)}")
 	
 	def delete_currency(self):
@@ -528,53 +554,26 @@ class WalletSettingsTab(QWidget):
 		if reply == QMessageBox.Yes:
 			try:
 				self.db_manager.wallet_helper.delete_currency(currency_id)
+				print(f"Currency deleted successfully: {currency_code}")
 				QMessageBox.information(self, "Success", "Currency deleted successfully")
 				self.clear_currency_form()
 				self.load_currencies()
+				self.signal_manager.emit_currency_changed()
 			
 			except Exception as e:
+				print(f"ERROR deleting currency: {e}")
+				import traceback
+				traceback.print_exc()
 				QMessageBox.critical(self, "Error", f"Failed to delete currency: {str(e)}")
 	
 	def create_transaction_status_tab(self):
 		widget = QWidget()
-		main_layout = QHBoxLayout()
+		main_layout = QVBoxLayout()
 		main_layout.setContentsMargins(10, 10, 10, 10)
 		main_layout.setSpacing(10)
 		
-		left_layout = QVBoxLayout()
-		left_layout.setSpacing(10)
-		
-		list_label = QLabel("Transaction Status List")
-		list_label.setStyleSheet("font-weight: bold; font-size: 14px;")
-		left_layout.addWidget(list_label)
-		
-		self.status_table = QTableWidget()
-		self.status_table.setColumnCount(2)
-		self.status_table.setHorizontalHeaderLabels(["Name", "Note"])
-		self.status_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-		self.status_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-		self.status_table.setSelectionBehavior(QTableWidget.SelectRows)
-		self.status_table.setSelectionMode(QTableWidget.SingleSelection)
-		self.status_table.setEditTriggers(QTableWidget.NoEditTriggers)
-		self.status_table.itemSelectionChanged.connect(self.on_status_selected)
-		left_layout.addWidget(self.status_table)
-		
-		table_buttons_layout = QHBoxLayout()
-		self.btn_refresh_status = QPushButton(qta.icon("fa6s.arrows-rotate"), " Refresh")
-		self.btn_refresh_status.clicked.connect(self.load_statuses)
-		table_buttons_layout.addWidget(self.btn_refresh_status)
-		table_buttons_layout.addStretch()
-		left_layout.addLayout(table_buttons_layout)
-		
-		main_layout.addLayout(left_layout, 2)
-		
-		right_layout = QVBoxLayout()
-		right_layout.setSpacing(10)
-		
-		form_label = QLabel("Transaction Status Details")
-		form_label.setStyleSheet("font-weight: bold; font-size: 14px;")
-		right_layout.addWidget(form_label)
-		
+		form_group = QGroupBox("Transaction Status Details")
+		form_widget = QWidget()
 		form_layout = QFormLayout()
 		form_layout.setSpacing(10)
 		
@@ -590,9 +589,7 @@ class WalletSettingsTab(QWidget):
 		self.input_status_note.setMaximumHeight(100)
 		form_layout.addRow("Note:", self.input_status_note)
 		
-		right_layout.addLayout(form_layout)
-		
-		buttons_layout = QVBoxLayout()
+		buttons_layout = QHBoxLayout()
 		buttons_layout.setSpacing(8)
 		
 		self.btn_add_status = QPushButton(qta.icon("fa6s.plus"), " Add Status")
@@ -614,9 +611,46 @@ class WalletSettingsTab(QWidget):
 		buttons_layout.addWidget(self.btn_clear_status)
 		
 		buttons_layout.addStretch()
-		right_layout.addLayout(buttons_layout)
+		form_layout.addRow(buttons_layout)
 		
-		main_layout.addLayout(right_layout, 1)
+		form_widget.setLayout(form_layout)
+		
+		form_scroll = QScrollArea()
+		form_scroll.setWidget(form_widget)
+		form_scroll.setWidgetResizable(True)
+		form_scroll.setMaximumHeight(250)
+		
+		form_group_layout = QVBoxLayout()
+		form_group_layout.addWidget(form_scroll)
+		form_group.setLayout(form_group_layout)
+		
+		main_layout.addWidget(form_group)
+		
+		table_group = QGroupBox("Transaction Status List")
+		table_layout = QVBoxLayout()
+		table_layout.setSpacing(10)
+		
+		self.status_table = QTableWidget()
+		self.status_table.setColumnCount(2)
+		self.status_table.setHorizontalHeaderLabels(["Name", "Note"])
+		self.status_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+		self.status_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+		self.status_table.setSelectionBehavior(QTableWidget.SelectRows)
+		self.status_table.setSelectionMode(QTableWidget.SingleSelection)
+		self.status_table.setEditTriggers(QTableWidget.NoEditTriggers)
+		self.status_table.itemSelectionChanged.connect(self.on_status_selected)
+		table_layout.addWidget(self.status_table)
+		
+		table_buttons_layout = QHBoxLayout()
+		self.btn_refresh_status = QPushButton(qta.icon("fa6s.arrows-rotate"), " Refresh")
+		self.btn_refresh_status.clicked.connect(self.load_statuses)
+		table_buttons_layout.addWidget(self.btn_refresh_status)
+		table_buttons_layout.addStretch()
+		table_layout.addLayout(table_buttons_layout)
+		
+		table_group.setLayout(table_layout)
+		main_layout.addWidget(table_group)
+		
 		widget.setLayout(main_layout)
 		
 		if self.db_manager:
@@ -683,11 +717,16 @@ class WalletSettingsTab(QWidget):
 		
 		try:
 			self.db_manager.wallet_helper.add_transaction_status(name, note)
+			print(f"Status added successfully: {name}")
 			QMessageBox.information(self, "Success", "Status added successfully")
 			self.clear_status_form()
 			self.load_statuses()
+			self.signal_manager.emit_status_changed()
 		
 		except Exception as e:
+			print(f"ERROR adding status: {e}")
+			import traceback
+			traceback.print_exc()
 			QMessageBox.critical(self, "Error", f"Failed to add status: {str(e)}")
 	
 	def update_status(self):
@@ -705,11 +744,16 @@ class WalletSettingsTab(QWidget):
 		
 		try:
 			self.db_manager.wallet_helper.update_transaction_status(status_id, name, note)
+			print(f"Status updated successfully: {name}")
 			QMessageBox.information(self, "Success", "Status updated successfully")
 			self.clear_status_form()
 			self.load_statuses()
+			self.signal_manager.emit_status_changed()
 		
 		except Exception as e:
+			print(f"ERROR updating status: {e}")
+			import traceback
+			traceback.print_exc()
 			QMessageBox.critical(self, "Error", f"Failed to update status: {str(e)}")
 	
 	def delete_status(self):
@@ -734,61 +778,32 @@ class WalletSettingsTab(QWidget):
 		if reply == QMessageBox.Yes:
 			try:
 				self.db_manager.wallet_helper.delete_transaction_status(status_id)
+				print(f"Status deleted successfully: {status_name}")
 				QMessageBox.information(self, "Success", "Status deleted successfully")
 				self.clear_status_form()
 				self.load_statuses()
+				self.signal_manager.emit_status_changed()
 			
 			except Exception as e:
+				print(f"ERROR deleting status: {e}")
+				import traceback
+				traceback.print_exc()
 				QMessageBox.critical(self, "Error", f"Failed to delete status: {str(e)}")
 	
 	def create_transaction_locations_tab(self):
 		widget = QWidget()
-		main_layout = QHBoxLayout()
+		main_layout = QVBoxLayout()
 		main_layout.setContentsMargins(10, 10, 10, 10)
 		main_layout.setSpacing(10)
 		
-		left_layout = QVBoxLayout()
-		left_layout.setSpacing(10)
-		
-		list_label = QLabel("Transaction Locations List")
-		list_label.setStyleSheet("font-weight: bold; font-size: 14px;")
-		left_layout.addWidget(list_label)
-		
-		self.location_table = QTableWidget()
-		self.location_table.setColumnCount(3)
-		self.location_table.setHorizontalHeaderLabels(["Name", "Type", "Address"])
-		self.location_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-		self.location_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-		self.location_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
-		self.location_table.setSelectionBehavior(QTableWidget.SelectRows)
-		self.location_table.setSelectionMode(QTableWidget.SingleSelection)
-		self.location_table.setEditTriggers(QTableWidget.NoEditTriggers)
-		self.location_table.itemSelectionChanged.connect(self.on_location_selected)
-		left_layout.addWidget(self.location_table)
-		
-		table_buttons_layout = QHBoxLayout()
-		self.btn_refresh_location = QPushButton(qta.icon("fa6s.arrows-rotate"), " Refresh")
-		self.btn_refresh_location.clicked.connect(self.load_locations)
-		table_buttons_layout.addWidget(self.btn_refresh_location)
-		table_buttons_layout.addStretch()
-		left_layout.addLayout(table_buttons_layout)
-		
-		main_layout.addLayout(left_layout, 2)
-		
-		right_layout = QVBoxLayout()
-		right_layout.setSpacing(10)
-		
-		form_label = QLabel("Transaction Location Details")
-		form_label.setStyleSheet("font-weight: bold; font-size: 14px;")
-		right_layout.addWidget(form_label)
-		
+		form_group = QGroupBox("Transaction Location Details")
+		form_widget = QWidget()
 		form_layout = QFormLayout()
 		form_layout.setSpacing(10)
 		
 		self.input_location_id = QLineEdit()
 		self.input_location_id.setVisible(False)
 		
-		# Image upload area
 		image_row = QHBoxLayout()
 		image_row.setSpacing(8)
 		
@@ -863,9 +878,7 @@ class WalletSettingsTab(QWidget):
 		self.input_location_note.setMaximumHeight(100)
 		form_layout.addRow("Note:", self.input_location_note)
 		
-		right_layout.addLayout(form_layout)
-		
-		buttons_layout = QVBoxLayout()
+		buttons_layout = QHBoxLayout()
 		buttons_layout.setSpacing(8)
 		
 		self.btn_add_location = QPushButton(qta.icon("fa6s.plus"), " Add Location")
@@ -887,9 +900,47 @@ class WalletSettingsTab(QWidget):
 		buttons_layout.addWidget(self.btn_clear_location)
 		
 		buttons_layout.addStretch()
-		right_layout.addLayout(buttons_layout)
+		form_layout.addRow(buttons_layout)
 		
-		main_layout.addLayout(right_layout, 1)
+		form_widget.setLayout(form_layout)
+		
+		form_scroll = QScrollArea()
+		form_scroll.setWidget(form_widget)
+		form_scroll.setWidgetResizable(True)
+		form_scroll.setMaximumHeight(300)
+		
+		form_group_layout = QVBoxLayout()
+		form_group_layout.addWidget(form_scroll)
+		form_group.setLayout(form_group_layout)
+		
+		main_layout.addWidget(form_group)
+		
+		table_group = QGroupBox("Transaction Locations List")
+		table_layout = QVBoxLayout()
+		table_layout.setSpacing(10)
+		
+		self.location_table = QTableWidget()
+		self.location_table.setColumnCount(3)
+		self.location_table.setHorizontalHeaderLabels(["Name", "Type", "Address"])
+		self.location_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+		self.location_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+		self.location_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+		self.location_table.setSelectionBehavior(QTableWidget.SelectRows)
+		self.location_table.setSelectionMode(QTableWidget.SingleSelection)
+		self.location_table.setEditTriggers(QTableWidget.NoEditTriggers)
+		self.location_table.itemSelectionChanged.connect(self.on_location_selected)
+		table_layout.addWidget(self.location_table)
+		
+		table_buttons_layout = QHBoxLayout()
+		self.btn_refresh_location = QPushButton(qta.icon("fa6s.arrows-rotate"), " Refresh")
+		self.btn_refresh_location.clicked.connect(self.load_locations)
+		table_buttons_layout.addWidget(self.btn_refresh_location)
+		table_buttons_layout.addStretch()
+		table_layout.addLayout(table_buttons_layout)
+		
+		table_group.setLayout(table_layout)
+		main_layout.addWidget(table_group)
+		
 		widget.setLayout(main_layout)
 		
 		if self.db_manager:
@@ -1033,11 +1084,16 @@ class WalletSettingsTab(QWidget):
 			self.db_manager.connection.commit()
 			self.db_manager.close()
 			
+			print(f"Location added successfully: {name}")
 			QMessageBox.information(self, "Success", "Location added successfully")
 			self.clear_location_form()
 			self.load_locations()
+			self.signal_manager.emit_location_changed()
 		
 		except Exception as e:
+			print(f"ERROR adding location: {e}")
+			import traceback
+			traceback.print_exc()
 			QMessageBox.critical(self, "Error", f"Failed to add location: {str(e)}")
 	
 	def update_location(self):
@@ -1075,11 +1131,16 @@ class WalletSettingsTab(QWidget):
 			self.db_manager.connection.commit()
 			self.db_manager.close()
 			
+			print(f"Location updated successfully: {name}")
 			QMessageBox.information(self, "Success", "Location updated successfully")
 			self.clear_location_form()
 			self.load_locations()
+			self.signal_manager.emit_location_changed()
 		
 		except Exception as e:
+			print(f"ERROR updating location: {e}")
+			import traceback
+			traceback.print_exc()
 			QMessageBox.critical(self, "Error", f"Failed to update location: {str(e)}")
 	
 	def delete_location(self):
@@ -1109,11 +1170,16 @@ class WalletSettingsTab(QWidget):
 				self.db_manager.connection.commit()
 				self.db_manager.close()
 				
+				print(f"Location deleted successfully: {location_name}")
 				QMessageBox.information(self, "Success", "Location deleted successfully")
 				self.clear_location_form()
 				self.load_locations()
+				self.signal_manager.emit_location_changed()
 			
 			except Exception as e:
+				print(f"ERROR deleting location: {e}")
+				import traceback
+				traceback.print_exc()
 				QMessageBox.critical(self, "Error", f"Failed to delete location: {str(e)}")
 	
 	def upload_location_image(self, file_path=None):

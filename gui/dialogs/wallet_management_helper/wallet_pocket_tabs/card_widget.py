@@ -133,18 +133,12 @@ class CardWidget(QFrame):
 		layout.addLayout(bottom_layout)
 		
 		issuer = self.card_data.get('issuer', '')
-		balance = self.card_data.get('balance', 0)
-		if issuer or balance:
+		if issuer:
 			info_layout = QHBoxLayout()
-			if issuer:
-				issuer_label = QLabel(issuer)
-				issuer_label.setStyleSheet("font-size: 10px; color: rgba(255,255,255,0.8);")
-				info_layout.addWidget(issuer_label)
+			issuer_label = QLabel(issuer)
+			issuer_label.setStyleSheet("font-size: 10px; color: rgba(255,255,255,0.8);")
+			info_layout.addWidget(issuer_label)
 			info_layout.addStretch()
-			if balance:
-				balance_label = QLabel(f"Rp {float(balance):,.0f}")
-				balance_label.setStyleSheet("font-size: 12px; font-weight: bold;")
-				info_layout.addWidget(balance_label)
 			layout.addLayout(info_layout)
 		
 		self.setLayout(layout)
