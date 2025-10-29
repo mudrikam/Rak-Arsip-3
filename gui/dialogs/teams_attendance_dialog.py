@@ -468,7 +468,7 @@ class TeamsAttendanceDialog(QDialog):
             elif self.current_mode == "checkout":
                 success, msg = db_manager.add_attendance_record(username, pin, note, mode="checkout")
                 self.status_label.setText(msg)
-        # Clear PIN and note, then remove focus from PIN field
+        
         self.pin_edit.clear()
         self.pin_edit.clearFocus()
         self.note_edit.clear()
@@ -478,3 +478,10 @@ class TeamsAttendanceDialog(QDialog):
                 btn.setChecked(True)
                 break
         self.live_update_attendance_state()
+        
+        # Refresh attendance bar di main window
+        main_window = self.parent()
+        if main_window and hasattr(main_window, "attendance_bar"):
+            attendance_bar = main_window.attendance_bar
+            if attendance_bar:
+                attendance_bar.refresh_attendance()

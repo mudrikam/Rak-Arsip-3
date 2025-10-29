@@ -541,7 +541,14 @@ class CentralWidget(QWidget):
 
     def refresh_table(self):
         self.load_data_from_database(keep_search=True)
+        
+        # Refresh attendance bar
         main_window = self._main_window
+        if main_window and hasattr(main_window, "attendance_bar"):
+            attendance_bar = main_window.attendance_bar
+            if attendance_bar:
+                attendance_bar.refresh_attendance()
+        
         if main_window and hasattr(main_window, "main_action_dock"):
             main_action = main_window.main_action_dock
             # Refresh kategori hanya jika ada perubahan
