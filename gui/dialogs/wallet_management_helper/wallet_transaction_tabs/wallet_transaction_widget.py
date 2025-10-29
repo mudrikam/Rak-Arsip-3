@@ -75,6 +75,7 @@ class WalletTransactionWidget(QWidget):
         super().__init__(parent)
         self.db_manager = db_manager
         self.transaction_items = []
+        self.pending_analyzed_items = []
         self.transaction_image_path = None
         self.basedir = None
         self.current_transaction_id = None
@@ -124,6 +125,7 @@ class WalletTransactionWidget(QWidget):
 
         # Analyze button (GUI only)
         self.btn_analyze = QPushButton(qta.icon("fa6s.wand-magic-sparkles"), " Analyze")
+        self.btn_analyze.clicked.connect(self.on_analyze_invoice)
         img_layout.addWidget(self.btn_analyze, alignment=Qt.AlignTop)
 
         img_group.setLayout(img_layout)
@@ -836,6 +838,7 @@ class WalletTransactionWidget(QWidget):
         self.destination_widget.setVisible(False)
         self.combo_status.setCurrentIndex(0)
         self.transaction_items.clear()
+        self.pending_analyzed_items = []
         self.refresh_items_table()
         self.update_total_amount()
         
@@ -934,6 +937,186 @@ class WalletTransactionWidget(QWidget):
         
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to delete transaction: {str(e)}")
+    
+    def on_analyze_invoice(self):
+        if not self.transaction_image_path:
+            QMessageBox.warning(self, "No Image", "Please load an invoice image first")
+            return
+        
+        try:
+            from helpers.gemini_helper import GeminiHelper
+            from PySide6.QtWidgets import QProgressDialog
+            from PySide6.QtCore import QCoreApplication, QThread, Signal
+            
+            progress = QProgressDialog("Analyzing invoice with AI...", "Cancel", 0, 0, self)
+            progress.setWindowModality(Qt.WindowModal)
+            progress.setMinimumDuration(0)
+            progress.setValue(0)
+            progress.show()
+            QCoreApplication.processEvents()
+            
+            class AnalysisThread(QThread):
+                finished = Signal(object)
+                error = Signal(str)
+                
+                def __init__(self, gemini_helper, image_path):
+                    super().__init__()
+                    self.gemini_helper = gemini_helper
+                    self.image_path = image_path
+                
+                def run(self):
+                    try:
+                        analysis_data = self.gemini_helper.analyze_invoice(self.image_path)
+                        self.finished.emit(analysis_data)
+                    except Exception as e:
+                        self.error.emit(str(e))
+            
+            gemini_helper = GeminiHelper(None, self.db_manager)
+            
+            if hasattr(self.parent(), 'config_manager'):
+                gemini_helper.config_manager = self.parent().config_manager
+            elif hasattr(self.parent(), 'parent') and hasattr(self.parent().parent(), 'config_manager'):
+                gemini_helper.config_manager = self.parent().parent().config_manager
+            
+            self.analysis_thread = AnalysisThread(gemini_helper, self.transaction_image_path)
+            
+            def on_analysis_finished(analysis_data):
+                progress.close()
+                if analysis_data:
+                    self.apply_analysis_data(analysis_data)
+                    QMessageBox.information(self, "Analysis Complete", 
+                        "Invoice analyzed successfully! Please review the extracted data and save the transaction.")
+            
+            def on_analysis_error(error_msg):
+                progress.close()
+                QMessageBox.critical(self, "Analysis Error", f"Failed to analyze invoice: {error_msg}")
+                print(f"Error analyzing invoice: {error_msg}")
+            
+            def on_progress_canceled():
+                if self.analysis_thread.isRunning():
+                    self.analysis_thread.terminate()
+                    self.analysis_thread.wait()
+            
+            self.analysis_thread.finished.connect(on_analysis_finished)
+            self.analysis_thread.error.connect(on_analysis_error)
+            progress.canceled.connect(on_progress_canceled)
+            
+            self.analysis_thread.start()
+            
+        except Exception as e:
+            if 'progress' in locals():
+                progress.close()
+            QMessageBox.critical(self, "Analysis Error", f"Failed to start analysis: {str(e)}")
+            print(f"Error starting analysis: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def apply_analysis_data(self, analysis_data):
+        transaction_details = analysis_data.get('transaction_details', {})
+        
+        if transaction_details.get('name'):
+            self.input_name.setText(transaction_details['name'])
+        
+        if transaction_details.get('type'):
+            trans_type = transaction_details['type']
+            for i in range(self.combo_type.count()):
+                if self.combo_type.itemData(i) == trans_type:
+                    self.combo_type.setCurrentIndex(i)
+                    break
+        
+        if transaction_details.get('pocket_id'):
+            idx = self.combo_pocket.findData(transaction_details['pocket_id'])
+            if idx >= 0:
+                self.combo_pocket.setCurrentIndex(idx)
+        
+        if transaction_details.get('destination_pocket_id'):
+            idx = self.combo_destination_pocket.findData(transaction_details['destination_pocket_id'])
+            if idx >= 0:
+                self.combo_destination_pocket.setCurrentIndex(idx)
+        
+        if transaction_details.get('currency_id'):
+            idx = self.combo_currency.findData(transaction_details['currency_id'])
+            if idx >= 0:
+                self.combo_currency.setCurrentIndex(idx)
+        
+        if transaction_details.get('location_id'):
+            idx = self.combo_location.findData(transaction_details['location_id'])
+            if idx >= 0:
+                self.combo_location.setCurrentIndex(idx)
+        
+        if transaction_details.get('category_id'):
+            idx = self.combo_category.findData(transaction_details['category_id'])
+            if idx >= 0:
+                self.combo_category.setCurrentIndex(idx)
+        
+        if transaction_details.get('status_id'):
+            idx = self.combo_status.findData(transaction_details['status_id'])
+            if idx >= 0:
+                self.combo_status.setCurrentIndex(idx)
+        
+        items = analysis_data.get('items', [])
+        if items:
+            self.pending_analyzed_items = items
+            print(f"DEBUG: Stored {len(items)} analyzed items in pending list")
+    
+    def handle_pending_analyzed_items(self):
+        if not self.pending_analyzed_items or not self.current_transaction_id:
+            return
+        
+        reply = QMessageBox.question(
+            self,
+            "Add Analyzed Items",
+            f"AI detected {len(self.pending_analyzed_items)} item(s) in the invoice.\n\n"
+            "Do you want to add these items to the transaction?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            try:
+                added_count = 0
+                for item_data in self.pending_analyzed_items:
+                    self.db_manager.wallet_helper.add_transaction_item(
+                        wallet_transaction_id=self.current_transaction_id,
+                        item_type=item_data.get('item_type', ''),
+                        sku=item_data.get('sku', ''),
+                        item_name=item_data.get('item_name', ''),
+                        item_description=item_data.get('item_description', ''),
+                        quantity=item_data.get('quantity', 1),
+                        unit=item_data.get('unit', ''),
+                        amount=item_data.get('amount', 0.0),
+                        width=item_data.get('width', 0.0),
+                        height=item_data.get('height', 0.0),
+                        depth=item_data.get('depth', 0.0),
+                        weight=item_data.get('weight', 0.0),
+                        material=item_data.get('material', ''),
+                        color=item_data.get('color', ''),
+                        file_url=item_data.get('file_url', ''),
+                        license_key=item_data.get('license_key', ''),
+                        expiry_date=item_data.get('expiry_date', ''),
+                        digital_type=item_data.get('digital_type', ''),
+                        note=item_data.get('note', '')
+                    )
+                    added_count += 1
+                
+                print(f"Added {added_count} analyzed items to transaction")
+                
+                # Reload items from database
+                self.load_transaction_items()
+                
+                # Emit signal for balance update
+                self.signal_manager.emit_transaction_changed()
+                
+                QMessageBox.information(self, "Items Added", 
+                    f"Successfully added {added_count} item(s) to the transaction!")
+                
+            except Exception as e:
+                print(f"ERROR adding analyzed items: {e}")
+                import traceback
+                traceback.print_exc()
+                QMessageBox.critical(self, "Error", f"Failed to add items: {str(e)}")
+        
+        # Clear pending items after handling
+        self.pending_analyzed_items = []
     
     def save_transaction(self):
         """Save transaction to database."""
@@ -1149,6 +1332,10 @@ class WalletTransactionWidget(QWidget):
                 self.update_ui_for_mode()
                 print(f"Switched to edit mode with transaction ID: {transaction_id}")
             
+            # Handle pending analyzed items
+            if self.pending_analyzed_items:
+                self.handle_pending_analyzed_items()
+            
             print("=== DEBUG: Save Complete ===\n")
             
         except Exception as e:
@@ -1353,6 +1540,7 @@ class WalletTransactionWidget(QWidget):
         self.combo_status.setCurrentIndex(0)
         self.combo_type.setCurrentIndex(0)
         self.transaction_items.clear()
+        self.pending_analyzed_items = []
         self.refresh_items_table()
         self.update_total_amount()
         self.transaction_image_path = None
