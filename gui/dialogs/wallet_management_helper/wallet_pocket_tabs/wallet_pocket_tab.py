@@ -1,12 +1,7 @@
-﻿from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
-                               QScrollArea, QFrame, QLineEdit, QTextEdit, QMessageBox,
-                               QDialog, QFormLayout, QComboBox, QGridLayout, QCheckBox,
-                               QDoubleSpinBox, QColorDialog, QFileDialog, QApplication,
-                               QTabWidget, QDateEdit, QInputDialog)
-from PySide6.QtCore import Qt, Signal, QDate
-from PySide6.QtGui import QColor, QPixmap
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+                               QScrollArea, QGridLayout, QMessageBox, QTabWidget)
+from PySide6.QtCore import Qt
 import qtawesome as qta
-
 from .pocket_card_widget import PocketCard
 from .card_widget import CardWidget
 from .view_dialogs import PocketViewDialog, CardViewDialog
@@ -68,7 +63,6 @@ class WalletPocketTab(QWidget):
 		scroll_widget = QWidget()
 		self.pockets_layout = QGridLayout()
 		self.pockets_layout.setSpacing(15)
-		self.pockets_layout.setAlignment(Qt.AlignTop)
 		scroll_widget.setLayout(self.pockets_layout)
 		scroll.setWidget(scroll_widget)
 		
@@ -84,7 +78,7 @@ class WalletPocketTab(QWidget):
 		self.cards_pocket_label.setStyleSheet("font-weight: bold; font-size: 14px;")
 		header_layout.addWidget(self.cards_pocket_label)
 		
-		header_layout.addStretch()
+		self.cards_layout.setAlignment(Qt.AlignTop)
 		
 		self.btn_add_card = QPushButton(qta.icon("fa6s.plus"), " Add Card")
 		self.btn_add_card.clicked.connect(self.add_card)
@@ -100,7 +94,6 @@ class WalletPocketTab(QWidget):
 		scroll_widget = QWidget()
 		self.cards_layout = QVBoxLayout()
 		self.cards_layout.setSpacing(15)
-		self.cards_layout.setAlignment(Qt.AlignTop)
 		scroll_widget.setLayout(self.cards_layout)
 		scroll.setWidget(scroll_widget)
 		
@@ -207,4 +200,5 @@ class WalletPocketTab(QWidget):
 		self.db_manager = db_manager
 		if self.db_manager:
 			self.load_pockets()
+
 
