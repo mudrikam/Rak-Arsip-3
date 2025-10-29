@@ -1,0 +1,679 @@
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
+                               QTableWidget, QTableWidgetItem, QPushButton, 
+                               QLineEdit, QTextEdit, QMessageBox, QHeaderView,
+                               QTabWidget, QGroupBox, QFormLayout)
+from PySide6.QtCore import Qt
+import qtawesome as qta
+
+
+class WalletSettingsTab(QWidget):
+	def __init__(self, db_manager=None, parent=None):
+		super().__init__(parent)
+		self.db_manager = db_manager
+		self.init_ui()
+
+	def init_ui(self):
+		layout = QVBoxLayout()
+		layout.setContentsMargins(0, 0, 0, 0)
+		
+		self.tab_widget = QTabWidget()
+		self.tab_widget.addTab(self.create_categories_tab(), "Categories")
+		self.tab_widget.addTab(self.create_currency_tab(), "Currency")
+		self.tab_widget.addTab(self.create_transaction_status_tab(), "Transaction Status")
+		
+		layout.addWidget(self.tab_widget)
+		self.setLayout(layout)
+	
+	def create_categories_tab(self):
+		widget = QWidget()
+		main_layout = QHBoxLayout()
+		main_layout.setContentsMargins(10, 10, 10, 10)
+		main_layout.setSpacing(10)
+		
+		# Left side: Category list
+		left_layout = QVBoxLayout()
+		left_layout.setSpacing(10)
+		
+		list_label = QLabel("Category List")
+		list_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+		left_layout.addWidget(list_label)
+		
+		self.category_table = QTableWidget()
+		self.category_table.setColumnCount(2)
+		self.category_table.setHorizontalHeaderLabels(["Name", "Note"])
+		self.category_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+		self.category_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+		self.category_table.setSelectionBehavior(QTableWidget.SelectRows)
+		self.category_table.setSelectionMode(QTableWidget.SingleSelection)
+		self.category_table.setEditTriggers(QTableWidget.NoEditTriggers)
+		self.category_table.itemSelectionChanged.connect(self.on_category_selected)
+		left_layout.addWidget(self.category_table)
+		
+		# Buttons below table
+		table_buttons_layout = QHBoxLayout()
+		
+		self.btn_refresh = QPushButton(qta.icon("fa6s.arrows-rotate"), " Refresh")
+		self.btn_refresh.clicked.connect(self.load_categories)
+		table_buttons_layout.addWidget(self.btn_refresh)
+		
+		table_buttons_layout.addStretch()
+		left_layout.addLayout(table_buttons_layout)
+		
+		main_layout.addLayout(left_layout, 2)
+		
+		# Right side: Form for CRUD operations
+		right_layout = QVBoxLayout()
+		right_layout.setSpacing(10)
+		
+		form_label = QLabel("Category Details")
+		form_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+		right_layout.addWidget(form_label)
+
+		form_layout = QFormLayout()
+		form_layout.setSpacing(10)
+
+		self.input_category_id = QLineEdit()
+		self.input_category_id.setVisible(False)
+
+		self.input_category_name = QLineEdit()
+		self.input_category_name.setPlaceholderText("Enter category name")
+		form_layout.addRow("Name:", self.input_category_name)
+
+		self.input_category_note = QTextEdit()
+		self.input_category_note.setPlaceholderText("Enter category note (optional)")
+		self.input_category_note.setMaximumHeight(100)
+		form_layout.addRow("Note:", self.input_category_note)
+
+		right_layout.addLayout(form_layout)
+		
+		# Action buttons
+		buttons_layout = QVBoxLayout()
+		buttons_layout.setSpacing(8)
+		
+		self.btn_add = QPushButton(qta.icon("fa6s.plus"), " Add Category")
+		self.btn_add.clicked.connect(self.add_category)
+		buttons_layout.addWidget(self.btn_add)
+		
+		self.btn_update = QPushButton(qta.icon("fa6s.pen-to-square"), " Update Category")
+		self.btn_update.clicked.connect(self.update_category)
+		self.btn_update.setEnabled(False)
+		buttons_layout.addWidget(self.btn_update)
+		
+		self.btn_delete = QPushButton(qta.icon("fa6s.trash"), " Delete Category")
+		self.btn_delete.clicked.connect(self.delete_category)
+		self.btn_delete.setEnabled(False)
+		buttons_layout.addWidget(self.btn_delete)
+		
+		self.btn_clear = QPushButton(qta.icon("fa6s.xmark"), " Clear Form")
+		self.btn_clear.clicked.connect(self.clear_form)
+		buttons_layout.addWidget(self.btn_clear)
+		
+		buttons_layout.addStretch()
+		right_layout.addLayout(buttons_layout)
+		
+		main_layout.addLayout(right_layout, 1)
+		
+		widget.setLayout(main_layout)
+		
+		if self.db_manager:
+			self.load_categories()
+		
+		return widget
+	
+	def load_categories(self):
+		if not self.db_manager:
+			return
+		
+		try:
+			categories = self.db_manager.wallet_helper.get_all_categories()
+			self.category_table.setRowCount(0)
+			
+			for category in categories:
+				row = self.category_table.rowCount()
+				self.category_table.insertRow(row)
+				
+				item_name = QTableWidgetItem(category.get('name', ''))
+				item_name.setData(Qt.UserRole, category.get('id'))
+				self.category_table.setItem(row, 0, item_name)
+				self.category_table.setItem(row, 1, QTableWidgetItem(category.get('note', '')))
+		
+		except Exception as e:
+			QMessageBox.critical(self, "Error", f"Failed to load categories: {str(e)}")
+	
+	def on_category_selected(self):
+		selected_rows = self.category_table.selectedItems()
+		if selected_rows:
+			row = self.category_table.currentRow()
+			
+			category_id = self.category_table.item(row, 0).data(Qt.UserRole)
+			category_name = self.category_table.item(row, 0).text()
+			category_note = self.category_table.item(row, 1).text()
+			
+			self.input_category_id.setText(str(category_id))
+			self.input_category_name.setText(category_name)
+			self.input_category_note.setPlainText(category_note)
+			
+			self.btn_update.setEnabled(True)
+			self.btn_delete.setEnabled(True)
+			self.btn_add.setEnabled(False)
+		else:
+			self.clear_form()
+	
+	def clear_form(self):
+		self.input_category_id.clear()
+		self.input_category_name.clear()
+		self.input_category_note.clear()
+		self.category_table.clearSelection()
+		
+		self.btn_add.setEnabled(True)
+		self.btn_update.setEnabled(False)
+		self.btn_delete.setEnabled(False)
+	
+	def add_category(self):
+		if not self.db_manager:
+			QMessageBox.warning(self, "Warning", "Database manager not available")
+			return
+		
+		name = self.input_category_name.text().strip()
+		note = self.input_category_note.toPlainText().strip()
+		
+		if not name:
+			QMessageBox.warning(self, "Warning", "Category name is required")
+			return
+		
+		try:
+			self.db_manager.wallet_helper.add_category(name, note)
+			QMessageBox.information(self, "Success", "Category added successfully")
+			self.clear_form()
+			self.load_categories()
+		
+		except Exception as e:
+			QMessageBox.critical(self, "Error", f"Failed to add category: {str(e)}")
+	
+	def update_category(self):
+		if not self.db_manager:
+			QMessageBox.warning(self, "Warning", "Database manager not available")
+			return
+		
+		category_id = self.input_category_id.text().strip()
+		name = self.input_category_name.text().strip()
+		note = self.input_category_note.toPlainText().strip()
+		
+		if not category_id or not name:
+			QMessageBox.warning(self, "Warning", "Category ID and name are required")
+			return
+		
+		try:
+			self.db_manager.wallet_helper.update_category(category_id, name, note)
+			QMessageBox.information(self, "Success", "Category updated successfully")
+			self.clear_form()
+			self.load_categories()
+		
+		except Exception as e:
+			QMessageBox.critical(self, "Error", f"Failed to update category: {str(e)}")
+	
+	def delete_category(self):
+		if not self.db_manager:
+			QMessageBox.warning(self, "Warning", "Database manager not available")
+			return
+		
+		category_id = self.input_category_id.text().strip()
+		category_name = self.input_category_name.text().strip()
+		
+		if not category_id:
+			QMessageBox.warning(self, "Warning", "No category selected")
+			return
+		
+		reply = QMessageBox.question(
+			self, 
+			"Confirm Delete", 
+			f"Are you sure you want to delete category '{category_name}'?",
+			QMessageBox.Yes | QMessageBox.No
+		)
+		
+		if reply == QMessageBox.Yes:
+			try:
+				self.db_manager.wallet_helper.delete_category(category_id)
+				QMessageBox.information(self, "Success", "Category deleted successfully")
+				self.clear_form()
+				self.load_categories()
+			
+			except Exception as e:
+				QMessageBox.critical(self, "Error", f"Failed to delete category: {str(e)}")
+	
+	def set_db_manager(self, db_manager):
+		self.db_manager = db_manager
+		if self.db_manager:
+			self.load_categories()
+	
+	def create_currency_tab(self):
+		widget = QWidget()
+		main_layout = QHBoxLayout()
+		main_layout.setContentsMargins(10, 10, 10, 10)
+		main_layout.setSpacing(10)
+		
+		left_layout = QVBoxLayout()
+		left_layout.setSpacing(10)
+		
+		list_label = QLabel("Currency List")
+		list_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+		left_layout.addWidget(list_label)
+		
+		self.currency_table = QTableWidget()
+		self.currency_table.setColumnCount(4)
+		self.currency_table.setHorizontalHeaderLabels(["Code", "Name", "Symbol", "Note"])
+		self.currency_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+		self.currency_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+		self.currency_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+		self.currency_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+		self.currency_table.setSelectionBehavior(QTableWidget.SelectRows)
+		self.currency_table.setSelectionMode(QTableWidget.SingleSelection)
+		self.currency_table.setEditTriggers(QTableWidget.NoEditTriggers)
+		self.currency_table.itemSelectionChanged.connect(self.on_currency_selected)
+		left_layout.addWidget(self.currency_table)
+		
+		table_buttons_layout = QHBoxLayout()
+		self.btn_refresh_currency = QPushButton(qta.icon("fa6s.arrows-rotate"), " Refresh")
+		self.btn_refresh_currency.clicked.connect(self.load_currencies)
+		table_buttons_layout.addWidget(self.btn_refresh_currency)
+		table_buttons_layout.addStretch()
+		left_layout.addLayout(table_buttons_layout)
+		
+		main_layout.addLayout(left_layout, 2)
+		
+		right_layout = QVBoxLayout()
+		right_layout.setSpacing(10)
+		
+		form_label = QLabel("Currency Details")
+		form_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+		right_layout.addWidget(form_label)
+		
+		form_layout = QFormLayout()
+		form_layout.setSpacing(10)
+		
+		self.input_currency_id = QLineEdit()
+		self.input_currency_id.setVisible(False)
+		
+		self.input_currency_code = QLineEdit()
+		self.input_currency_code.setPlaceholderText("e.g., USD, EUR, IDR")
+		form_layout.addRow("Code:", self.input_currency_code)
+		
+		self.input_currency_name = QLineEdit()
+		self.input_currency_name.setPlaceholderText("e.g., US Dollar")
+		form_layout.addRow("Name:", self.input_currency_name)
+		
+		self.input_currency_symbol = QLineEdit()
+		self.input_currency_symbol.setPlaceholderText("e.g., $, €, Rp")
+		form_layout.addRow("Symbol:", self.input_currency_symbol)
+		
+		self.input_currency_note = QTextEdit()
+		self.input_currency_note.setPlaceholderText("Enter currency note (optional)")
+		self.input_currency_note.setMaximumHeight(100)
+		form_layout.addRow("Note:", self.input_currency_note)
+		
+		right_layout.addLayout(form_layout)
+		
+		buttons_layout = QVBoxLayout()
+		buttons_layout.setSpacing(8)
+		
+		self.btn_add_currency = QPushButton(qta.icon("fa6s.plus"), " Add Currency")
+		self.btn_add_currency.clicked.connect(self.add_currency)
+		buttons_layout.addWidget(self.btn_add_currency)
+		
+		self.btn_update_currency = QPushButton(qta.icon("fa6s.pen-to-square"), " Update Currency")
+		self.btn_update_currency.clicked.connect(self.update_currency)
+		self.btn_update_currency.setEnabled(False)
+		buttons_layout.addWidget(self.btn_update_currency)
+		
+		self.btn_delete_currency = QPushButton(qta.icon("fa6s.trash"), " Delete Currency")
+		self.btn_delete_currency.clicked.connect(self.delete_currency)
+		self.btn_delete_currency.setEnabled(False)
+		buttons_layout.addWidget(self.btn_delete_currency)
+		
+		self.btn_clear_currency = QPushButton(qta.icon("fa6s.xmark"), " Clear Form")
+		self.btn_clear_currency.clicked.connect(self.clear_currency_form)
+		buttons_layout.addWidget(self.btn_clear_currency)
+		
+		buttons_layout.addStretch()
+		right_layout.addLayout(buttons_layout)
+		
+		main_layout.addLayout(right_layout, 1)
+		widget.setLayout(main_layout)
+		
+		if self.db_manager:
+			self.load_currencies()
+		
+		return widget
+	
+	def load_currencies(self):
+		if not self.db_manager:
+			return
+		
+		try:
+			currencies = self.db_manager.wallet_helper.get_all_currencies()
+			self.currency_table.setRowCount(0)
+			
+			for currency in currencies:
+				row = self.currency_table.rowCount()
+				self.currency_table.insertRow(row)
+				
+				item_code = QTableWidgetItem(currency.get('code', ''))
+				item_code.setData(Qt.UserRole, currency.get('id'))
+				self.currency_table.setItem(row, 0, item_code)
+				self.currency_table.setItem(row, 1, QTableWidgetItem(currency.get('name', '')))
+				self.currency_table.setItem(row, 2, QTableWidgetItem(currency.get('symbol', '')))
+				self.currency_table.setItem(row, 3, QTableWidgetItem(currency.get('note', '')))
+		
+		except Exception as e:
+			QMessageBox.critical(self, "Error", f"Failed to load currencies: {str(e)}")
+	
+	def on_currency_selected(self):
+		selected_rows = self.currency_table.selectedItems()
+		if selected_rows:
+			row = self.currency_table.currentRow()
+			
+			self.input_currency_id.setText(str(self.currency_table.item(row, 0).data(Qt.UserRole)))
+			self.input_currency_code.setText(self.currency_table.item(row, 0).text())
+			self.input_currency_name.setText(self.currency_table.item(row, 1).text())
+			self.input_currency_symbol.setText(self.currency_table.item(row, 2).text())
+			self.input_currency_note.setPlainText(self.currency_table.item(row, 3).text())
+			
+			self.btn_update_currency.setEnabled(True)
+			self.btn_delete_currency.setEnabled(True)
+			self.btn_add_currency.setEnabled(False)
+		else:
+			self.clear_currency_form()
+	
+	def clear_currency_form(self):
+		self.input_currency_id.clear()
+		self.input_currency_code.clear()
+		self.input_currency_name.clear()
+		self.input_currency_symbol.clear()
+		self.input_currency_note.clear()
+		self.currency_table.clearSelection()
+		
+		self.btn_add_currency.setEnabled(True)
+		self.btn_update_currency.setEnabled(False)
+		self.btn_delete_currency.setEnabled(False)
+	
+	def add_currency(self):
+		if not self.db_manager:
+			QMessageBox.warning(self, "Warning", "Database manager not available")
+			return
+		
+		code = self.input_currency_code.text().strip()
+		name = self.input_currency_name.text().strip()
+		symbol = self.input_currency_symbol.text().strip()
+		note = self.input_currency_note.toPlainText().strip()
+		
+		if not code or not name or not symbol:
+			QMessageBox.warning(self, "Warning", "Code, Name, and Symbol are required")
+			return
+		
+		try:
+			self.db_manager.wallet_helper.add_currency(code, name, symbol, note)
+			QMessageBox.information(self, "Success", "Currency added successfully")
+			self.clear_currency_form()
+			self.load_currencies()
+		
+		except Exception as e:
+			QMessageBox.critical(self, "Error", f"Failed to add currency: {str(e)}")
+	
+	def update_currency(self):
+		if not self.db_manager:
+			QMessageBox.warning(self, "Warning", "Database manager not available")
+			return
+		
+		currency_id = self.input_currency_id.text().strip()
+		code = self.input_currency_code.text().strip()
+		name = self.input_currency_name.text().strip()
+		symbol = self.input_currency_symbol.text().strip()
+		note = self.input_currency_note.toPlainText().strip()
+		
+		if not currency_id or not code or not name or not symbol:
+			QMessageBox.warning(self, "Warning", "ID, Code, Name, and Symbol are required")
+			return
+		
+		try:
+			self.db_manager.wallet_helper.update_currency(currency_id, code, name, symbol, note)
+			QMessageBox.information(self, "Success", "Currency updated successfully")
+			self.clear_currency_form()
+			self.load_currencies()
+		
+		except Exception as e:
+			QMessageBox.critical(self, "Error", f"Failed to update currency: {str(e)}")
+	
+	def delete_currency(self):
+		if not self.db_manager:
+			QMessageBox.warning(self, "Warning", "Database manager not available")
+			return
+		
+		currency_id = self.input_currency_id.text().strip()
+		currency_code = self.input_currency_code.text().strip()
+		
+		if not currency_id:
+			QMessageBox.warning(self, "Warning", "No currency selected")
+			return
+		
+		reply = QMessageBox.question(
+			self, 
+			"Confirm Delete", 
+			f"Are you sure you want to delete currency '{currency_code}'?",
+			QMessageBox.Yes | QMessageBox.No
+		)
+		
+		if reply == QMessageBox.Yes:
+			try:
+				self.db_manager.wallet_helper.delete_currency(currency_id)
+				QMessageBox.information(self, "Success", "Currency deleted successfully")
+				self.clear_currency_form()
+				self.load_currencies()
+			
+			except Exception as e:
+				QMessageBox.critical(self, "Error", f"Failed to delete currency: {str(e)}")
+	
+	def create_transaction_status_tab(self):
+		widget = QWidget()
+		main_layout = QHBoxLayout()
+		main_layout.setContentsMargins(10, 10, 10, 10)
+		main_layout.setSpacing(10)
+		
+		left_layout = QVBoxLayout()
+		left_layout.setSpacing(10)
+		
+		list_label = QLabel("Transaction Status List")
+		list_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+		left_layout.addWidget(list_label)
+		
+		self.status_table = QTableWidget()
+		self.status_table.setColumnCount(2)
+		self.status_table.setHorizontalHeaderLabels(["Name", "Note"])
+		self.status_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+		self.status_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+		self.status_table.setSelectionBehavior(QTableWidget.SelectRows)
+		self.status_table.setSelectionMode(QTableWidget.SingleSelection)
+		self.status_table.setEditTriggers(QTableWidget.NoEditTriggers)
+		self.status_table.itemSelectionChanged.connect(self.on_status_selected)
+		left_layout.addWidget(self.status_table)
+		
+		table_buttons_layout = QHBoxLayout()
+		self.btn_refresh_status = QPushButton(qta.icon("fa6s.arrows-rotate"), " Refresh")
+		self.btn_refresh_status.clicked.connect(self.load_statuses)
+		table_buttons_layout.addWidget(self.btn_refresh_status)
+		table_buttons_layout.addStretch()
+		left_layout.addLayout(table_buttons_layout)
+		
+		main_layout.addLayout(left_layout, 2)
+		
+		right_layout = QVBoxLayout()
+		right_layout.setSpacing(10)
+		
+		form_label = QLabel("Transaction Status Details")
+		form_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+		right_layout.addWidget(form_label)
+		
+		form_layout = QFormLayout()
+		form_layout.setSpacing(10)
+		
+		self.input_status_id = QLineEdit()
+		self.input_status_id.setVisible(False)
+		
+		self.input_status_name = QLineEdit()
+		self.input_status_name.setPlaceholderText("Enter status name")
+		form_layout.addRow("Name:", self.input_status_name)
+		
+		self.input_status_note = QTextEdit()
+		self.input_status_note.setPlaceholderText("Enter status note (optional)")
+		self.input_status_note.setMaximumHeight(100)
+		form_layout.addRow("Note:", self.input_status_note)
+		
+		right_layout.addLayout(form_layout)
+		
+		buttons_layout = QVBoxLayout()
+		buttons_layout.setSpacing(8)
+		
+		self.btn_add_status = QPushButton(qta.icon("fa6s.plus"), " Add Status")
+		self.btn_add_status.clicked.connect(self.add_status)
+		buttons_layout.addWidget(self.btn_add_status)
+		
+		self.btn_update_status = QPushButton(qta.icon("fa6s.pen-to-square"), " Update Status")
+		self.btn_update_status.clicked.connect(self.update_status)
+		self.btn_update_status.setEnabled(False)
+		buttons_layout.addWidget(self.btn_update_status)
+		
+		self.btn_delete_status = QPushButton(qta.icon("fa6s.trash"), " Delete Status")
+		self.btn_delete_status.clicked.connect(self.delete_status)
+		self.btn_delete_status.setEnabled(False)
+		buttons_layout.addWidget(self.btn_delete_status)
+		
+		self.btn_clear_status = QPushButton(qta.icon("fa6s.xmark"), " Clear Form")
+		self.btn_clear_status.clicked.connect(self.clear_status_form)
+		buttons_layout.addWidget(self.btn_clear_status)
+		
+		buttons_layout.addStretch()
+		right_layout.addLayout(buttons_layout)
+		
+		main_layout.addLayout(right_layout, 1)
+		widget.setLayout(main_layout)
+		
+		if self.db_manager:
+			self.load_statuses()
+		
+		return widget
+	
+	def load_statuses(self):
+		if not self.db_manager:
+			return
+		
+		try:
+			statuses = self.db_manager.wallet_helper.get_all_transaction_statuses()
+			self.status_table.setRowCount(0)
+			
+			for status in statuses:
+				row = self.status_table.rowCount()
+				self.status_table.insertRow(row)
+				
+				item_name = QTableWidgetItem(status.get('name', ''))
+				item_name.setData(Qt.UserRole, status.get('id'))
+				self.status_table.setItem(row, 0, item_name)
+				self.status_table.setItem(row, 1, QTableWidgetItem(status.get('note', '')))
+		
+		except Exception as e:
+			QMessageBox.critical(self, "Error", f"Failed to load statuses: {str(e)}")
+	
+	def on_status_selected(self):
+		selected_rows = self.status_table.selectedItems()
+		if selected_rows:
+			row = self.status_table.currentRow()
+			
+			self.input_status_id.setText(str(self.status_table.item(row, 0).data(Qt.UserRole)))
+			self.input_status_name.setText(self.status_table.item(row, 0).text())
+			self.input_status_note.setPlainText(self.status_table.item(row, 1).text())
+			
+			self.btn_update_status.setEnabled(True)
+			self.btn_delete_status.setEnabled(True)
+			self.btn_add_status.setEnabled(False)
+		else:
+			self.clear_status_form()
+	
+	def clear_status_form(self):
+		self.input_status_id.clear()
+		self.input_status_name.clear()
+		self.input_status_note.clear()
+		self.status_table.clearSelection()
+		
+		self.btn_add_status.setEnabled(True)
+		self.btn_update_status.setEnabled(False)
+		self.btn_delete_status.setEnabled(False)
+	
+	def add_status(self):
+		if not self.db_manager:
+			QMessageBox.warning(self, "Warning", "Database manager not available")
+			return
+		
+		name = self.input_status_name.text().strip()
+		note = self.input_status_note.toPlainText().strip()
+		
+		if not name:
+			QMessageBox.warning(self, "Warning", "Status name is required")
+			return
+		
+		try:
+			self.db_manager.wallet_helper.add_transaction_status(name, note)
+			QMessageBox.information(self, "Success", "Status added successfully")
+			self.clear_status_form()
+			self.load_statuses()
+		
+		except Exception as e:
+			QMessageBox.critical(self, "Error", f"Failed to add status: {str(e)}")
+	
+	def update_status(self):
+		if not self.db_manager:
+			QMessageBox.warning(self, "Warning", "Database manager not available")
+			return
+		
+		status_id = self.input_status_id.text().strip()
+		name = self.input_status_name.text().strip()
+		note = self.input_status_note.toPlainText().strip()
+		
+		if not status_id or not name:
+			QMessageBox.warning(self, "Warning", "Status ID and name are required")
+			return
+		
+		try:
+			self.db_manager.wallet_helper.update_transaction_status(status_id, name, note)
+			QMessageBox.information(self, "Success", "Status updated successfully")
+			self.clear_status_form()
+			self.load_statuses()
+		
+		except Exception as e:
+			QMessageBox.critical(self, "Error", f"Failed to update status: {str(e)}")
+	
+	def delete_status(self):
+		if not self.db_manager:
+			QMessageBox.warning(self, "Warning", "Database manager not available")
+			return
+		
+		status_id = self.input_status_id.text().strip()
+		status_name = self.input_status_name.text().strip()
+		
+		if not status_id:
+			QMessageBox.warning(self, "Warning", "No status selected")
+			return
+		
+		reply = QMessageBox.question(
+			self, 
+			"Confirm Delete", 
+			f"Are you sure you want to delete status '{status_name}'?",
+			QMessageBox.Yes | QMessageBox.No
+		)
+		
+		if reply == QMessageBox.Yes:
+			try:
+				self.db_manager.wallet_helper.delete_transaction_status(status_id)
+				QMessageBox.information(self, "Success", "Status deleted successfully")
+				self.clear_status_form()
+				self.load_statuses()
+			
+			except Exception as e:
+				QMessageBox.critical(self, "Error", f"Failed to delete status: {str(e)}")

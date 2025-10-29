@@ -35,7 +35,7 @@ class WalletManagementDialog(QDialog):
         self.sidebar.section_changed.connect(self.on_section_changed)
         content_layout.addWidget(self.sidebar)
         
-        self.central = WalletCentral(self)
+        self.central = WalletCentral(db_manager=self.db_manager, parent=self)
         content_layout.addWidget(self.central, 1)
         
         main_layout.addLayout(content_layout)

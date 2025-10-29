@@ -186,7 +186,6 @@
             "email": "TEXT",
             "country": "TEXT",
             "card_limit": "REAL",
-            "balance": "REAL",
             "image": "TEXT",
             "color": "TEXT",
             "note": "TEXT",
