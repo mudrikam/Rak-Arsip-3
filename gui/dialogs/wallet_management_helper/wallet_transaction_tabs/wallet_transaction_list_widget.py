@@ -10,6 +10,7 @@ from datetime import datetime
 
 from .transaction_view_dialog import TransactionViewDialog
 from ..wallet_signal_manager import WalletSignalManager
+from .wallet_transaction_deletion_warning_dialog import WalletTransactionDeletionDialog
 
 
 class WalletTransactionListWidget(QWidget):
@@ -475,8 +476,6 @@ class WalletTransactionListWidget(QWidget):
             return
 
         try:
-            print("Loading transactions from database...")
-
             # Get filter values
             search_text = self.search_input.text().strip()
             transaction_type = self.filter_type.currentData()
@@ -499,10 +498,6 @@ class WalletTransactionListWidget(QWidget):
             if category_id in (None, ""):
                 category_id = ""
 
-            print(f"Filters - Search: '{search_text}', Type: '{transaction_type}', Pocket: {pocket_id}, Category: {category_id}")
-            print(f"Date range: {date_from if date_from else 'ALL'} to {date_to if date_to else 'ALL'}")
-            print(f"Pagination - Page: {self.current_page}, Per page: {self.items_per_page}")
-
             # Count total transactions for pagination
             self.total_items = self.db_manager.wallet_helper.count_transactions(
                 search_text=search_text,
@@ -512,8 +507,6 @@ class WalletTransactionListWidget(QWidget):
                 date_from=date_from,
                 date_to=date_to
             )
-
-            print(f"DEBUG: Database transaction count = {self.total_items}")
 
             # Calculate pagination
             self.total_pages = max(1, (self.total_items + self.items_per_page - 1) // self.items_per_page)
@@ -536,10 +529,6 @@ class WalletTransactionListWidget(QWidget):
                 limit=self.items_per_page,
                 offset=offset
             )
-
-            print(f"DEBUG: GUI loaded transaction items = {len(transactions)}")
-
-            print(f"Found {len(transactions)} transactions on page {self.current_page} of {self.total_pages}")
 
             # Populate table
             self.transactions_table.setRowCount(0)
@@ -576,8 +565,6 @@ class WalletTransactionListWidget(QWidget):
 
             # Update pagination controls
             self.update_pagination_controls()
-
-            print("Transaction table loaded successfully")
         
         except Exception as e:
             print(f"Error loading transactions: {e}")
@@ -702,66 +689,36 @@ class WalletTransactionListWidget(QWidget):
             items_count = self.db_manager.wallet_helper.count_transaction_items(transaction_id)
             invoice_count = self.db_manager.wallet_helper.count_invoice_images(transaction_id)
             
-            # Build detailed warning message
+            # Get image paths if any
+            image_paths = self.db_manager.wallet_helper.get_invoice_images(transaction_id)
+            
+            # Build detailed warning message is inside the shared dialog; first quick warning via QMessageBox
             warning_msg = f"<b>WARNING: Deleting transaction '{transaction_name}' will permanently delete:</b><br><br>"
             warning_msg += f"<b>From wallet_transactions table:</b><br>"
             warning_msg += f"- 1 Transaction record<br><br>"
-            
             if items_count > 0:
-                warning_msg += f"<b>From wallet_transaction_items table:</b><br>"
-                warning_msg += f"- {items_count} Transaction Item(s)<br><br>"
-            
+                warning_msg += f"<b>From wallet_transaction_items table:</b><br>- {items_count} Transaction Item(s)<br><br>"
             if invoice_count > 0:
-                warning_msg += f"<b>From wallet_transactions_invoice_prove table:</b><br>"
-                warning_msg += f"- {invoice_count} Invoice Image(s)<br><br>"
-                
-                # List image files that will be deleted
-                image_paths = self.db_manager.wallet_helper.get_invoice_images(transaction_id)
-                if image_paths:
-                    warning_msg += f"<b>Image files that will be deleted:</b><br>"
-                    for path in image_paths:
-                        warning_msg += f"- {path}<br>"
-                    warning_msg += "<br>"
-            
+                warning_msg += f"<b>From wallet_transactions_invoice_prove table:</b><br>- {invoice_count} Invoice Image(s)<br><br>"
             warning_msg += "<b>TOTAL RECORDS TO BE DELETED:</b><br>"
-            warning_msg += f"- Transactions: 1<br>"
-            warning_msg += f"- Transaction Items: {items_count}<br>"
-            warning_msg += f"- Invoice Images: {invoice_count}<br>"
-            warning_msg += f"<br><b>Grand Total: {1 + items_count + invoice_count} records</b>"
+            warning_msg += f"- Transactions: 1<br>- Transaction Items: {items_count}<br>- Invoice Images: {invoice_count}<br><br>"
+            warning_msg += f"<b>Grand Total: {1 + items_count + invoice_count} records</b>"
             
-            reply = QMessageBox.warning(
-                self,
-                "Delete Warning",
-                warning_msg,
-                QMessageBox.Ok | QMessageBox.Cancel
-            )
-            
+            reply = QMessageBox.warning(self, "Delete Warning", warning_msg, QMessageBox.Ok | QMessageBox.Cancel)
             if reply == QMessageBox.Cancel:
                 return
+
+            # Use shared confirmation dialog that requires exact name match, with copy/paste helpers
+            confirmed = WalletTransactionDeletionDialog.confirm(self, transaction_name, items_count=items_count, invoice_count=invoice_count, image_paths=image_paths)
+            if not confirmed:
+                # user cancelled or mismatch
+                return
             
-            # Final confirmation with name input
-            confirm_msg = "<b>FINAL CONFIRMATION</b><br><br>"
-            confirm_msg += f"You are about to permanently delete transaction '<b>{transaction_name}</b>' "
-            confirm_msg += f"and <b>{items_count}</b> item(s), <b>{invoice_count}</b> invoice image(s).<br><br>"
-            confirm_msg += "<b style='color: red;'>THIS CANNOT BE UNDONE!</b><br><br>"
-            confirm_msg += "Type the transaction name to confirm deletion."
+            # Perform deletion
+            self.db_manager.wallet_helper.delete_transaction(transaction_id)
             
-            text, ok = QInputDialog.getText(
-                self,
-                "Confirm Deletion",
-                confirm_msg
-            )
-            
-            if ok and text == transaction_name:
-                # Use wallet helper for delete operation
-                self.db_manager.wallet_helper.delete_transaction(transaction_id)
-                
-                QMessageBox.information(self, "Success", 
-                    f"Transaction '{transaction_name}' and {items_count + invoice_count} related records deleted successfully")
-                self.load_transactions()
-            elif ok:
-                QMessageBox.information(self, "Cancelled", "Transaction name did not match. Deletion cancelled.")
-        
+            QMessageBox.information(self, "Success", f"Transaction '{transaction_name}' and {items_count + invoice_count} related records deleted successfully")
+            self.load_transactions()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to delete transaction: {str(e)}")
 

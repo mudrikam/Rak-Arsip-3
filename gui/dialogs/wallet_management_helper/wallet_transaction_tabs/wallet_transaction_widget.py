@@ -10,6 +10,7 @@ import os
 
 from .wallet_add_transaction_item_dialog import WalletAddTransactionItemDialog
 from ..wallet_signal_manager import WalletSignalManager
+from .wallet_transaction_deletion_warning_dialog import WalletTransactionDeletionDialog
 
 
 class TransactionImageLabel(QLabel):
@@ -962,77 +963,44 @@ class WalletTransactionWidget(QWidget):
             # Get counts of related records
             items_count = self.db_manager.wallet_helper.count_transaction_items(self.current_transaction_id)
             invoice_count = self.db_manager.wallet_helper.count_invoice_images(self.current_transaction_id)
+            image_paths = self.db_manager.wallet_helper.get_invoice_images(self.current_transaction_id)
             
-            # Build detailed warning message
+            # Quick warning (keeps previous flow for initial confirmation)
             warning_msg = f"<b>WARNING: Deleting transaction '{transaction_name}' will permanently delete:</b><br><br>"
             warning_msg += f"<b>From wallet_transactions table:</b><br>"
             warning_msg += f"- 1 Transaction record<br><br>"
-            
             if items_count > 0:
-                warning_msg += f"<b>From wallet_transaction_items table:</b><br>"
-                warning_msg += f"- {items_count} Transaction Item(s)<br><br>"
-            
+                warning_msg += f"<b>From wallet_transaction_items table:</b><br>- {items_count} Transaction Item(s)<br><br>"
             if invoice_count > 0:
-                warning_msg += f"<b>From wallet_transactions_invoice_prove table:</b><br>"
-                warning_msg += f"- {invoice_count} Invoice Image(s)<br><br>"
-                
-                # List image files that will be deleted
-                image_paths = self.db_manager.wallet_helper.get_invoice_images(self.current_transaction_id)
-                if image_paths:
-                    warning_msg += f"<b>Image files that will be deleted:</b><br>"
-                    for path in image_paths:
-                        warning_msg += f"- {path}<br>"
-                    warning_msg += "<br>"
-            
+                warning_msg += f"<b>From wallet_transactions_invoice_prove table:</b><br>- {invoice_count} Invoice Image(s)<br><br>"
             warning_msg += "<b>TOTAL RECORDS TO BE DELETED:</b><br>"
-            warning_msg += f"- Transactions: 1<br>"
-            warning_msg += f"- Transaction Items: {items_count}<br>"
-            warning_msg += f"- Invoice Images: {invoice_count}<br>"
-            warning_msg += f"<br><b>Grand Total: {1 + items_count + invoice_count} records</b>"
+            warning_msg += f"- Transactions: 1<br>- Transaction Items: {items_count}<br>- Invoice Images: {invoice_count}<br><br>"
+            warning_msg += f"<b>Grand Total: {1 + items_count + invoice_count} records</b>"
             
-            reply = QMessageBox.warning(
-                self,
-                "Delete Warning",
-                warning_msg,
-                QMessageBox.Ok | QMessageBox.Cancel
-            )
-            
+            reply = QMessageBox.warning(self, "Delete Warning", warning_msg, QMessageBox.Ok | QMessageBox.Cancel)
             if reply == QMessageBox.Cancel:
                 return
             
-            # Final confirmation with name input
-            from PySide6.QtWidgets import QInputDialog
-            confirm_msg = "<b>FINAL CONFIRMATION</b><br><br>"
-            confirm_msg += f"You are about to permanently delete transaction '<b>{transaction_name}</b>' "
-            confirm_msg += f"and <b>{items_count}</b> item(s), <b>{invoice_count}</b> invoice image(s).<br><br>"
-            confirm_msg += "<b style='color: red;'>THIS CANNOT BE UNDONE!</b><br><br>"
-            confirm_msg += "Type the transaction name to confirm deletion."
+            # Use shared confirmation dialog that requires exact name match, with copy/paste helpers
+            confirmed = WalletTransactionDeletionDialog.confirm(self, transaction_name, items_count=items_count, invoice_count=invoice_count, image_paths=image_paths)
+            if not confirmed:
+                return
+
+            # Use wallet helper for delete operation
+            self.db_manager.wallet_helper.delete_transaction(self.current_transaction_id)
             
-            text, ok = QInputDialog.getText(
-                self,
-                "Confirm Deletion",
-                confirm_msg
-            )
+            QMessageBox.information(self, "Success", 
+                f"Transaction '{transaction_name}' and {items_count + invoice_count} related records deleted successfully")
+            self.clear_form()
             
-            if ok and text == transaction_name:
-                # Use wallet helper for delete operation
-                self.db_manager.wallet_helper.delete_transaction(self.current_transaction_id)
-                
-                QMessageBox.information(self, "Success", 
-                    f"Transaction '{transaction_name}' and {items_count + invoice_count} related records deleted successfully")
-                self.clear_form()
-                
-                # Signal parent to refresh transaction list
-                parent = self.parent()
-                while parent:
-                    if hasattr(parent, 'transaction_list_widget') and parent.transaction_list_widget:
-                        parent.transaction_list_widget.load_transactions()
-                        break
-                    parent = parent.parent()
+            # Signal parent to refresh transaction list
+            parent = self.parent()
+            while parent:
+                if hasattr(parent, 'transaction_list_widget') and parent.transaction_list_widget:
+                    parent.transaction_list_widget.load_transactions()
+                    break
+                parent = parent.parent()
                         
-            elif ok:
-                QMessageBox.information(self, "Cancelled", "Transaction name did not match. Deletion cancelled.")
-        
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to delete transaction: {str(e)}")
     
