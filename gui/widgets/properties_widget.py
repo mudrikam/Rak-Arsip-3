@@ -138,6 +138,28 @@ class PropertiesWidget(QDockWidget):
         batch_row.addStretch()
         layout.addLayout(batch_row)
 
+        # Shares row (added)
+        shares_row = QHBoxLayout()
+        self.shares_icon = QLabel()
+        self.shares_icon.setPixmap(qta.icon("fa6s.user-group", color="#666").pixmap(16, 16))
+        self.shares_icon.setCursor(Qt.PointingHandCursor)
+        # place names and amount in a small vertical layout
+        shares_labels_container = QWidget(self.scroll_content)
+        shares_labels_layout = QVBoxLayout(shares_labels_container)
+        shares_labels_layout.setContentsMargins(0, 0, 0, 0)
+        shares_labels_layout.setSpacing(0)
+        self.shares_label = QLabel("-", shares_labels_container)
+        self.shares_label.setWordWrap(True)
+        self.shares_amount_label = QLabel("-", shares_labels_container)
+        self.shares_amount_label.setWordWrap(True)
+        self.shares_amount_label.setStyleSheet("color: #666; font-size: 12px;")
+        shares_labels_layout.addWidget(self.shares_label)
+        shares_labels_layout.addWidget(self.shares_amount_label)
+        shares_row.addWidget(self.shares_icon)
+        shares_row.addWidget(shares_labels_container)
+        shares_row.addStretch()
+        layout.addLayout(shares_row)
+
         # Price and Note row
         price_row = QHBoxLayout()
         self.price_icon = QLabel()
@@ -354,6 +376,38 @@ class PropertiesWidget(QDockWidget):
                 if batch_val:
                     batch_number = batch_val
         self.batch_label.setText(batch_number)
+
+        # Shares: who worked on the project (show names only and one equal amount)
+        shares_names = "-"
+        shares_amount = "-"
+        if db_manager and row_data.get("id"):
+            try:
+                earnings = db_manager.get_earnings_by_file_id(row_data["id"])
+                if earnings:
+                    usernames = [e.get('username', '') for e in earnings if e.get('username')]
+                    if usernames:
+                        shares_names = ", ".join(usernames)
+                    # compute equal per-person amount based on project price
+                    try:
+                        price, currency, note = db_manager.get_item_price_detail(row_data["id"])
+                        if price is not None and currency:
+                            price_float = float(price)
+                            n = len(usernames) if usernames else len(earnings)
+                            if n > 0:
+                                per_person = price_float / n
+                                if per_person.is_integer():
+                                    per_str = f"{int(per_person):,}".replace(",", ".")
+                                else:
+                                    per_str = f"{per_person:,.2f}".replace(",", ".")
+                                shares_amount = f"{per_str} {currency} each"
+                    except Exception:
+                        shares_amount = "-"
+            except Exception:
+                shares_names = "-"
+                shares_amount = "-"
+        self.shares_label.setText(shares_names)
+        self.shares_amount_label.setText(shares_amount)
+
         # Price and Note
         price_str = "-"
         note_str = "-"
