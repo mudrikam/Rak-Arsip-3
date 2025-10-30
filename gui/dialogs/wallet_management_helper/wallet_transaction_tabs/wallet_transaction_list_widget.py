@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTableWidget, QTableWidgetItem,
     QPushButton, QLineEdit, QComboBox, QDateEdit, QMessageBox, QHeaderView,
-    QMenu, QGroupBox, QFormLayout, QInputDialog, QSpinBox
+    QMenu, QGroupBox, QFormLayout, QInputDialog, QSpinBox, QCompleter, QCheckBox
 )
 from PySide6.QtCore import Qt, QDate
 from PySide6.QtGui import QAction
@@ -29,6 +29,7 @@ class WalletTransactionListWidget(QWidget):
         self.init_ui()
         
         if self.db_manager:
+            self.load_filter_data()
             self.load_transactions()
         
         self.connect_signals()
@@ -36,8 +37,11 @@ class WalletTransactionListWidget(QWidget):
     def connect_signals(self):
         """Connect to signal manager for auto-refresh."""
         self.signal_manager.transaction_changed.connect(self.load_transactions)
-        self.signal_manager.pocket_changed.connect(self.load_filter_data)
-        self.signal_manager.category_changed.connect(self.load_filter_data)
+        self.signal_manager.pocket_changed.connect(self.on_pocket_filter_changed)
+        self.signal_manager.category_changed.connect(self.on_category_filter_changed)
+        self.signal_manager.location_changed.connect(self.on_location_filter_changed)
+        self.signal_manager.status_changed.connect(self.on_status_filter_changed)
+        self.signal_manager.currency_changed.connect(self.on_currency_filter_changed)
     
     def init_ui(self):
         main_layout = QVBoxLayout()
@@ -68,13 +72,18 @@ class WalletTransactionListWidget(QWidget):
         filter_row1.addWidget(self.filter_type)
         
         self.filter_pocket = QComboBox()
-        self.filter_pocket.addItem("All Pockets", None)
+        self.filter_pocket.setEditable(True)
+        self.filter_pocket.setInsertPolicy(QComboBox.NoInsert)
         self.filter_pocket.currentIndexChanged.connect(self.on_filter_changed)
+        # ensure typing triggers filter
+        self.filter_pocket.lineEdit().textEdited.connect(self.on_filter_changed)
         filter_row1.addWidget(self.filter_pocket)
         
         self.filter_category = QComboBox()
-        self.filter_category.addItem("All Categories", None)
+        self.filter_category.setEditable(True)
+        self.filter_category.setInsertPolicy(QComboBox.NoInsert)
         self.filter_category.currentIndexChanged.connect(self.on_filter_changed)
+        self.filter_category.lineEdit().textEdited.connect(self.on_filter_changed)
         filter_row1.addWidget(self.filter_category)
         
         filter_layout.addRow("Type/Pocket/Category:", filter_row1)
@@ -83,10 +92,17 @@ class WalletTransactionListWidget(QWidget):
         filter_row2 = QHBoxLayout()
         filter_row2.setSpacing(8)
         
+        # Date filter enable checkbox (default off = show all)
+        self.chk_use_date = QCheckBox("Enable Date Filter")
+        self.chk_use_date.setChecked(False)
+        self.chk_use_date.toggled.connect(self.on_date_filter_toggled)
+        filter_row2.addWidget(self.chk_use_date)
+
         self.date_from = QDateEdit()
         self.date_from.setDate(QDate.currentDate().addDays(-30))
         self.date_from.setCalendarPopup(True)
         self.date_from.dateChanged.connect(self.load_transactions)
+        self.date_from.setEnabled(False)
         filter_row2.addWidget(QLabel("From:"))
         filter_row2.addWidget(self.date_from)
         
@@ -94,6 +110,7 @@ class WalletTransactionListWidget(QWidget):
         self.date_to.setDate(QDate.currentDate())
         self.date_to.setCalendarPopup(True)
         self.date_to.dateChanged.connect(self.load_transactions)
+        self.date_to.setEnabled(False)
         filter_row2.addWidget(QLabel("To:"))
         filter_row2.addWidget(self.date_to)
         
@@ -136,18 +153,19 @@ class WalletTransactionListWidget(QWidget):
         
         # Transaction table
         self.transactions_table = QTableWidget()
-        self.transactions_table.setColumnCount(5)
+        self.transactions_table.setColumnCount(6)
         self.transactions_table.setHorizontalHeaderLabels([
-            "Name", "Type", "Pocket", "Category", "Amount"
+            "Name", "Date", "Type", "Pocket", "Category", "Amount"
         ])
         
         # Set column widths
         header = self.transactions_table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.Stretch)           # Name
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)  # Type
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # Pocket
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # Category
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)  # Amount
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)  # Date
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # Type
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # Pocket
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)  # Category
+        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # Amount
         
         self.transactions_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.transactions_table.setSelectionMode(QTableWidget.SingleSelection)
@@ -239,22 +257,161 @@ class WalletTransactionListWidget(QWidget):
             return
         
         try:
-            # Load only pockets that have transactions
-            pockets = self.db_manager.wallet_helper.get_pockets_with_transactions()
+            pockets = self.db_manager.get_all_wallet_pockets()
+            prev_text = self.filter_pocket.currentText() if self.filter_pocket.isEditable() else None
+            self.filter_pocket.clear()
+            self.filter_pocket.addItem("All Pockets", None)
+            for pocket in pockets:
+                self.filter_pocket.addItem(pocket['name'], pocket['id'])
+            pocket_completer = QCompleter(self.filter_pocket.model(), self)
+            pocket_completer.setFilterMode(Qt.MatchContains)
+            pocket_completer.setCaseSensitivity(Qt.CaseInsensitive)
+            pocket_completer.setCompletionMode(QCompleter.PopupCompletion)
+            pocket_completer.activated.connect(lambda text: self._set_combo_to_text(self.filter_pocket, text))
+            self.filter_pocket.setCompleter(pocket_completer)
+            if prev_text:
+                idx = self.filter_pocket.findText(prev_text, Qt.MatchExactly)
+                if idx >= 0:
+                    self.filter_pocket.setCurrentIndex(idx)
+                else:
+                    self.filter_pocket.setCurrentIndex(0)
+                    self.filter_pocket.lineEdit().setText(prev_text)
+            
+            categories = self.db_manager.get_all_wallet_categories()
+            prev_cat_text = self.filter_category.currentText() if self.filter_category.isEditable() else None
+            self.filter_category.clear()
+            self.filter_category.addItem("All Categories", None)
+            for category in categories:
+                self.filter_category.addItem(category['name'], category['id'])
+            cat_completer = QCompleter(self.filter_category.model(), self)
+            cat_completer.setFilterMode(Qt.MatchContains)
+            cat_completer.setCaseSensitivity(Qt.CaseInsensitive)
+            cat_completer.setCompletionMode(QCompleter.PopupCompletion)
+            cat_completer.activated.connect(lambda text: self._set_combo_to_text(self.filter_category, text))
+            self.filter_category.setCompleter(cat_completer)
+            if prev_cat_text:
+                idx = self.filter_category.findText(prev_cat_text, Qt.MatchExactly)
+                if idx >= 0:
+                    self.filter_category.setCurrentIndex(idx)
+                else:
+                    self.filter_category.setCurrentIndex(0)
+                    self.filter_category.lineEdit().setText(prev_cat_text)
+            
+            # Fix: use correct method name
+            locations = self.db_manager.wallet_helper.get_all_locations()
+            self.filter_location.clear() if hasattr(self, 'filter_location') else None
+            
+            statuses = self.db_manager.get_all_wallet_transaction_statuses()
+            self.filter_status.clear() if hasattr(self, 'filter_status') else None
+            
+        except Exception as e:
+            print(f"Error loading filter data: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _set_combo_to_text(self, combo: QComboBox, text: str):
+        """Helper: set combo currentIndex to the item that matches text (exact match prioritized)."""
+        if not text:
+            return
+        idx = combo.findText(text, Qt.MatchExactly)
+        if idx >= 0:
+            combo.setCurrentIndex(idx)
+        else:
+            idx = combo.findText(text, Qt.MatchContains)
+            if idx >= 0:
+                combo.setCurrentIndex(idx)
+        # trigger filter after programmatic set
+        self.on_filter_changed()
+    
+    def on_pocket_filter_changed(self):
+        """Reload pocket filter when pocket data changes."""
+        # preserve typed text while reloading pockets
+        if not self.db_manager:
+            return
+        
+        try:
+            prev_text = self.filter_pocket.currentText() if self.filter_pocket.isEditable() else None
+            
+            pockets = self.db_manager.get_all_wallet_pockets()
             self.filter_pocket.clear()
             self.filter_pocket.addItem("All Pockets", None)
             for pocket in pockets:
                 self.filter_pocket.addItem(pocket['name'], pocket['id'])
             
-            # Load only categories that have transactions
-            categories = self.db_manager.wallet_helper.get_categories_with_transactions()
+            if prev_text:
+                idx = self.filter_pocket.findText(prev_text, Qt.MatchExactly)
+                if idx >= 0:
+                    self.filter_pocket.setCurrentIndex(idx)
+                else:
+                    self.filter_pocket.setCurrentIndex(0)
+                    self.filter_pocket.lineEdit().setText(prev_text)
+            
+            # reattach completer model
+            if self.filter_pocket.completer():
+                self.filter_pocket.completer().setModel(self.filter_pocket.model())
+            
+            print("Pocket filter reloaded")
+        except Exception as e:
+            print(f"Error reloading pocket filter: {e}")
+    
+    def on_category_filter_changed(self):
+        """Reload category filter when category data changes."""
+        if not self.db_manager:
+            return
+        
+        try:
+            prev_text = self.filter_category.currentText() if self.filter_category.isEditable() else None
+            
+            categories = self.db_manager.get_all_wallet_categories()
             self.filter_category.clear()
             self.filter_category.addItem("All Categories", None)
             for category in categories:
                 self.filter_category.addItem(category['name'], category['id'])
-        
+            
+            if prev_text:
+                idx = self.filter_category.findText(prev_text, Qt.MatchExactly)
+                if idx >= 0:
+                    self.filter_category.setCurrentIndex(idx)
+                else:
+                    self.filter_category.setCurrentIndex(0)
+                    self.filter_category.lineEdit().setText(prev_text)
+            
+            if self.filter_category.completer():
+                self.filter_category.completer().setModel(self.filter_category.model())
+            
+            print("Category filter reloaded")
         except Exception as e:
-            print(f"Error loading filter data: {e}")
+            print(f"Error reloading category filter: {e}")
+    
+    def on_location_filter_changed(self):
+        """Reload location filter when location data changes."""
+        if not self.db_manager:
+            return
+        
+        try:
+            print("Location filter reload triggered")
+        except Exception as e:
+            print(f"Error reloading location filter: {e}")
+    
+    def on_status_filter_changed(self):
+        """Reload status filter when status data changes."""
+        if not self.db_manager:
+            return
+        
+        try:
+            print("Status filter reload triggered")
+        except Exception as e:
+            print(f"Error reloading status filter: {e}")
+    
+    def on_currency_filter_changed(self):
+        """Reload currency filter when currency data changes."""
+        if not self.db_manager:
+            return
+        
+        try:
+            print("Currency filter reload triggered")
+        except Exception as e:
+            print(f"Error reloading currency filter: {e}")
     
     def on_per_page_changed(self, per_page_text):
         """Handle items per page change."""
@@ -316,22 +473,36 @@ class WalletTransactionListWidget(QWidget):
         """Load transactions from database with pagination."""
         if not self.db_manager:
             return
-        
+
         try:
             print("Loading transactions from database...")
-            
+
             # Get filter values
             search_text = self.search_input.text().strip()
             transaction_type = self.filter_type.currentData()
             pocket_id = self.filter_pocket.currentData()
             category_id = self.filter_category.currentData()
-            date_from = self.date_from.date().toString("yyyy-MM-dd")
-            date_to = self.date_to.date().toString("yyyy-MM-dd")
-            
+
+            # Date range: only use when date filter is enabled, otherwise pass empty so DB returns all
+            if getattr(self, 'chk_use_date', None) and self.chk_use_date.isChecked():
+                date_from = self.date_from.date().toString("yyyy-MM-dd")
+                date_to = self.date_to.date().toString("yyyy-MM-dd")
+            else:
+                date_from = ""
+                date_to = ""
+
+            # Fix: If filter is "All", set to empty string so all records are loaded
+            if transaction_type in (None, ""):
+                transaction_type = ""
+            if pocket_id in (None, ""):
+                pocket_id = ""
+            if category_id in (None, ""):
+                category_id = ""
+
             print(f"Filters - Search: '{search_text}', Type: '{transaction_type}', Pocket: {pocket_id}, Category: {category_id}")
-            print(f"Date range: {date_from} to {date_to}")
+            print(f"Date range: {date_from if date_from else 'ALL'} to {date_to if date_to else 'ALL'}")
             print(f"Pagination - Page: {self.current_page}, Per page: {self.items_per_page}")
-            
+
             # Count total transactions for pagination
             self.total_items = self.db_manager.wallet_helper.count_transactions(
                 search_text=search_text,
@@ -341,17 +512,19 @@ class WalletTransactionListWidget(QWidget):
                 date_from=date_from,
                 date_to=date_to
             )
-            
+
+            print(f"DEBUG: Database transaction count = {self.total_items}")
+
             # Calculate pagination
             self.total_pages = max(1, (self.total_items + self.items_per_page - 1) // self.items_per_page)
-            
+
             # Ensure current page is valid
             if self.current_page > self.total_pages:
                 self.current_page = max(1, self.total_pages)
-            
+
             # Calculate offset
             offset = (self.current_page - 1) * self.items_per_page
-            
+
             # Get paginated transactions
             transactions = self.db_manager.wallet_helper.get_all_transactions(
                 search_text=search_text,
@@ -363,38 +536,47 @@ class WalletTransactionListWidget(QWidget):
                 limit=self.items_per_page,
                 offset=offset
             )
-            
+
+            print(f"DEBUG: GUI loaded transaction items = {len(transactions)}")
+
             print(f"Found {len(transactions)} transactions on page {self.current_page} of {self.total_pages}")
-            
+
             # Populate table
             self.transactions_table.setRowCount(0)
-            
+
             for row_idx, transaction in enumerate(transactions):
                 self.transactions_table.insertRow(row_idx)
-                
+
                 # Store transaction ID in first column for reference
                 name_item = QTableWidgetItem(transaction['transaction_name'] or '')
                 name_item.setData(Qt.UserRole, transaction['id'])
                 self.transactions_table.setItem(row_idx, 0, name_item)
-                
+
+                # Date
+                date_str = transaction.get('transaction_date', '')
+                if date_str:
+                    if ' ' in date_str:
+                        date_str = date_str.split(' ')[0]
+                self.transactions_table.setItem(row_idx, 1, QTableWidgetItem(date_str))
+
                 # Type
-                self.transactions_table.setItem(row_idx, 1, QTableWidgetItem(transaction['transaction_type'] or ''))
-                
+                self.transactions_table.setItem(row_idx, 2, QTableWidgetItem(transaction['transaction_type'] or ''))
+
                 # Pocket
-                self.transactions_table.setItem(row_idx, 2, QTableWidgetItem(transaction['pocket_name'] or ''))
-                
+                self.transactions_table.setItem(row_idx, 3, QTableWidgetItem(transaction['pocket_name'] or ''))
+
                 # Category
-                self.transactions_table.setItem(row_idx, 3, QTableWidgetItem(transaction['category_name'] or ''))
-                
+                self.transactions_table.setItem(row_idx, 4, QTableWidgetItem(transaction['category_name'] or ''))
+
                 # Amount with currency
                 amount = transaction['total_amount'] or 0
                 currency = transaction['currency_symbol'] or ''
                 amount_text = f"{currency} {amount:,.2f}" if currency else f"{amount:,.2f}"
-                self.transactions_table.setItem(row_idx, 4, QTableWidgetItem(amount_text))
-            
+                self.transactions_table.setItem(row_idx, 5, QTableWidgetItem(amount_text))
+
             # Update pagination controls
             self.update_pagination_controls()
-            
+
             print("Transaction table loaded successfully")
         
         except Exception as e:
@@ -415,12 +597,26 @@ class WalletTransactionListWidget(QWidget):
         self.current_page = 1
         self.load_transactions()
     
+    def on_date_filter_toggled(self, checked: bool):
+        """Enable/disable date edits and reload transactions."""
+        try:
+            self.date_from.setEnabled(bool(checked))
+            self.date_to.setEnabled(bool(checked))
+            # Reset to page 1 when toggling date filter
+            self.current_page = 1
+            self.load_transactions()
+        except Exception as e:
+            print(f"Error toggling date filter: {e}")
+    
     def reset_filters(self):
         """Reset all filters to default."""
         self.search_input.clear()
         self.filter_type.setCurrentIndex(0)
         self.filter_pocket.setCurrentIndex(0)
         self.filter_category.setCurrentIndex(0)
+        # disable date filter and reset dates
+        if getattr(self, 'chk_use_date', None):
+            self.chk_use_date.setChecked(False)
         self.date_from.setDate(QDate.currentDate().addDays(-30))
         self.date_to.setDate(QDate.currentDate())
         self.current_page = 1  # Reset to page 1
@@ -474,7 +670,7 @@ class WalletTransactionListWidget(QWidget):
     
     def on_item_double_clicked(self, item):
         """Handle double click on transaction item."""
-        self.edit_transaction()
+        self.view_transaction()
     
     def edit_transaction(self):
         """Edit selected transaction."""

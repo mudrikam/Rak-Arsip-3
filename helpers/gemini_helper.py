@@ -13,34 +13,29 @@ class GeminiHelper:
         try:
             basedir = Path(__file__).parent.parent
             ai_config_path = basedir / "configs" / "ai_config.json"
-            if ai_config_path.exists():
-                with open(ai_config_path, 'r', encoding='utf-8') as f:
-                    self.ai_config = json.load(f)
-            else:
-                self.ai_config = {
-                    "gemini": {
-                        "api_key": "",
-                        "model": "gemini-2.5-flash",
-                        "max_tokens": 100,
-                        "temperature": 0.7
-                    },
-                    "prompts": {
-                        "name_generation": "Based on this image, generate a creative, descriptive project name in English. The name should be 3-5 words maximum, suitable for a design project folder. Use underscores instead of spaces. Just return the name without explanation.",
-                        "invoice_analysis": "Analyze this invoice/receipt image and extract transaction information. Return ONLY a valid JSON object without any markdown formatting, code blocks, or explanations. The JSON should have this exact structure: {\"transaction_details\": {\"name\": \"transaction name or empty string\", \"type\": \"income/expense/transfer or empty string\", \"pocket_id\": null, \"destination_pocket_id\": null, \"card_id\": null, \"currency_id\": null, \"location_id\": null, \"category_id\": null, \"status_id\": null}, \"items\": [{\"item_type\": \"product/service/digital or empty string\", \"sku\": \"sku or empty string\", \"item_name\": \"item name\", \"item_description\": \"description or empty string\", \"quantity\": 1, \"unit\": \"pcs/kg/etc or empty string\", \"amount\": 0.0, \"width\": 0.0, \"height\": 0.0, \"depth\": 0.0, \"weight\": 0.0, \"material\": \"material or empty string\", \"color\": \"color or empty string\", \"file_url\": \"url or empty string\", \"license_key\": \"key or empty string\", \"expiry_date\": \"date or empty string\", \"digital_type\": \"type or empty string\", \"note\": \"note or empty string\"}]}. For transaction_details: use exact ID values from the provided options lists. For items: extract all visible items with their quantities and prices. If data is not visible in image, use empty string or 0. Ensure valid JSON syntax."
-                    }
-                }
+            if not ai_config_path.exists():
+                raise Exception(f"AI config file not found at {ai_config_path}")
+            
+            with open(ai_config_path, 'r', encoding='utf-8') as f:
+                self.ai_config = json.load(f)
+                
         except Exception as e:
-            print(f"Error loading AI config: {e}")
-            self.ai_config = {}
+            print(f"CRITICAL ERROR loading AI config: {e}")
+            raise e
             
     def generate_name_from_image(self, image_path):
         try:
             gemini_config = self.ai_config.get("gemini", {})
             api_key = gemini_config.get("api_key", "")
-            if not api_key or api_key == "YOUR_GEMINI_API_KEY_HERE":
+            if not api_key:
                 raise Exception("Gemini API key not configured in ai_config.json")
+            
             model = gemini_config.get("model", "gemini-2.5-flash")
             prompt = self.ai_config.get("prompts", {}).get("name_generation")
+            
+            if not prompt:
+                raise Exception("name_generation prompt not found in ai_config.json")
+            
             try:
                 import google.genai as genai
                 from google.genai import types
@@ -100,13 +95,14 @@ class GeminiHelper:
         try:
             gemini_config = self.ai_config.get("gemini", {})
             api_key = gemini_config.get("api_key", "")
-            if not api_key or api_key == "YOUR_GEMINI_API_KEY_HERE":
+            if not api_key:
                 raise Exception("Gemini API key not configured in ai_config.json")
+            
             model = gemini_config.get("model", "gemini-2.5-flash")
             prompt = self.ai_config.get("prompts", {}).get("invoice_analysis")
             
             if not prompt:
-                prompt = "Analyze this invoice/receipt image and extract transaction information. Return ONLY a valid JSON object without any markdown formatting, code blocks, or explanations. The JSON should have this exact structure: {\"transaction_details\": {\"name\": \"transaction name or empty string\", \"type\": \"income/expense/transfer or empty string\", \"pocket_id\": null, \"destination_pocket_id\": null, \"card_id\": null, \"currency_id\": null, \"location_id\": null, \"category_id\": null, \"status_id\": null}, \"items\": [{\"item_type\": \"product/service/digital or empty string\", \"sku\": \"sku or empty string\", \"item_name\": \"item name\", \"item_description\": \"description or empty string\", \"quantity\": 1, \"unit\": \"pcs/kg/etc or empty string\", \"amount\": 0.0, \"width\": 0.0, \"height\": 0.0, \"depth\": 0.0, \"weight\": 0.0, \"material\": \"material or empty string\", \"color\": \"color or empty string\", \"file_url\": \"url or empty string\", \"license_key\": \"key or empty string\", \"expiry_date\": \"date or empty string\", \"digital_type\": \"type or empty string\", \"note\": \"note or empty string\"}]}. For transaction_details: use exact ID values from the provided options lists. For items: extract all visible items with their quantities and prices. If data is not visible in image, use empty string or 0. Ensure valid JSON syntax."
+                raise Exception("invoice_analysis prompt not found in ai_config.json")
             
             context_parts = []
             
@@ -188,6 +184,23 @@ class GeminiHelper:
                         if cleaned_response.endswith("```"):
                             cleaned_response = cleaned_response[:-3]
                         cleaned_response = cleaned_response.strip()
+                        
+                        # Remove any extra closing braces or characters after valid JSON
+                        # Try to find the end of the JSON object
+                        brace_count = 0
+                        json_end = -1
+                        for i, char in enumerate(cleaned_response):
+                            if char == '{':
+                                brace_count += 1
+                            elif char == '}':
+                                brace_count -= 1
+                                if brace_count == 0:
+                                    json_end = i + 1
+                                    break
+                        
+                        if json_end > 0 and json_end < len(cleaned_response):
+                            print(f"Truncating response from {len(cleaned_response)} to {json_end} characters")
+                            cleaned_response = cleaned_response[:json_end]
                         
                         try:
                             analysis_data = json.loads(cleaned_response)

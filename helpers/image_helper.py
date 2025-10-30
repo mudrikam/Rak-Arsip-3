@@ -101,24 +101,30 @@ class ImageHelper:
     @staticmethod
     def generate_transaction_image_path(basedir, transaction_id=None):
         """
-        Generate path for transaction image.
-        
+        Generate path for transaction image organized into year/month/day subfolders.
+
         Args:
             basedir: Base directory path
             transaction_id: Transaction ID (optional)
-        
+
         Returns:
-            str: Full path for image file
+            str: Full path for image file (directories are created)
         """
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        
-        dir_path = os.path.join(basedir, "images", "transactions", timestamp)
-        
+        now = datetime.now()
+        timestamp = now.strftime("%Y%m%d_%H%M%S")
+        year = now.strftime("%Y")
+        month = now.strftime("%B")  # e.g. July
+        day = str(now.day)  # day without leading zero, e.g. 3
+
+        # directory: basedir/images/transactions/invoices/<year>/<MonthName>/<day>/
+        dir_path = os.path.join(basedir, "images", "transactions", "invoices", year, month, day)
+        os.makedirs(dir_path, exist_ok=True)
+
         if transaction_id:
             filename = f"{transaction_id}_{timestamp}.jpg"
         else:
-            filename = f"temp_{timestamp}.jpg"
-        
+            filename = f"invoice_{timestamp}.jpg"
+
         return os.path.join(dir_path, filename)
     
     @staticmethod

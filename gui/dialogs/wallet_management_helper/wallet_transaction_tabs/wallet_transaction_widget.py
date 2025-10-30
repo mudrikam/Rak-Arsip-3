@@ -1,10 +1,10 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QComboBox, QTableWidget, QTableWidgetItem, QTextEdit, QGroupBox,
-    QFormLayout, QSizePolicy, QHeaderView, QMenu, QMessageBox, QFileDialog
+    QFormLayout, QSizePolicy, QHeaderView, QMenu, QMessageBox, QFileDialog, QDateEdit
 )
 from PySide6.QtGui import QPixmap, QAction, QDragEnterEvent, QDropEvent
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import Qt, QSize, QDate, QDateTime
 import qtawesome as qta
 import os
 
@@ -103,6 +103,13 @@ class WalletTransactionWidget(QWidget):
         main_layout.setContentsMargins(12, 12, 12, 12)
         main_layout.setSpacing(12)
 
+        # Mode indicator
+        from PySide6.QtWidgets import QFrame
+        self.mode_label = QLabel("Mode: Add")
+        self.mode_label.setStyleSheet("color: #198754; font-weight: bold;")
+        self.mode_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        main_layout.addWidget(self.mode_label)
+
         # Top area: image + form
         top_layout = QHBoxLayout()
         top_layout.setSpacing(12)
@@ -131,8 +138,22 @@ class WalletTransactionWidget(QWidget):
         img_group.setLayout(img_layout)
         top_layout.addWidget(img_group, 0)
 
-        # Form area
+        # Form area with scroll
         form_group = QGroupBox("Transaction Details")
+        form_group_layout = QVBoxLayout()
+        form_group_layout.setContentsMargins(2, 2, 2, 2)
+        
+        # Create scroll area for form
+        from PySide6.QtWidgets import QScrollArea
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll_area.setFrameShape(QScrollArea.NoFrame)
+        scroll_area.setMaximumHeight(200)
+        
+        # Create widget to hold form layout
+        form_widget = QWidget()
         form_layout = QVBoxLayout()
         form_layout.setContentsMargins(8, 8, 8, 8)
         form_layout.setSpacing(8)
@@ -144,21 +165,22 @@ class WalletTransactionWidget(QWidget):
         self.input_name.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         form_layout.addWidget(self.input_name)
 
-        # Amount (display only) + Currency
-        amount_row = QHBoxLayout()
-        amount_row.setSpacing(8)
-        # amount shown as a label (read-only display)
-        self.label_amount = QLabel("")
-        self.label_amount.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
-        self.label_amount.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        amount_row.addWidget(self.label_amount)
-
+        # Date + Currency (compact row)
+        date_currency_row = QHBoxLayout()
+        date_currency_row.setSpacing(8)
+        from PySide6.QtWidgets import QDateTimeEdit
+        self.date_edit = QDateTimeEdit()
+        self.date_edit.setDateTime(self.date_edit.minimumDateTime())
+        self.date_edit.setCalendarPopup(True)
+        self.date_edit.setDisplayFormat("yyyy-MM-dd HH:mm")
+        self.date_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        date_currency_row.addWidget(self.date_edit)
         self.combo_currency = QComboBox()
         self.combo_currency.setEditable(False)
         self.combo_currency.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
         self.combo_currency.addItem("")
-        amount_row.addWidget(self.combo_currency)
-        form_layout.addLayout(amount_row)
+        date_currency_row.addWidget(self.combo_currency)
+        form_layout.addLayout(date_currency_row)
 
         # Pocket + Card
         pocket_row = QHBoxLayout()
@@ -239,9 +261,31 @@ class WalletTransactionWidget(QWidget):
         self.destination_widget.setVisible(False)
         form_layout.addWidget(self.destination_widget)
 
+        # Tags (comma separated)
+        self.input_tags = QLineEdit()
+        self.input_tags.setPlaceholderText("Tags (comma separated, e.g., food, shopping, urgent)")
+        self.input_tags.setMinimumHeight(28)
+        self.input_tags.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        form_layout.addWidget(self.input_tags)
+
+        # Note (multi-line)
+        note_label = QLabel("Note:")
+        form_layout.addWidget(note_label)
+        self.input_note = QTextEdit()
+        self.input_note.setPlaceholderText("Additional notes about this transaction...")
+        self.input_note.setMaximumHeight(80)
+        self.input_note.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        form_layout.addWidget(self.input_note)
+
     # NOTE: Add Item button moved below (above items table)
 
-        form_group.setLayout(form_layout)
+        # Set form layout to widget and add to scroll area
+        form_widget.setLayout(form_layout)
+        scroll_area.setWidget(form_widget)
+        
+        # Add scroll area to form group
+        form_group_layout.addWidget(scroll_area)
+        form_group.setLayout(form_group_layout)
         top_layout.addWidget(form_group, 1)
 
         main_layout.addLayout(top_layout)
@@ -251,15 +295,26 @@ class WalletTransactionWidget(QWidget):
         items_layout = QVBoxLayout()
         items_layout.setContentsMargins(6, 6, 6, 6)
 
-        # Add item button above the table
-        items_button_row = QHBoxLayout()
-        items_button_row.addStretch()
+        # Amount label and Add Item button in one row
+        items_top_row = QHBoxLayout()
+        self.label_amount = QLabel("")
+        self.label_amount.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.label_amount.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        items_top_row.addWidget(self.label_amount, alignment=Qt.AlignLeft)
+        items_top_row.addStretch()
         self.btn_add_item = QPushButton(qta.icon("fa6s.plus"), " Add Item")
         self.btn_add_item.setMaximumWidth(120)
         self.btn_add_item.clicked.connect(self.on_add_item_clicked)
-        items_button_row.addWidget(self.btn_add_item)
-        items_layout.addLayout(items_button_row)
-        
+        items_top_row.addWidget(self.btn_add_item)
+
+        # Clear Items button (deletes all items for current transaction)
+        self.btn_clear_items = QPushButton(qta.icon("fa6s.broom"), " Clear Items")
+        self.btn_clear_items.setMaximumWidth(120)
+        self.btn_clear_items.setToolTip("Delete all items for this transaction")
+        self.btn_clear_items.clicked.connect(self.on_clear_items_clicked)
+        items_top_row.addWidget(self.btn_clear_items)
+        items_layout.addLayout(items_top_row)
+
         # Warning label for add item
         self.label_add_item_warning = QLabel("Save transaction first to add items")
         self.label_add_item_warning.setStyleSheet("color: #666; font-style: italic; font-size: 11px;")
@@ -269,27 +324,22 @@ class WalletTransactionWidget(QWidget):
         self.items_table = QTableWidget()
         self.items_table.setColumnCount(7)
         self.items_table.setHorizontalHeaderLabels(["Item", "Qty", "Unit", "Unit Price", "Total", "Note", "Actions"])
-        
+
         # Set column widths
         header = self.items_table.horizontalHeader()
-        # Make Item name take remaining space, other numeric/text columns fit contents
         header.setSectionResizeMode(0, QHeaderView.Stretch)           # Item Name (priority)
         header.setSectionResizeMode(1, QHeaderView.ResizeToContents)  # Quantity
         header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # Unit
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # Unit okePrice
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)  # Total (will be sized to contents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # Unit Price
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)  # Total
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # Note
-        # Keep Actions column fixed and very small (only two icon buttons)
         header.setSectionResizeMode(6, QHeaderView.Fixed)             # Actions
-        header.resizeSection(6, 56)  # Slightly wider for actions column to fit icons comfortably
-        # Prevent the header from stretching the last section (so Actions won't expand)
+        header.resizeSection(6, 56)
         self.items_table.horizontalHeader().setStretchLastSection(False)
-        # Make Total column a bit wider so amounts are readable
         try:
             header.resizeSection(4, 110)
         except Exception:
             pass
-        # Optionally set a minimum width for important columns to improve layout
         header.setMinimumSectionSize(20)
         self.items_table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.items_table.customContextMenuRequested.connect(self.show_item_context_menu)
@@ -360,6 +410,7 @@ class WalletTransactionWidget(QWidget):
                 display_text = f"{currency['code']} - {currency['symbol']}"
                 self.combo_currency.addItem(display_text, currency['id'])
             
+            # locations: use API exposed by db_manager (kept as-is)
             locations = self.db_manager.get_all_wallet_locations()
             self.combo_location.clear()
             self.combo_location.addItem("Select Location", None)
@@ -387,7 +438,7 @@ class WalletTransactionWidget(QWidget):
             
         except Exception as e:
             print(f"Error loading wallet data: {e}")
-    
+
     def on_pocket_data_changed(self):
         """Reload pockets when data changes."""
         if not self.db_manager:
@@ -738,6 +789,42 @@ class WalletTransactionWidget(QWidget):
                 import traceback
                 traceback.print_exc()
                 QMessageBox.critical(self, "Error", f"Failed to delete item: {str(e)}")
+
+    def on_clear_items_clicked(self):
+        """Clear (delete) all items for the current transaction after confirmation."""
+        if not self.edit_mode or not self.current_transaction_id:
+            QMessageBox.warning(self, "Warning", "Please save the transaction first before clearing items")
+            return
+
+        # Try to get accurate count from DB; fallback to current in-memory list
+        try:
+            items_count = self.db_manager.wallet_helper.count_transaction_items(self.current_transaction_id)
+        except Exception:
+            items_count = len(self.transaction_items)
+
+        if items_count == 0:
+            QMessageBox.information(self, "No Items", "There are no items to delete for this transaction")
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "Confirm Delete All Items",
+            f"Delete all {items_count} item(s) from this transaction? This action cannot be undone.",
+            QMessageBox.Yes | QMessageBox.No
+        )
+
+        if reply == QMessageBox.Yes:
+            try:
+                self.db_manager.wallet_helper.delete_transaction_items(self.current_transaction_id)
+                # Reload items and update UI
+                self.load_transaction_items()
+                self.signal_manager.emit_transaction_changed()
+                QMessageBox.information(self, "Success", f"Deleted {items_count} item(s) successfully")
+            except Exception as e:
+                print(f"ERROR deleting all items: {e}")
+                import traceback
+                traceback.print_exc()
+                QMessageBox.critical(self, "Error", f"Failed to delete items: {str(e)}")
     
     def edit_selected_item(self):
         """Edit the selected item."""
@@ -783,14 +870,14 @@ class WalletTransactionWidget(QWidget):
     def update_total_amount(self):
         """Calculate and display total amount from all items."""
         total = sum(item['quantity'] * item['amount'] for item in self.transaction_items)
-        
+        item_count = len(self.transaction_items)
         currency_idx = self.combo_currency.currentIndex()
         currency_symbol = ""
         if currency_idx > 0:
             currency_text = self.combo_currency.currentText()
             if " - " in currency_text:
                 currency_symbol = currency_text.split(" - ")[1] + " "
-        
+
         # Check if transfer and validate balance
         is_transfer = False
         insufficient_balance = False
@@ -808,15 +895,16 @@ class WalletTransactionWidget(QWidget):
                             insufficient_balance = True
                     except Exception as e:
                         print(f"ERROR checking balance: {e}")
-        
+
         # Update label with appropriate styling (but don't disable save button)
+        label_text = f"{currency_symbol}{total:,.2f} ({item_count} items)"
         if insufficient_balance:
-            self.label_amount.setText(f"{currency_symbol}{total:,.2f}")
+            self.label_amount.setText(label_text)
             self.label_amount.setStyleSheet("color: red; font-weight: bold; font-size: 16px;")
         else:
-            self.label_amount.setText(f"{currency_symbol}{total:,.2f}")
-            self.label_amount.setStyleSheet("font-weight: bold; font-size: 16px;")
-        
+            self.label_amount.setText(label_text)
+            self.label_amount.setStyleSheet("color: #2196F3; font-weight: bold; font-size: 16px;")
+
         return total
     
     def set_db_manager(self, db_manager):
@@ -826,29 +914,39 @@ class WalletTransactionWidget(QWidget):
             self.load_data_from_db()
     
     def clear_form(self):
-        """Clear all form fields and items."""
+        """Clear all form fields and items (switch to Add mode)."""
+        self.edit_mode = False
+        self.current_transaction_id = None
         self.input_name.clear()
+        try:
+            from PySide6.QtCore import QDateTime
+            self.date_edit.setDateTime(QDateTime.currentDateTime())
+        except Exception:
+            pass
         self.combo_pocket.setCurrentIndex(0)
         self.combo_card.setCurrentIndex(0)
         self.combo_currency.setCurrentIndex(0)
         self.combo_location.setCurrentIndex(0)
         self.combo_category.setCurrentIndex(0)
+        self.combo_status.setCurrentIndex(0)
         self.combo_type.setCurrentIndex(0)
         self.combo_destination_pocket.setCurrentIndex(0)
         self.destination_widget.setVisible(False)
-        self.combo_status.setCurrentIndex(0)
+        self.input_tags.clear()
+        self.input_note.clear()
         self.transaction_items.clear()
         self.pending_analyzed_items = []
         self.refresh_items_table()
         self.update_total_amount()
-        
         self.transaction_image_path = None
         self.image_label.clear()
         self.image_label.setText("Drop Image Here\nor Click to Open Image")
         self.image_label.setStyleSheet(
             "border: 1px dashed #999; border-radius: 6px; color: #666; background-color: #f9f9f9;"
         )
-    
+        # Update UI to reflect Add mode
+        self.update_ui_for_mode()
+
     def delete_transaction(self):
         """Delete transaction with detailed warning."""
         if not self.edit_mode or not self.current_transaction_id:
@@ -1017,6 +1115,19 @@ class WalletTransactionWidget(QWidget):
         if transaction_details.get('name'):
             self.input_name.setText(transaction_details['name'])
         
+        if transaction_details.get('transaction_date'):
+            date_str = transaction_details['transaction_date']
+            from PySide6.QtCore import QDateTime
+            qdatetime = QDateTime.fromString(date_str, "yyyy-MM-dd HH:mm")
+            if not qdatetime.isValid():
+                # fallback ke tanggal saja jika format tidak lengkap
+                qdatetime = QDateTime.fromString(date_str, "yyyy-MM-dd")
+            if qdatetime.isValid():
+                self.date_edit.setDateTime(qdatetime)
+            else:
+                from PySide6.QtCore import QDateTime
+                self.date_edit.setDateTime(QDateTime.currentDateTime())
+        
         if transaction_details.get('type'):
             trans_type = transaction_details['type']
             for i in range(self.combo_type.count()):
@@ -1053,6 +1164,12 @@ class WalletTransactionWidget(QWidget):
             idx = self.combo_status.findData(transaction_details['status_id'])
             if idx >= 0:
                 self.combo_status.setCurrentIndex(idx)
+        
+        if transaction_details.get('tags'):
+            self.input_tags.setText(transaction_details['tags'])
+        
+        if transaction_details.get('note'):
+            self.input_note.setPlainText(transaction_details['note'])
         
         items = analysis_data.get('items', [])
         if items:
@@ -1163,29 +1280,23 @@ class WalletTransactionWidget(QWidget):
                 return
             
             # Validate transfer amount vs source balance - ONLY IF HAS ITEMS
-            # Allow saving transfer without items first (items added after save)
             total_amount = sum(item['quantity'] * item['amount'] for item in self.transaction_items)
             
-            # Only validate balance if there are items
             if total_amount > 0 and self.db_manager:
                 try:
-                    # Exclude current transaction from balance calculation if editing
                     exclude_id = self.current_transaction_id if self.edit_mode else None
                     source_balance = self.db_manager.wallet_helper.get_pocket_balance(pocket_id, exclude_id)
                     
-                    # Get currency symbol from transaction currency_id
                     currency_id = self.combo_currency.itemData(currency_idx)
                     currency_symbol = self.db_manager.wallet_helper.get_currency_symbol(currency_id)
                     
                     if total_amount > source_balance:
-                        reply = QMessageBox.critical(
+                        QMessageBox.critical(
                             self, 
                             "Insufficient Balance", 
-                            f"<b>Cannot save transaction!</b><br><br>"
-                            f"Transfer amount: <b>{currency_symbol} {total_amount:,.2f}</b><br>"
-                            f"Source pocket balance: <b>{currency_symbol} {source_balance:,.2f}</b><br>"
-                            f"Deficit: <b style='color: red;'>{currency_symbol} {(total_amount - source_balance):,.2f}</b><br><br>"
-                            f"Please reduce the item amounts to match available balance.",
+                            f"Transfer amount: {currency_symbol} {total_amount:,.2f}\n"
+                            f"Source pocket balance: {currency_symbol} {source_balance:,.2f}\n"
+                            "Please reduce the item amounts to match available balance.",
                             QMessageBox.Ok
                         )
                         return
@@ -1206,7 +1317,9 @@ class WalletTransactionWidget(QWidget):
         status_idx = self.combo_status.currentIndex()
         status_id = self.combo_status.itemData(status_idx) if status_idx > 0 else None
         
-        transaction_date = datetime.now()
+        transaction_date = self.date_edit.dateTime().toString("yyyy-MM-dd HH:mm")
+        tags = self.input_tags.text().strip()
+        note = self.input_note.toPlainText().strip()
         
         print(f"Transaction Name: {transaction_name}")
         print(f"Pocket ID: {pocket_id}")
@@ -1216,6 +1329,8 @@ class WalletTransactionWidget(QWidget):
         print(f"Status ID: {status_id}")
         print(f"Transaction Type: {transaction_type}")
         print(f"Transaction Date: {transaction_date}")
+        print(f"Tags: {tags}")
+        print(f"Note: {note}")
         print(f"Items Count: {len(self.transaction_items)}")
         print(f"Image Path: {self.transaction_image_path}")
         
@@ -1240,8 +1355,8 @@ class WalletTransactionWidget(QWidget):
                     transaction_name=transaction_name,
                     transaction_date=transaction_date,
                     transaction_type=transaction_type,
-                    tags="",
-                    note=""
+                    tags=tags,
+                    note=note
                 )
                 
                 print(f"Transaction updated with ID: {transaction_id}")
@@ -1261,8 +1376,8 @@ class WalletTransactionWidget(QWidget):
                     transaction_name=transaction_name,
                     transaction_date=transaction_date,
                     transaction_type=transaction_type,
-                    tags="",
-                    note=""
+                    tags=tags,
+                    note=note
                 )
                 
                 print(f"Transaction inserted with ID: {transaction_id}")
@@ -1301,7 +1416,6 @@ class WalletTransactionWidget(QWidget):
                 if saved_image_path:
                     print(f"Invoice image saved to: {saved_image_path}")
                     
-                    # Save to invoice table
                     import os
                     filename = os.path.basename(saved_image_path)
                     file_size = os.path.getsize(os.path.join(self.basedir, saved_image_path)) if os.path.exists(os.path.join(self.basedir, saved_image_path)) else None
@@ -1363,6 +1477,22 @@ class WalletTransactionWidget(QWidget):
             # Populate form
             self.input_name.setText(transaction['transaction_name'] or '')
             
+            # Set transaction date
+            if transaction.get('transaction_date'):
+                date_str = transaction['transaction_date']
+                if isinstance(date_str, str):
+                    if ' ' in date_str:
+                        date_str = date_str.split(' ')[0]
+                    qdate = QDate.fromString(date_str, "yyyy-MM-dd")
+                    if qdate.isValid():
+                        self.date_edit.setDate(qdate)
+                    else:
+                        self.date_edit.setDate(QDate.currentDate())
+                else:
+                    self.date_edit.setDate(QDate.currentDate())
+            else:
+                self.date_edit.setDate(QDate.currentDate())
+            
             # Find and set combo values
             self.set_combo_value_by_id(self.combo_pocket, transaction['pocket_id'])
             self.set_combo_value_by_id(self.combo_currency, transaction['currency_id'])
@@ -1380,6 +1510,10 @@ class WalletTransactionWidget(QWidget):
             # Set destination pocket if transfer
             if type_text == 'transfer' and transaction.get('destination_pocket_id'):
                 self.set_combo_value_by_id(self.combo_destination_pocket, transaction['destination_pocket_id'])
+            
+            # Set tags and note
+            self.input_tags.setText(transaction.get('tags') or '')
+            self.input_note.setPlainText(transaction.get('note') or '')
             
             # Load cards for selected pocket
             self.on_pocket_changed(self.combo_pocket.currentIndex())
@@ -1515,23 +1649,40 @@ class WalletTransactionWidget(QWidget):
     def update_ui_for_mode(self):
         """Update UI elements based on current mode (new/edit)."""
         if self.edit_mode and self.current_transaction_id:
+            self.mode_label.setText(f"Mode: Edit (ID: {self.current_transaction_id})")
+            self.mode_label.setStyleSheet("color: #fd7e14; font-weight: bold;")  # orange for edit
             self.btn_save.setText(" Update Transaction")
             self.btn_save.setIcon(qta.icon("fa6s.pen-to-square"))
             self.btn_delete.setEnabled(True)
             self.btn_add_item.setEnabled(True)
+            try:
+                self.btn_clear_items.setEnabled(True)
+            except Exception:
+                pass
             self.label_add_item_warning.setVisible(False)
         else:
+            self.mode_label.setText("Mode: Add")
+            self.mode_label.setStyleSheet("color: #198754; font-weight: bold;")  # green for add
             self.btn_save.setText(" Save Transaction")
             self.btn_save.setIcon(qta.icon("fa6s.floppy-disk"))
             self.btn_delete.setEnabled(False)
             self.btn_add_item.setEnabled(False)
+            try:
+                self.btn_clear_items.setEnabled(False)
+            except Exception:
+                pass
             self.label_add_item_warning.setVisible(True)
-    
+
     def clear_form(self):
-        """Clear all form fields."""
+        """Clear all form fields and items (switch to Add mode)."""
         self.edit_mode = False
         self.current_transaction_id = None
         self.input_name.clear()
+        try:
+            from PySide6.QtCore import QDateTime
+            self.date_edit.setDateTime(QDateTime.currentDateTime())
+        except Exception:
+            pass
         self.combo_pocket.setCurrentIndex(0)
         self.combo_card.setCurrentIndex(0)
         self.combo_currency.setCurrentIndex(0)
@@ -1539,6 +1690,10 @@ class WalletTransactionWidget(QWidget):
         self.combo_category.setCurrentIndex(0)
         self.combo_status.setCurrentIndex(0)
         self.combo_type.setCurrentIndex(0)
+        self.combo_destination_pocket.setCurrentIndex(0)
+        self.destination_widget.setVisible(False)
+        self.input_tags.clear()
+        self.input_note.clear()
         self.transaction_items.clear()
         self.pending_analyzed_items = []
         self.refresh_items_table()
@@ -1546,6 +1701,10 @@ class WalletTransactionWidget(QWidget):
         self.transaction_image_path = None
         self.image_label.clear()
         self.image_label.setText("Drop Image Here\nor Click to Open Image")
+        self.image_label.setStyleSheet(
+            "border: 1px dashed #999; border-radius: 6px; color: #666; background-color: #f9f9f9;"
+        )
+        # Update UI to reflect Add mode
         self.update_ui_for_mode()
     
     def open_add_location_dialog(self):
@@ -1677,13 +1836,11 @@ class WalletTransactionWidget(QWidget):
             return None
         
         from helpers.image_helper import ImageHelper
-        from datetime import datetime
-        
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        dir_path = os.path.join(self.basedir, "images", "transactions", "invoices")
-        filename = f"invoice_{transaction_id}_{timestamp}.jpg"
-        output_path = os.path.join(dir_path, filename)
-        
+
+        # Use ImageHelper.generate_transaction_image_path to get a fully
+        # qualified path with year/month/day subfolders (and ensure dirs exist).
+        output_path = ImageHelper.generate_transaction_image_path(self.basedir, transaction_id)
+
         if ImageHelper.save_image_to_file(self.transaction_image_path, output_path):
             # Return relative path
             relative_path = os.path.relpath(output_path, self.basedir)

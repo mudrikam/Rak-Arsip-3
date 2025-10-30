@@ -434,11 +434,11 @@ class DatabaseWalletHelper:
             query += " AND t.transaction_type = ?"
             params.append(transaction_type)
         
-        if pocket_id:
+        if pocket_id is not None and pocket_id != "":
             query += " AND t.pocket_id = ?"
             params.append(pocket_id)
         
-        if category_id:
+        if category_id is not None and category_id != "":
             query += " AND t.category_id = ?"
             params.append(category_id)
         
@@ -486,11 +486,11 @@ class DatabaseWalletHelper:
                 query += " AND t.transaction_type = ?"
                 params.append(transaction_type)
             
-            if pocket_id:
+            if pocket_id is not None and pocket_id != "":
                 query += " AND t.pocket_id = ?"
                 params.append(pocket_id)
             
-            if category_id:
+            if category_id is not None and category_id != "":
                 query += " AND t.category_id = ?"
                 params.append(category_id)
             

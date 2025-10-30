@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTableWidget, QTableWidgetItem,
-    QPushButton, QGroupBox, QFormLayout, QScrollArea, QWidget, QHeaderView
+    QPushButton, QGroupBox, QFormLayout, QScrollArea, QWidget, QHeaderView,
+    QDialogButtonBox, QMenu
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap, QFont
@@ -8,6 +9,81 @@ import qtawesome as qta
 from datetime import datetime
 import os
 
+
+class ItemDetailDialog(QDialog):
+    """Dialog that shows full details for a wallet transaction item.
+
+    Fields mirror `WalletAddTransactionItemDialog` form so reviewers see the
+    same data model used when adding/editing items.
+    """
+
+    def __init__(self, item_data, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Item Detail")
+        self.setMinimumWidth(520)
+
+        layout = QVBoxLayout()
+        form = QFormLayout()
+        form.setLabelAlignment(Qt.AlignRight)
+
+        # Basic identity
+        form.addRow("Item Type:", QLabel(str(item_data.get('item_type', ''))))
+        form.addRow("SKU:", QLabel(str(item_data.get('sku', ''))))
+        form.addRow("Item Name:", QLabel(str(item_data.get('item_name', ''))))
+
+        # Description (multiline)
+        desc = item_data.get('item_description', '') or ''
+        note = item_data.get('note', '') or ''
+        desc_full = desc
+        if note:
+            desc_full = f"{desc}\n\nNote: {note}" if desc else f"Note: {note}"
+        desc_label = QLabel(desc_full)
+        desc_label.setWordWrap(True)
+        form.addRow("Description:", desc_label)
+
+        # Quantity / unit / price
+        form.addRow("Quantity:", QLabel(str(item_data.get('quantity', ''))))
+        form.addRow("Unit:", QLabel(str(item_data.get('unit', ''))))
+        form.addRow("Unit Price:", QLabel(f"{item_data.get('amount', 0):,.2f}"))
+        total = (item_data.get('quantity', 0) or 0) * (item_data.get('amount', 0) or 0)
+        form.addRow("Total:", QLabel(f"{total:,.2f}"))
+
+        # Physical properties
+        w = item_data.get('width')
+        h = item_data.get('height')
+        d = item_data.get('depth')
+        dims = []
+        if w:
+            dims.append(f"W: {w}")
+        if h:
+            dims.append(f"H: {h}")
+        if d:
+            dims.append(f"D: {d}")
+        dims_text = ", ".join(dims) if dims else "-"
+        form.addRow("Dimensions:", QLabel(dims_text))
+
+        wt = item_data.get('weight')
+        form.addRow("Weight:", QLabel(f"{wt} kg" if wt else "-"))
+        form.addRow("Material:", QLabel(str(item_data.get('material', ''))))
+        form.addRow("Color:", QLabel(str(item_data.get('color', ''))))
+
+        # Links / license / expiry
+        form.addRow("File URL:", QLabel(str(item_data.get('file_url', ''))))
+        form.addRow("License Key:", QLabel(str(item_data.get('license_key', ''))))
+        expiry = item_data.get('expiry_date') or ''
+        form.addRow("Expiry Date:", QLabel(str(expiry)))
+        form.addRow("Digital Type:", QLabel(str(item_data.get('digital_type', ''))))
+
+        layout.addLayout(form)
+
+        # Footer buttons
+        buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        close_btn = buttons.button(QDialogButtonBox.Close)
+        if close_btn:
+            close_btn.clicked.connect(self.close)
+        layout.addWidget(buttons)
+
+        self.setLayout(layout)
 
 class TransactionViewDialog(QDialog):
     """Dialog to view transaction details."""
@@ -58,11 +134,42 @@ class TransactionViewDialog(QDialog):
         scroll_layout = QVBoxLayout()
         scroll_layout.setSpacing(15)
         
-        # Transaction info group
+        # Transaction info group (images will be shown to the left)
+        images_group = QGroupBox("Invoice Images")
+        images_layout = QVBoxLayout()
+        images_layout.setContentsMargins(6, 6, 6, 6)
+
+        self.images_scroll = QScrollArea()
+        # increase space for invoice images (allow wider thumbnails)
+        self.images_scroll.setMaximumWidth(260)
+        self.images_scroll.setMaximumHeight(400)
+        self.images_scroll.setWidgetResizable(True)
+
+        self.images_widget = QWidget()
+        self.images_layout = QVBoxLayout()
+        self.images_layout.setAlignment(Qt.AlignTop)
+        self.images_widget.setLayout(self.images_layout)
+        self.images_scroll.setWidget(self.images_widget)
+
+        images_layout.addWidget(self.images_scroll)
+        images_group.setLayout(images_layout)
+
         info_group = QGroupBox("Transaction Information")
         info_layout = QFormLayout()
         info_layout.setSpacing(8)
-        
+
+        # Put images (left) and info (right) side by side
+        top_row = QWidget()
+        top_row_layout = QHBoxLayout()
+        top_row_layout.setSpacing(12)
+        top_row_layout.setContentsMargins(0, 0, 0, 0)
+        top_row.setLayout(top_row_layout)
+        # give images column a larger share of available horizontal space
+        top_row_layout.addWidget(images_group, 1)
+        top_row_layout.addWidget(info_group, 3)
+
+        scroll_layout.addWidget(top_row)
+
         self.lbl_name = QLabel()
         self.lbl_name.setStyleSheet("font-weight: bold; font-size: 14px;")
         info_layout.addRow("Name:", self.lbl_name)
@@ -93,7 +200,6 @@ class TransactionViewDialog(QDialog):
         info_layout.addRow("Total Amount:", self.lbl_total_amount)
         
         info_group.setLayout(info_layout)
-        scroll_layout.addWidget(info_group)
         
         # Transaction items group
         items_group = QGroupBox("Transaction Items")
@@ -119,6 +225,11 @@ class TransactionViewDialog(QDialog):
         self.items_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.items_table.setAlternatingRowColors(True)
         self.items_table.setSortingEnabled(True)
+
+        # Enable custom context menu and double-click handling for item detail view
+        self.items_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.items_table.customContextMenuRequested.connect(self.show_item_context_menu)
+        self.items_table.itemDoubleClicked.connect(self.on_item_double_clicked)
         
         items_layout.addWidget(self.items_table)
         
@@ -134,23 +245,6 @@ class TransactionViewDialog(QDialog):
         items_group.setLayout(items_layout)
         scroll_layout.addWidget(items_group)
         
-        # Invoice images group
-        images_group = QGroupBox("Invoice Images")
-        images_layout = QVBoxLayout()
-        
-        self.images_scroll = QScrollArea()
-        self.images_scroll.setMaximumHeight(200)
-        self.images_scroll.setWidgetResizable(True)
-        
-        self.images_widget = QWidget()
-        self.images_layout = QHBoxLayout()
-        self.images_layout.setAlignment(Qt.AlignLeft)
-        self.images_widget.setLayout(self.images_layout)
-        self.images_scroll.setWidget(self.images_widget)
-        
-        images_layout.addWidget(self.images_scroll)
-        images_group.setLayout(images_layout)
-        scroll_layout.addWidget(images_group)
         
         scroll_widget.setLayout(scroll_layout)
         scroll.setWidget(scroll_widget)
@@ -252,6 +346,34 @@ class TransactionViewDialog(QDialog):
         
         # Update item count
         self.lbl_item_count.setText(f"Total Items: {len(self.transaction_items)}")
+
+    def show_item_context_menu(self, pos):
+        """Show context menu for an item row with 'View Item Detail'."""
+        idx = self.items_table.indexAt(pos)
+        row = idx.row()
+        if row < 0:
+            return
+
+        menu = QMenu(self)
+        act_view = menu.addAction("View Item Detail")
+        action = menu.exec(self.items_table.viewport().mapToGlobal(pos))
+        if action == act_view:
+            self.view_item_detail(row)
+
+    def on_item_double_clicked(self, table_item):
+        """Open item detail when an item row is double-clicked."""
+        if not table_item:
+            return
+        row = table_item.row()
+        self.view_item_detail(row)
+
+    def view_item_detail(self, row):
+        """Create and show the item detail dialog for the given table row."""
+        if row < 0 or row >= len(self.transaction_items):
+            return
+        item_data = self.transaction_items[row]
+        dlg = ItemDetailDialog(item_data, parent=self)
+        dlg.exec()
     
     def populate_invoice_images(self):
         """Populate invoice images."""
@@ -288,19 +410,23 @@ class TransactionViewDialog(QDialog):
                 image_label = QLabel()
                 pixmap = QPixmap(full_path)
                 if not pixmap.isNull():
-                    # Scale image to fit
-                    scaled_pixmap = pixmap.scaled(150, 150, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                    # scale to 150px width, keep aspect ratio
+                    scaled_pixmap = pixmap.scaledToWidth(150, Qt.SmoothTransformation)
                     image_label.setPixmap(scaled_pixmap)
+                    image_label.setFixedWidth(150)
+                    image_label.setFixedHeight(scaled_pixmap.height())
                 else:
                     image_label.setText("Invalid Image")
-                
-                image_label.setFixedSize(150, 150)
+                    image_label.setFixedWidth(150)
+                    image_label.setFixedHeight(80)
+
                 image_label.setStyleSheet("border: 1px solid #ccc; padding: 2px;")
                 image_label.setAlignment(Qt.AlignCenter)
                 self.images_layout.addWidget(image_label)
             else:
                 missing_label = QLabel(f"Missing:\n{os.path.basename(image_path)}")
-                missing_label.setFixedSize(150, 150)
+                missing_label.setFixedWidth(150)
+                missing_label.setFixedHeight(80)
                 missing_label.setStyleSheet("border: 1px solid #f00; padding: 2px; color: #f00;")
                 missing_label.setAlignment(Qt.AlignCenter)
                 self.images_layout.addWidget(missing_label)
