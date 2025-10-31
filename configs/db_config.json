@@ -240,6 +240,7 @@
         "wallet_transactions": {
             "id": "INTEGER PRIMARY KEY AUTOINCREMENT",
             "pocket_id": "INTEGER NOT NULL",
+            "card_id": "INTEGER",
             "destination_pocket_id": "INTEGER",
             "category_id": "INTEGER",
             "status_id": "INTEGER",
@@ -253,6 +254,7 @@
             "created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
             "updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
             "FOREIGN KEY (pocket_id)": "REFERENCES wallet_pockets(id)",
+            "FOREIGN KEY (card_id)": "REFERENCES wallet_cards(id)",
             "FOREIGN KEY (destination_pocket_id)": "REFERENCES wallet_pockets(id)",
             "FOREIGN KEY (category_id)": "REFERENCES wallet_categories(id)",
             "FOREIGN KEY (status_id)": "REFERENCES wallet_transaction_statuses(id)",

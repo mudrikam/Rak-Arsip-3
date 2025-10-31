@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox, QMenu
 )
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap, QFont
+from PySide6.QtGui import QPixmap, QFont, QAction
 import qtawesome as qta
 from datetime import datetime
 import os
@@ -76,13 +76,6 @@ class ItemDetailDialog(QDialog):
 
         layout.addLayout(form)
 
-        # Footer buttons
-        buttons = QDialogButtonBox(QDialogButtonBox.Close)
-        close_btn = buttons.button(QDialogButtonBox.Close)
-        if close_btn:
-            close_btn.clicked.connect(self.close)
-        layout.addWidget(buttons)
-
         self.setLayout(layout)
 
 class TransactionViewDialog(QDialog):
@@ -118,10 +111,6 @@ class TransactionViewDialog(QDialog):
         header_layout.addWidget(self.title_label)
         
         header_layout.addStretch()
-        
-        btn_close = QPushButton(qta.icon("fa6s.xmark"), " Close")
-        btn_close.clicked.connect(self.close)
-        header_layout.addWidget(btn_close)
         
         main_layout.addLayout(header_layout)
         
@@ -183,6 +172,10 @@ class TransactionViewDialog(QDialog):
         self.lbl_pocket = QLabel()
         info_layout.addRow("Pocket:", self.lbl_pocket)
         
+        # Card (assigned card for the transaction)
+        self.lbl_card = QLabel()
+        info_layout.addRow("Card:", self.lbl_card)
+        
         self.lbl_category = QLabel()
         info_layout.addRow("Category:", self.lbl_category)
         
@@ -198,6 +191,10 @@ class TransactionViewDialog(QDialog):
         self.lbl_total_amount = QLabel()
         self.lbl_total_amount.setStyleSheet("font-weight: bold; font-size: 14px; color: #007acc;")
         info_layout.addRow("Total Amount:", self.lbl_total_amount)
+        # Total items label moved into transaction info for easier visibility
+        self.lbl_item_count = QLabel()
+        self.lbl_item_count.setStyleSheet("font-weight: bold;")
+        info_layout.addRow("Total Items:", self.lbl_item_count)
         
         info_group.setLayout(info_layout)
         
@@ -207,9 +204,10 @@ class TransactionViewDialog(QDialog):
         
         # Items table
         self.items_table = QTableWidget()
-        self.items_table.setColumnCount(6)
+        # Add an extra column for actions (eye button to view detail)
+        self.items_table.setColumnCount(7)
         self.items_table.setHorizontalHeaderLabels([
-            "Item Name", "Quantity", "Unit", "Unit Price", "Total", "Description"
+            "Item Name", "Quantity", "Unit", "Unit Price", "Total", "Description", "Action"
         ])
         
         # Set column widths
@@ -220,6 +218,7 @@ class TransactionViewDialog(QDialog):
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # Unit Price
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)  # Total
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # Description
+        header.setSectionResizeMode(6, QHeaderView.ResizeToContents)  # Action (button)
         
         self.items_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.items_table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -233,15 +232,6 @@ class TransactionViewDialog(QDialog):
         
         items_layout.addWidget(self.items_table)
         
-        # Items summary
-        summary_layout = QHBoxLayout()
-        summary_layout.addStretch()
-        
-        self.lbl_item_count = QLabel()
-        self.lbl_item_count.setStyleSheet("font-weight: bold;")
-        summary_layout.addWidget(self.lbl_item_count)
-        
-        items_layout.addLayout(summary_layout)
         items_group.setLayout(items_layout)
         scroll_layout.addWidget(items_group)
         
@@ -305,6 +295,14 @@ class TransactionViewDialog(QDialog):
         total_amount = sum(item.get('quantity', 0) * item.get('amount', 0) for item in self.transaction_items)
         currency_symbol = data.get('currency_code', '')
         self.lbl_total_amount.setText(f"{total_amount:,.2f} {currency_symbol}")
+        
+        # Populate card label deterministically from the joined field added in DB helper
+        # (we expect get_transaction_by_id to include 'card_name')
+        try:
+            self.lbl_card.setText(data['card_name'] if data.get('card_name') else 'N/A')
+        except Exception:
+            # Fallback only in case of unexpected data shape — but normally card_name must exist
+            self.lbl_card.setText('N/A')
     
     def populate_items_table(self):
         """Populate transaction items table."""
@@ -343,9 +341,24 @@ class TransactionViewDialog(QDialog):
             
             desc_display = full_desc[:100] + "..." if len(full_desc) > 100 else full_desc
             self.items_table.setItem(row_idx, 5, QTableWidgetItem(desc_display))
+
+            # Action button (eye icon) to view item detail — works even when table is sorted
+            try:
+                item_id = item.get('id', None)
+            except Exception:
+                item_id = None
+
+            btn = QPushButton(qta.icon("fa6s.eye"), "")
+            btn.setToolTip("View Item Detail")
+            # store identifiers so handler can find the correct item even if the table is sorted
+            btn.setProperty('item_id', item_id)
+            btn.setProperty('item_index', row_idx)
+            btn.clicked.connect(lambda checked, iid=item_id, idx=row_idx: self.on_action_view(iid, idx))
+            btn.setFlat(True)
+            self.items_table.setCellWidget(row_idx, 6, btn)
         
         # Update item count
-        self.lbl_item_count.setText(f"Total Items: {len(self.transaction_items)}")
+        self.lbl_item_count.setText(str(len(self.transaction_items)))
 
     def show_item_context_menu(self, pos):
         """Show context menu for an item row with 'View Item Detail'."""
@@ -355,7 +368,8 @@ class TransactionViewDialog(QDialog):
             return
 
         menu = QMenu(self)
-        act_view = menu.addAction("View Item Detail")
+        act_view = QAction(qta.icon("fa6s.eye"), "View Item Detail", self)
+        menu.addAction(act_view)
         action = menu.exec(self.items_table.viewport().mapToGlobal(pos))
         if action == act_view:
             self.view_item_detail(row)
@@ -374,6 +388,34 @@ class TransactionViewDialog(QDialog):
         item_data = self.transaction_items[row]
         dlg = ItemDetailDialog(item_data, parent=self)
         dlg.exec()
+
+    def on_action_view(self, item_id, fallback_index):
+        """Handler for action button clicks — locate the correct item and show detail.
+
+        Attempts to resolve by `item_id` first (preferred). If not available, falls
+        back to the index captured when the button was created.
+        """
+        target_index = None
+        if item_id is not None:
+            # try to find by id in current list (handles sorting)
+            for i, it in enumerate(self.transaction_items):
+                try:
+                    if it.get('id') == item_id:
+                        target_index = i
+                        break
+                except Exception:
+                    continue
+
+        if target_index is None:
+            # fallback to captured index if valid
+            if isinstance(fallback_index, int) and 0 <= fallback_index < len(self.transaction_items):
+                target_index = fallback_index
+
+        if target_index is None:
+            # nothing we can do
+            return
+
+        self.view_item_detail(target_index)
     
     def populate_invoice_images(self):
         """Populate invoice images."""

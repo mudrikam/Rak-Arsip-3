@@ -372,9 +372,7 @@ class DatabaseWalletHelper:
                         cursor = self.db_manager.connection.cursor()
                         cursor.execute("UPDATE wallet_transaction_locations SET image = ? WHERE id = ?", (rel, location_id))
                         self.db_manager.connection.commit()
-                        # If the source image was saved under the tmp folder, remove the tmp file to avoid leftover junk
                         try:
-                            # resolve absolute source path
                             src_abs = image_src_path if os.path.isabs(image_src_path) else os.path.join(basedir, image_src_path)
                             tmp_root = os.path.abspath(os.path.join(basedir, "images", "locations", "tmp"))
                             src_abs_norm = os.path.abspath(src_abs)
@@ -382,7 +380,6 @@ class DatabaseWalletHelper:
                                 try:
                                     os.remove(src_abs_norm)
                                 except Exception:
-                                    # best-effort cleanup; ignore errors
                                     pass
                         except Exception:
                             pass
@@ -442,11 +439,8 @@ class DatabaseWalletHelper:
                 except Exception as e:
                     print(f"Warning: could not remove old location image {existing_image}: {e}")
 
-            # If the source image came from the tmp upload folder, remove the tmp source file as well
-            # This prevents accumulation of files under images/locations/tmp
             if image_src_path and basedir:
                 try:
-                    # resolve absolute source path
                     src_abs = image_src_path if os.path.isabs(image_src_path) else os.path.join(basedir, image_src_path)
                     tmp_root = os.path.abspath(os.path.join(basedir, "images", "locations", "tmp"))
                     src_abs_norm = os.path.abspath(src_abs)
@@ -454,7 +448,6 @@ class DatabaseWalletHelper:
                         try:
                             os.remove(src_abs_norm)
                         except Exception:
-                            # best-effort cleanup; ignore errors
                             pass
                 except Exception:
                     pass
@@ -475,7 +468,7 @@ class DatabaseWalletHelper:
         try:
             self.db_manager.connect(write=True)
             cursor = self.db_manager.connection.cursor()
-            # fetch image path for cleanup
+            
             cursor.execute("SELECT image FROM wallet_transaction_locations WHERE id = ?", (location_id,))
             row = cursor.fetchone()
             image_path = row['image'] if row and 'image' in row.keys() else None
@@ -483,7 +476,7 @@ class DatabaseWalletHelper:
             cursor.execute("DELETE FROM wallet_transaction_locations WHERE id = ?", (location_id,))
             self.db_manager.connection.commit()
 
-            # Cleanup physical file
+            
             try:
                 basedir = getattr(self.db_manager, 'basedir', None)
                 if basedir and image_path:
@@ -585,12 +578,14 @@ class DatabaseWalletHelper:
                 t.transaction_name,
                 t.transaction_type,
                 p.name as pocket_name,
+                ca.card_name as card_name,
                 c.name as category_name,
                 s.name as status_name,
                 COALESCE(SUM(ti.quantity * ti.amount), 0) as total_amount,
                 cu.symbol as currency_symbol
             FROM wallet_transactions t
             LEFT JOIN wallet_pockets p ON t.pocket_id = p.id
+            LEFT JOIN wallet_cards ca ON t.card_id = ca.id
             LEFT JOIN wallet_categories c ON t.category_id = c.id
             LEFT JOIN wallet_transaction_statuses s ON t.status_id = s.id
             LEFT JOIN wallet_currency cu ON t.currency_id = cu.id
@@ -683,17 +678,17 @@ class DatabaseWalletHelper:
         finally:
             self.db_manager.close()
     
-    def add_transaction(self, pocket_id, category_id, status_id, currency_id, location_id,
-                       transaction_name, transaction_date, transaction_type, tags="", note="", destination_pocket_id=None):
+    def add_transaction(self, pocket_id, card_id=None, category_id=None, status_id=None, currency_id=None, location_id=None,
+                       transaction_name=None, transaction_date=None, transaction_type=None, tags="", note="", destination_pocket_id=None):
         """Add a new transaction."""
         self.db_manager.connect(write=True)
         cursor = self.db_manager.connection.cursor()
         cursor.execute("""
             INSERT INTO wallet_transactions 
-            (pocket_id, destination_pocket_id, category_id, status_id, currency_id, location_id, 
+            (pocket_id, destination_pocket_id, card_id, category_id, status_id, currency_id, location_id, 
              transaction_name, transaction_date, transaction_type, tags, note)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (pocket_id, destination_pocket_id, category_id, status_id, currency_id, location_id,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (pocket_id, destination_pocket_id, card_id, category_id, status_id, currency_id, location_id,
               transaction_name, transaction_date, transaction_type, tags, note))
         
         transaction_id = cursor.lastrowid
@@ -756,29 +751,23 @@ class DatabaseWalletHelper:
             self.db_manager.connect(write=True)
             cursor = self.db_manager.connection.cursor()
             
-            # Get invoice image paths before deletion for file cleanup
             cursor.execute("SELECT image_path FROM wallet_transactions_invoice_prove WHERE wallet_transaction_id = ?", 
                           (transaction_id,))
             invoice_paths = [row[0] for row in cursor.fetchall()]
             
-            # Delete invoice images from database
             cursor.execute("DELETE FROM wallet_transactions_invoice_prove WHERE wallet_transaction_id = ?", 
                           (transaction_id,))
             
-            # Delete transaction items (foreign key constraint)
             cursor.execute("DELETE FROM wallet_transaction_items WHERE wallet_transaction_id = ?", 
                           (transaction_id,))
             
-            # Delete transaction
             cursor.execute("DELETE FROM wallet_transactions WHERE id = ?", (transaction_id,))
             
             self.db_manager.connection.commit()
             
-            # Delete physical image files if they exist
             import os
             for image_path in invoice_paths:
                 try:
-                    # Try to get basedir from parent components
                     basedir = getattr(self.db_manager, 'basedir', None)
                     if basedir and image_path:
                         full_path = os.path.join(basedir, image_path)
@@ -803,13 +792,14 @@ class DatabaseWalletHelper:
             cursor.execute("""
                 SELECT t.*, p.name as pocket_name, c.name as category_name, 
                        s.name as status_name, cu.code as currency_code,
-                       l.name as location_name
+                       l.name as location_name, ca.card_name as card_name
                 FROM wallet_transactions t
                 LEFT JOIN wallet_pockets p ON t.pocket_id = p.id
                 LEFT JOIN wallet_categories c ON t.category_id = c.id
                 LEFT JOIN wallet_transaction_statuses s ON t.status_id = s.id
                 LEFT JOIN wallet_currency cu ON t.currency_id = cu.id
                 LEFT JOIN wallet_transaction_locations l ON t.location_id = l.id
+                LEFT JOIN wallet_cards ca ON t.card_id = ca.id
                 WHERE t.id = ?
             """, (transaction_id,))
             
@@ -843,9 +833,9 @@ class DatabaseWalletHelper:
         finally:
             self.db_manager.close()
     
-    def update_transaction(self, transaction_id, pocket_id, category_id, status_id, 
-                          currency_id, location_id, transaction_name, transaction_date, 
-                          transaction_type, tags="", note="", destination_pocket_id=None):
+    def update_transaction(self, transaction_id, pocket_id, card_id=None, category_id=None, status_id=None, 
+                          currency_id=None, location_id=None, transaction_name=None, transaction_date=None, 
+                          transaction_type=None, tags="", note="", destination_pocket_id=None):
         """Update an existing transaction."""
         try:
             self.db_manager.connect(write=True)
@@ -853,10 +843,10 @@ class DatabaseWalletHelper:
             
             cursor.execute("""
                 UPDATE wallet_transactions 
-                SET pocket_id=?, destination_pocket_id=?, category_id=?, status_id=?, currency_id=?, location_id=?,
+                SET pocket_id=?, destination_pocket_id=?, card_id=?, category_id=?, status_id=?, currency_id=?, location_id=?,
                     transaction_name=?, transaction_date=?, transaction_type=?, tags=?, note=?
                 WHERE id=?
-            """, (pocket_id, destination_pocket_id, category_id, status_id, currency_id, location_id,
+            """, (pocket_id, destination_pocket_id, card_id, category_id, status_id, currency_id, location_id,
                   transaction_name, transaction_date, transaction_type, tags, note, transaction_id))
             
             self.db_manager.connection.commit()

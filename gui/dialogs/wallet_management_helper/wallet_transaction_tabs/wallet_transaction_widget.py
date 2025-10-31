@@ -28,7 +28,6 @@ class TransactionImageLabel(QLabel):
         if self.is_hovered:
             style = "border: 2px dashed #007acc; border-radius: 6px; color: #007acc;"
         else:
-            # idle border uses same thickness and dash as hover; only color differs
             style = "border: 2px dashed #999; border-radius: 6px; color: #666;"
         self.setStyleSheet(style)
     
@@ -105,18 +104,28 @@ class WalletTransactionWidget(QWidget):
         main_layout.setContentsMargins(12, 12, 12, 12)
         main_layout.setSpacing(12)
 
-        # Mode indicator
+    # Mode indicator + New Transaction button
         from PySide6.QtWidgets import QFrame
+        mode_row = QHBoxLayout()
+        mode_row.setSpacing(8)
         self.mode_label = QLabel("Mode: Add")
         self.mode_label.setStyleSheet("color: #198754; font-weight: bold;")
-        self.mode_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        main_layout.addWidget(self.mode_label)
+        self.mode_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        mode_row.addWidget(self.mode_label)
+        mode_row.addStretch()
+    # New Transaction button
+        self.btn_new_transaction = QPushButton(qta.icon("fa6s.plus"), " New Transaction")
+        self.btn_new_transaction.setMaximumWidth(160)
+        self.btn_new_transaction.setToolTip("Start a new transaction (clears current form)")
+        self.btn_new_transaction.clicked.connect(self.clear_form)
+        mode_row.addWidget(self.btn_new_transaction)
+        main_layout.addLayout(mode_row)
 
-        # Top area: image + form
+    # Top area: image + form
         top_layout = QHBoxLayout()
         top_layout.setSpacing(12)
 
-        # Image area
+    # Image area
         img_group = QGroupBox("Image")
         img_layout = QVBoxLayout()
         img_layout.setContentsMargins(8, 8, 8, 8)
@@ -132,7 +141,7 @@ class WalletTransactionWidget(QWidget):
         self.btn_open_image.clicked.connect(self.open_image_dialog)
         img_layout.addWidget(self.btn_open_image, alignment=Qt.AlignTop)
 
-        # Analyze button (GUI only)
+    # Analyze button
         self.btn_analyze = QPushButton(qta.icon("fa6s.wand-magic-sparkles"), " Analyze")
         self.btn_analyze.clicked.connect(self.on_analyze_invoice)
         img_layout.addWidget(self.btn_analyze, alignment=Qt.AlignTop)
@@ -140,12 +149,12 @@ class WalletTransactionWidget(QWidget):
         img_group.setLayout(img_layout)
         top_layout.addWidget(img_group, 0)
 
-        # Form area with scroll
+    # Form area with scroll
         form_group = QGroupBox("Transaction Details")
         form_group_layout = QVBoxLayout()
         form_group_layout.setContentsMargins(2, 2, 2, 2)
         
-        # Create scroll area for form
+    # Create scroll area for form
         from PySide6.QtWidgets import QScrollArea
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
@@ -154,20 +163,20 @@ class WalletTransactionWidget(QWidget):
         scroll_area.setFrameShape(QScrollArea.NoFrame)
         scroll_area.setMaximumHeight(200)
         
-        # Create widget to hold form layout
+    # Create widget to hold form layout
         form_widget = QWidget()
         form_layout = QVBoxLayout()
         form_layout.setContentsMargins(8, 8, 8, 8)
         form_layout.setSpacing(8)
 
-        # Transaction name
+    # Transaction name
         self.input_name = QLineEdit()
         self.input_name.setPlaceholderText("Transaction name")
         self.input_name.setMinimumHeight(28)
         self.input_name.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         form_layout.addWidget(self.input_name)
 
-        # Date + Currency (compact row)
+    # Date + Currency
         date_currency_row = QHBoxLayout()
         date_currency_row.setSpacing(8)
         from PySide6.QtWidgets import QDateTimeEdit
@@ -184,7 +193,7 @@ class WalletTransactionWidget(QWidget):
         date_currency_row.addWidget(self.combo_currency)
         form_layout.addLayout(date_currency_row)
 
-        # Pocket + Card
+    # Pocket + Card
         pocket_row = QHBoxLayout()
         pocket_row.setSpacing(8)
         self.combo_pocket = QComboBox()
@@ -198,7 +207,7 @@ class WalletTransactionWidget(QWidget):
         pocket_row.addWidget(self.combo_card)
         form_layout.addLayout(pocket_row)
 
-        # Location (with add)
+    # Location
         loc_row = QHBoxLayout()
         loc_row.setSpacing(8)
         self.combo_location = QComboBox()
@@ -210,7 +219,7 @@ class WalletTransactionWidget(QWidget):
         loc_row.addWidget(self.btn_add_location)
         form_layout.addLayout(loc_row)
 
-        # Category (with add)
+    # Category
         cat_row = QHBoxLayout()
         cat_row.setSpacing(8)
         self.combo_category = QComboBox()
@@ -222,7 +231,7 @@ class WalletTransactionWidget(QWidget):
         cat_row.addWidget(self.btn_add_category)
         form_layout.addLayout(cat_row)
 
-        # Status (with add)
+    # Status
         status_row = QHBoxLayout()
         status_row.setSpacing(8)
         self.combo_status = QComboBox()
@@ -234,7 +243,7 @@ class WalletTransactionWidget(QWidget):
         status_row.addWidget(self.btn_add_status)
         form_layout.addLayout(status_row)
 
-        # Type (combo only - no add button)
+    # Type
         type_row = QHBoxLayout()
         type_row.setSpacing(8)
         self.combo_type = QComboBox()
@@ -248,7 +257,7 @@ class WalletTransactionWidget(QWidget):
         type_row.addWidget(self.combo_type)
         form_layout.addLayout(type_row)
         
-        # Destination Pocket (only visible for transfer)
+    # Destination Pocket
         self.destination_row = QHBoxLayout()
         self.destination_row.setSpacing(8)
         destination_label = QLabel("To Pocket:")
@@ -263,14 +272,14 @@ class WalletTransactionWidget(QWidget):
         self.destination_widget.setVisible(False)
         form_layout.addWidget(self.destination_widget)
 
-        # Tags (comma separated)
+    # Tags
         self.input_tags = QLineEdit()
         self.input_tags.setPlaceholderText("Tags (comma separated, e.g., food, shopping, urgent)")
         self.input_tags.setMinimumHeight(28)
         self.input_tags.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         form_layout.addWidget(self.input_tags)
 
-        # Note (multi-line)
+    # Note
         note_label = QLabel("Note:")
         form_layout.addWidget(note_label)
         self.input_note = QTextEdit()
@@ -279,25 +288,25 @@ class WalletTransactionWidget(QWidget):
         self.input_note.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         form_layout.addWidget(self.input_note)
 
-    # NOTE: Add Item button moved below (above items table)
+    # Add Item button
 
-        # Set form layout to widget and add to scroll area
+    # Set form layout to widget and add to scroll area
         form_widget.setLayout(form_layout)
         scroll_area.setWidget(form_widget)
         
-        # Add scroll area to form group
+    # Add scroll area to form group
         form_group_layout.addWidget(scroll_area)
         form_group.setLayout(form_group_layout)
         top_layout.addWidget(form_group, 1)
 
         main_layout.addLayout(top_layout)
 
-        # Items table
+    # Items table
         items_group = QGroupBox("Items")
         items_layout = QVBoxLayout()
         items_layout.setContentsMargins(6, 6, 6, 6)
 
-        # Amount label and Add Item button in one row
+    # Amount label and Add Item button
         items_top_row = QHBoxLayout()
         self.label_amount = QLabel("")
         self.label_amount.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
@@ -309,7 +318,7 @@ class WalletTransactionWidget(QWidget):
         self.btn_add_item.clicked.connect(self.on_add_item_clicked)
         items_top_row.addWidget(self.btn_add_item)
 
-        # Clear Items button (deletes all items for current transaction)
+    # Clear Items button
         self.btn_clear_items = QPushButton(qta.icon("fa6s.broom"), " Clear Items")
         self.btn_clear_items.setMaximumWidth(120)
         self.btn_clear_items.setToolTip("Delete all items for this transaction")
@@ -317,7 +326,7 @@ class WalletTransactionWidget(QWidget):
         items_top_row.addWidget(self.btn_clear_items)
         items_layout.addLayout(items_top_row)
 
-        # Warning label for add item
+    # Warning label for add item
         self.label_add_item_warning = QLabel("Save transaction first to add items")
         self.label_add_item_warning.setStyleSheet("color: #666; font-style: italic; font-size: 11px;")
         self.label_add_item_warning.setAlignment(Qt.AlignRight)
@@ -327,7 +336,7 @@ class WalletTransactionWidget(QWidget):
         self.items_table.setColumnCount(7)
         self.items_table.setHorizontalHeaderLabels(["Item", "Qty", "Unit", "Unit Price", "Total", "Note", "Actions"])
 
-        # Set column widths
+    # Set column widths
         header = self.items_table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.Stretch)           # Item Name (priority)
         header.setSectionResizeMode(1, QHeaderView.ResizeToContents)  # Quantity
@@ -350,14 +359,11 @@ class WalletTransactionWidget(QWidget):
         items_group.setLayout(items_layout)
         main_layout.addWidget(items_group, 1)
 
-        # Action buttons at bottom
+    # Action buttons at bottom
         bottom_actions = QHBoxLayout()
         bottom_actions.setSpacing(10)
         
-        self.btn_clear = QPushButton(qta.icon("fa6s.broom"), " Clear")
-        self.btn_clear.clicked.connect(self.clear_form)
-        bottom_actions.addWidget(self.btn_clear)
-        
+    # New Transaction button
         self.btn_delete = QPushButton(qta.icon("fa6s.trash"), " Delete Transaction")
         self.btn_delete.clicked.connect(self.delete_transaction)
         bottom_actions.addWidget(self.btn_delete)
@@ -898,7 +904,7 @@ class WalletTransactionWidget(QWidget):
                     except Exception as e:
                         print(f"ERROR checking balance: {e}")
 
-        # Update label with appropriate styling (but don't disable save button)
+    # Update label with appropriate styling
         label_text = f"{currency_symbol}{total:,.2f} ({item_count} items)"
         if insufficient_balance:
             self.label_amount.setText(label_text)
@@ -941,7 +947,7 @@ class WalletTransactionWidget(QWidget):
         self.refresh_items_table()
         self.update_total_amount()
         self.transaction_image_path = None
-        # Reset image label text and let the widget restore its own default style
+    # Reset image label text
         self.image_label.clear()
         self.image_label.setText("Drop Image Here\nor Click to Open Image")
         if hasattr(self.image_label, "update_style"):
@@ -949,7 +955,7 @@ class WalletTransactionWidget(QWidget):
                 self.image_label.update_style()
             except Exception:
                 self.image_label.setStyleSheet("border: 1px dashed #999; border-radius: 6px; color: #666;")
-        # Update UI to reflect Add mode
+    # Update UI to reflect Add mode
         self.update_ui_for_mode()
     
     def delete_transaction(self):
@@ -969,7 +975,7 @@ class WalletTransactionWidget(QWidget):
             invoice_count = self.db_manager.wallet_helper.count_invoice_images(self.current_transaction_id)
             image_paths = self.db_manager.wallet_helper.get_invoice_images(self.current_transaction_id)
             
-            # Quick warning (keeps previous flow for initial confirmation)
+            # Quick warning
             warning_msg = f"<b>WARNING: Deleting transaction '{transaction_name}' will permanently delete:</b><br><br>"
             warning_msg += f"<b>From wallet_transactions table:</b><br>"
             warning_msg += f"- 1 Transaction record<br><br>"
@@ -985,7 +991,7 @@ class WalletTransactionWidget(QWidget):
             if reply == QMessageBox.Cancel:
                 return
             
-            # Use shared confirmation dialog that requires exact name match, with copy/paste helpers
+            # Use shared confirmation dialog
             confirmed = WalletTransactionDeletionDialog.confirm(self, transaction_name, items_count=items_count, invoice_count=invoice_count, image_paths=image_paths)
             if not confirmed:
                 return
@@ -1288,6 +1294,13 @@ class WalletTransactionWidget(QWidget):
         
         status_idx = self.combo_status.currentIndex()
         status_id = self.combo_status.itemData(status_idx) if status_idx > 0 else None
+
+        # Card selection (optional)
+        try:
+            card_idx = self.combo_card.currentIndex()
+            card_id = self.combo_card.itemData(card_idx) if card_idx > 0 else None
+        except Exception:
+            card_id = None
         
         transaction_date = self.date_edit.dateTime().toString("yyyy-MM-dd HH:mm")
         tags = self.input_tags.text().strip()
@@ -1299,6 +1312,7 @@ class WalletTransactionWidget(QWidget):
         print(f"Location ID: {location_id}")
         print(f"Category ID: {category_id}")
         print(f"Status ID: {status_id}")
+        print(f"Card ID: {card_id}")
         print(f"Transaction Type: {transaction_type}")
         print(f"Transaction Date: {transaction_date}")
         print(f"Tags: {tags}")
@@ -1319,6 +1333,7 @@ class WalletTransactionWidget(QWidget):
                 transaction_id = self.db_manager.wallet_helper.update_transaction(
                     transaction_id=self.current_transaction_id,
                     pocket_id=pocket_id,
+                    card_id=card_id,
                     destination_pocket_id=destination_pocket_id,
                     category_id=category_id, 
                     status_id=status_id,
@@ -1340,6 +1355,7 @@ class WalletTransactionWidget(QWidget):
                 # Create new transaction
                 transaction_id = self.db_manager.wallet_helper.add_transaction(
                     pocket_id=pocket_id,
+                    card_id=card_id,
                     destination_pocket_id=destination_pocket_id,
                     category_id=category_id, 
                     status_id=status_id,
@@ -1813,8 +1829,7 @@ class WalletTransactionWidget(QWidget):
 
         from helpers.image_helper import ImageHelper
 
-        # If the current transaction_image_path is already inside the app's
-        # managed images folder, assume it's already saved and don't re-save.
+            # If the current transaction_image_path is already inside the app's managed images folder, assume it's already saved and don't re-save.
         try:
             if isinstance(self.transaction_image_path, str) and ImageHelper.is_path_in_transaction_images(self.basedir, self.transaction_image_path):
                 # Return path relative to basedir (DB expects relative path)
@@ -1824,9 +1839,7 @@ class WalletTransactionWidget(QWidget):
             # Fall through to saving logic on any unexpected error
             pass
 
-        # Create a placeholder invoice DB row to obtain an invoice_id so we can
-        # include it in the final filename. Insert with empty image_path and then
-        # update it after the file is written.
+    # Create a placeholder invoice DB row to obtain an invoice_id so we can include it in the final filename. Insert with empty image_path and then update it after the file is written.
         invoice_id = None
         try:
             invoice_id = self.db_manager.wallet_helper.add_transaction_invoice_image(
@@ -1836,7 +1849,7 @@ class WalletTransactionWidget(QWidget):
             # If inserting placeholder fails, fallback to saving without invoice_id in name
             invoice_id = None
 
-        # Generate final path using invoice_id when available (falls back to transaction-based name)
+    # Generate final path using invoice_id when available (falls back to transaction-based name)
         try:
             if invoice_id:
                 output_path = ImageHelper.generate_invoice_image_path(self.basedir, transaction_id, invoice_id, self.transaction_image_path)
@@ -1852,10 +1865,10 @@ class WalletTransactionWidget(QWidget):
         if not saved:
             return None
 
-        # Determine relative path to store in DB
+    # Determine relative path to store in DB
         relative_path = os.path.relpath(output_path, self.basedir).replace("\\", "/")
 
-        # Prepare metadata and update invoice DB record (update will add new if placeholder wasn't created)
+    # Prepare metadata and update invoice DB record
         try:
             filename = os.path.basename(output_path)
             file_size = os.path.getsize(output_path) if os.path.exists(output_path) else None
@@ -1873,7 +1886,7 @@ class WalletTransactionWidget(QWidget):
         except Exception as e:
             print(f"Warning: failed to update invoice DB record: {e}")
 
-        # If we're replacing an existing image for this transaction, remove the old file to avoid orphan images
+    # If we're replacing an existing image for this transaction, remove the old file to avoid orphan images
         try:
             if self.edit_mode and self.current_transaction_id and self.db_manager:
                 try:

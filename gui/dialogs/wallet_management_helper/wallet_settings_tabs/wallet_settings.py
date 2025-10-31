@@ -132,7 +132,7 @@ class WalletSettingsTab(QWidget):
 		buttons_layout.addWidget(self.btn_clear)
 		
 		buttons_layout.addStretch()
-		form_layout.addRow(buttons_layout)
+		# Buttons are moved out of the scroll area so they remain visible.
 		
 		form_widget.setLayout(form_layout)
 		
@@ -146,6 +146,10 @@ class WalletSettingsTab(QWidget):
 		form_group.setLayout(form_group_layout)
 		
 		main_layout.addWidget(form_group)
+		# Visible button bar for category actions (outside scroll area)
+		buttons_widget = QWidget()
+		buttons_widget.setLayout(buttons_layout)
+		main_layout.addWidget(buttons_widget)
 		
 		table_group = QGroupBox("Category List")
 		table_layout = QVBoxLayout()
@@ -377,7 +381,6 @@ class WalletSettingsTab(QWidget):
 		buttons_layout.addWidget(self.btn_clear_currency)
 		
 		buttons_layout.addStretch()
-		form_layout.addRow(buttons_layout)
 		
 		form_widget.setLayout(form_layout)
 		
@@ -391,6 +394,9 @@ class WalletSettingsTab(QWidget):
 		form_group.setLayout(form_group_layout)
 		
 		main_layout.addWidget(form_group)
+		buttons_widget = QWidget()
+		buttons_widget.setLayout(buttons_layout)
+		main_layout.addWidget(buttons_widget)
 		
 		table_group = QGroupBox("Currency List")
 		table_layout = QVBoxLayout()
@@ -613,7 +619,7 @@ class WalletSettingsTab(QWidget):
 		buttons_layout.addWidget(self.btn_clear_status)
 		
 		buttons_layout.addStretch()
-		form_layout.addRow(buttons_layout)
+		# Buttons are moved out of the scroll area so they're always visible.
 		
 		form_widget.setLayout(form_layout)
 		
@@ -627,6 +633,10 @@ class WalletSettingsTab(QWidget):
 		form_group.setLayout(form_group_layout)
 		
 		main_layout.addWidget(form_group)
+		# Visible button bar for status actions (outside scroll area)
+		buttons_widget = QWidget()
+		buttons_widget.setLayout(buttons_layout)
+		main_layout.addWidget(buttons_widget)
 		
 		table_group = QGroupBox("Transaction Status List")
 		table_layout = QVBoxLayout()
@@ -902,7 +912,7 @@ class WalletSettingsTab(QWidget):
 		buttons_layout.addWidget(self.btn_clear_location)
 		
 		buttons_layout.addStretch()
-		form_layout.addRow(buttons_layout)
+		# Buttons moved out of the scroll area so they remain visible.
 		
 		form_widget.setLayout(form_layout)
 		
@@ -916,6 +926,10 @@ class WalletSettingsTab(QWidget):
 		form_group.setLayout(form_group_layout)
 		
 		main_layout.addWidget(form_group)
+		# Visible button bar for location actions (outside scroll area)
+		buttons_widget = QWidget()
+		buttons_widget.setLayout(buttons_layout)
+		main_layout.addWidget(buttons_widget)
 		
 		table_group = QGroupBox("Transaction Locations List")
 		table_layout = QVBoxLayout()
@@ -981,7 +995,7 @@ class WalletSettingsTab(QWidget):
 				return
 			
 			try:
-				# Use DB helper to get location record
+			
 				location = self.db_manager.wallet_helper.get_location_by_id(location_id)
 				if location:
 					self.input_location_id.setText(str(location['id']))
@@ -1069,10 +1083,10 @@ class WalletSettingsTab(QWidget):
 			return
 		
 		try:
-			# Prepare absolute image source path if provided
+		
 			image_src = None
 			if self.location_image_path and self.basedir:
-				# if stored as relative path, resolve to absolute for helper
+			
 				if not os.path.isabs(self.location_image_path):
 					image_src = os.path.join(self.basedir, self.location_image_path)
 				else:
@@ -1095,7 +1109,7 @@ class WalletSettingsTab(QWidget):
 				basedir=self.basedir
 			)
 
-			# Refresh UI and load created record to show image path
+		
 			location = self.db_manager.wallet_helper.get_location_by_id(location_id)
 			if location:
 				self.location_image_path = location.get('image')
@@ -1135,7 +1149,7 @@ class WalletSettingsTab(QWidget):
 			return
 		
 		try:
-			# Prepare absolute image source path if provided
+		
 			image_src = None
 			if self.location_image_path and self.basedir:
 				if not os.path.isabs(self.location_image_path):
@@ -1193,7 +1207,7 @@ class WalletSettingsTab(QWidget):
 		
 		if reply == QMessageBox.Yes:
 			try:
-				# Delegate deletion + cleanup to DB helper
+			
 				self.db_manager.wallet_helper.delete_location(location_id)
 				QMessageBox.information(self, "Success", "Location deleted successfully")
 				self.clear_location_form()
@@ -1227,18 +1241,18 @@ class WalletSettingsTab(QWidget):
 			QMessageBox.warning(self, "Error", "Base directory not set")
 			return
 		
-		# If file is already inside managed images/locations, don't re-save; just set relative path
+	
 		try:
 			if ImageHelper.is_path_in_subfolder(self.basedir, file_path, "images", "locations"):
 				rel = os.path.relpath(file_path, self.basedir).replace("\\", "/")
-				# If we're editing and there's an existing image different from this one, attempt cleanup
+			
 				old_rel = self.location_image_path
 				self.location_image_path = rel
 				pixmap = QPixmap(file_path)
 				self.location_image_label.setPixmap(
 					pixmap.scaled(120, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation)
 				)
-				# delete old file if different and exists
+			
 				if old_rel and old_rel != rel:
 					old_abs = os.path.join(self.basedir, old_rel)
 					new_abs = os.path.abspath(file_path)
@@ -1250,17 +1264,17 @@ class WalletSettingsTab(QWidget):
 							print(f"Failed to remove old location image '{old_abs}': {e}")
 				return
 		except Exception:
-			# fallback to saving behavior below
+		
 			pass
 
-		# Save new image into managed folder. If we have a location_id, let helper save directly into per-id folder.
+	
 		try:
 			location_id_val = None
 			if self.input_location_id and self.input_location_id.text().strip():
 				location_id_val = self.input_location_id.text().strip()
 
-			# For upload-only (before create), save into tmp folder; if location_id present, still save to tmp so DB helper
-			# can move or handle it consistently when the record is created/updated.
+		
+		
 			tmp_dir = os.path.join(self.basedir, "images", "locations", "tmp")
 			os.makedirs(tmp_dir, exist_ok=True)
 			timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

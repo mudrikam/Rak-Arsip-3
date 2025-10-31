@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTableWidget, QTableWidgetItem,
     QPushButton, QLineEdit, QComboBox, QDateEdit, QMessageBox, QHeaderView,
-    QMenu, QGroupBox, QFormLayout, QInputDialog, QSpinBox, QCompleter, QCheckBox
+    QMenu, QGroupBox, QFormLayout, QInputDialog, QSpinBox, QCompleter, QCheckBox, QDoubleSpinBox
 )
 from PySide6.QtCore import Qt, QDate
 from PySide6.QtGui import QAction
@@ -20,7 +20,7 @@ class WalletTransactionListWidget(QWidget):
         super().__init__(parent)
         self.db_manager = db_manager
         
-        # Pagination settings
+        
         self.current_page = 1
         self.items_per_page = 50
         self.total_items = 0
@@ -49,18 +49,18 @@ class WalletTransactionListWidget(QWidget):
         main_layout.setContentsMargins(12, 12, 12, 12)
         main_layout.setSpacing(12)
         
-        # Filter section
+        
         filter_group = QGroupBox("Filters")
         filter_layout = QFormLayout()
         filter_layout.setSpacing(8)
         
-        # Search by name
+        
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Search by transaction name...")
         self.search_input.textChanged.connect(self.on_search_changed)
         filter_layout.addRow("Search:", self.search_input)
         
-        # Filter by type
+        
         filter_row1 = QHBoxLayout()
         filter_row1.setSpacing(8)
         
@@ -76,7 +76,7 @@ class WalletTransactionListWidget(QWidget):
         self.filter_pocket.setEditable(True)
         self.filter_pocket.setInsertPolicy(QComboBox.NoInsert)
         self.filter_pocket.currentIndexChanged.connect(self.on_filter_changed)
-        # ensure typing triggers filter
+        
         self.filter_pocket.lineEdit().textEdited.connect(self.on_filter_changed)
         filter_row1.addWidget(self.filter_pocket)
         
@@ -89,11 +89,11 @@ class WalletTransactionListWidget(QWidget):
         
         filter_layout.addRow("Type/Pocket/Category:", filter_row1)
         
-        # Date range
+        
         filter_row2 = QHBoxLayout()
         filter_row2.setSpacing(8)
         
-        # Date filter enable checkbox (default off = show all)
+        
         self.chk_use_date = QCheckBox("Enable Date Filter")
         self.chk_use_date.setChecked(False)
         self.chk_use_date.toggled.connect(self.on_date_filter_toggled)
@@ -124,8 +124,49 @@ class WalletTransactionListWidget(QWidget):
         
         filter_group.setLayout(filter_layout)
         main_layout.addWidget(filter_group)
+
         
-        # Action buttons
+        filter_row3 = QHBoxLayout()
+        filter_row3.setSpacing(8)
+
+        self.amount_min_input = QLineEdit()
+        self.amount_min_input.setPlaceholderText("Min amount")
+        self.amount_min_input.setMaximumWidth(120)
+        self.amount_min_input.editingFinished.connect(self.on_filter_changed)
+        filter_row3.addWidget(self.amount_min_input)
+
+        self.amount_max_input = QLineEdit()
+        self.amount_max_input.setPlaceholderText("Max amount")
+        self.amount_max_input.setMaximumWidth(120)
+        self.amount_max_input.editingFinished.connect(self.on_filter_changed)
+        filter_row3.addWidget(self.amount_max_input)
+
+        filter_row3.addStretch()
+
+        
+        filter_row3.addWidget(QLabel("Sort by:"))
+        self.sort_field = QComboBox()
+        self.sort_field.addItem("Name", 0)
+        self.sort_field.addItem("Date", 1)
+        self.sort_field.addItem("Type", 2)
+        self.sort_field.addItem("Pocket", 3)
+        self.sort_field.addItem("Card", 4)
+        self.sort_field.addItem("Category", 5)
+        self.sort_field.addItem("Amount", 6)
+        self.sort_field.setCurrentIndex(1)
+        self.sort_field.currentIndexChanged.connect(self.apply_sorting)
+        filter_row3.addWidget(self.sort_field)
+
+        self.sort_order = QComboBox()
+        self.sort_order.addItem("Descending", Qt.DescendingOrder)
+        self.sort_order.addItem("Ascending", Qt.AscendingOrder)
+        self.sort_order.setCurrentIndex(0)
+        self.sort_order.currentIndexChanged.connect(self.apply_sorting)
+        filter_row3.addWidget(self.sort_order)
+
+        filter_layout.addRow("Amount / Sort:", filter_row3)
+        
+        
         action_layout = QHBoxLayout()
         action_layout.setSpacing(8)
         
@@ -152,21 +193,23 @@ class WalletTransactionListWidget(QWidget):
         
         main_layout.addLayout(action_layout)
         
-        # Transaction table
+        
         self.transactions_table = QTableWidget()
-        self.transactions_table.setColumnCount(6)
+        # Add Card column after Pocket
+        self.transactions_table.setColumnCount(7)
         self.transactions_table.setHorizontalHeaderLabels([
-            "Name", "Date", "Type", "Pocket", "Category", "Amount"
+            "Name", "Date", "Type", "Pocket", "Card", "Category", "Amount"
         ])
         
-        # Set column widths
+        
         header = self.transactions_table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.Stretch)           # Name
         header.setSectionResizeMode(1, QHeaderView.ResizeToContents)  # Date
         header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # Type
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # Pocket
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)  # Category
-        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # Amount
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)  # Card
+        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # Category
+        header.setSectionResizeMode(6, QHeaderView.ResizeToContents)  # Amount
         
         self.transactions_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.transactions_table.setSelectionMode(QTableWidget.SingleSelection)
@@ -174,23 +217,23 @@ class WalletTransactionListWidget(QWidget):
         self.transactions_table.setAlternatingRowColors(True)
         self.transactions_table.setSortingEnabled(True)
         
-        # Context menu
+        
         self.transactions_table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.transactions_table.customContextMenuRequested.connect(self.show_context_menu)
         
-        # Selection changed
+        
         self.transactions_table.itemSelectionChanged.connect(self.on_selection_changed)
         
-        # Double click for edit
+        
         self.transactions_table.itemDoubleClicked.connect(self.on_item_double_clicked)
         
         main_layout.addWidget(self.transactions_table, 1)
         
-        # Pagination controls
+        
         pagination_layout = QHBoxLayout()
         pagination_layout.setSpacing(10)
         
-        # Items per page
+        
         pagination_layout.addWidget(QLabel("Items per page:"))
         
         self.combo_per_page = QComboBox()
@@ -201,7 +244,7 @@ class WalletTransactionListWidget(QWidget):
         
         pagination_layout.addStretch()
         
-        # Page navigation
+        
         self.btn_first_page = QPushButton(qta.icon("fa6s.angles-left"), "")
         self.btn_first_page.setFixedSize(32, 32)
         self.btn_first_page.clicked.connect(self.go_to_first_page)
@@ -236,7 +279,7 @@ class WalletTransactionListWidget(QWidget):
         
         pagination_layout.addStretch()
         
-        # Total info (moved here)
+        
         self.label_total = QLabel("Total: 0 transactions")
         self.label_total.setStyleSheet("font-weight: bold; color: #666;")
         pagination_layout.addWidget(self.label_total)
@@ -298,7 +341,7 @@ class WalletTransactionListWidget(QWidget):
                     self.filter_category.setCurrentIndex(0)
                     self.filter_category.lineEdit().setText(prev_cat_text)
             
-            # Fix: use correct method name
+            
             locations = self.db_manager.wallet_helper.get_all_locations()
             self.filter_location.clear() if hasattr(self, 'filter_location') else None
             
@@ -321,12 +364,12 @@ class WalletTransactionListWidget(QWidget):
             idx = combo.findText(text, Qt.MatchContains)
             if idx >= 0:
                 combo.setCurrentIndex(idx)
-        # trigger filter after programmatic set
+        
         self.on_filter_changed()
     
     def on_pocket_filter_changed(self):
         """Reload pocket filter when pocket data changes."""
-        # preserve typed text while reloading pockets
+        
         if not self.db_manager:
             return
         
@@ -347,7 +390,7 @@ class WalletTransactionListWidget(QWidget):
                     self.filter_pocket.setCurrentIndex(0)
                     self.filter_pocket.lineEdit().setText(prev_text)
             
-            # reattach completer model
+            
             if self.filter_pocket.completer():
                 self.filter_pocket.completer().setModel(self.filter_pocket.model())
             
@@ -452,7 +495,7 @@ class WalletTransactionListWidget(QWidget):
         self.spin_page.setMaximum(max(1, self.total_pages))
         self.lbl_page_info.setText(f"of {self.total_pages}")
         
-        # Enable/disable buttons
+        
         has_prev = self.current_page > 1
         has_next = self.current_page < self.total_pages
         
@@ -461,7 +504,7 @@ class WalletTransactionListWidget(QWidget):
         self.btn_next_page.setEnabled(has_next)
         self.btn_last_page.setEnabled(has_next)
         
-        # Update total label
+        
         start_item = (self.current_page - 1) * self.items_per_page + 1
         end_item = min(self.current_page * self.items_per_page, self.total_items)
         
@@ -476,13 +519,13 @@ class WalletTransactionListWidget(QWidget):
             return
 
         try:
-            # Get filter values
+            
             search_text = self.search_input.text().strip()
             transaction_type = self.filter_type.currentData()
             pocket_id = self.filter_pocket.currentData()
             category_id = self.filter_category.currentData()
 
-            # Date range: only use when date filter is enabled, otherwise pass empty so DB returns all
+            
             if getattr(self, 'chk_use_date', None) and self.chk_use_date.isChecked():
                 date_from = self.date_from.date().toString("yyyy-MM-dd")
                 date_to = self.date_to.date().toString("yyyy-MM-dd")
@@ -490,7 +533,7 @@ class WalletTransactionListWidget(QWidget):
                 date_from = ""
                 date_to = ""
 
-            # Fix: If filter is "All", set to empty string so all records are loaded
+            
             if transaction_type in (None, ""):
                 transaction_type = ""
             if pocket_id in (None, ""):
@@ -498,45 +541,100 @@ class WalletTransactionListWidget(QWidget):
             if category_id in (None, ""):
                 category_id = ""
 
-            # Count total transactions for pagination
-            self.total_items = self.db_manager.wallet_helper.count_transactions(
-                search_text=search_text,
-                transaction_type=transaction_type,
-                pocket_id=pocket_id,
-                category_id=category_id,
-                date_from=date_from,
-                date_to=date_to
-            )
-
-            # Calculate pagination
-            self.total_pages = max(1, (self.total_items + self.items_per_page - 1) // self.items_per_page)
-
-            # Ensure current page is valid
-            if self.current_page > self.total_pages:
-                self.current_page = max(1, self.total_pages)
-
-            # Calculate offset
-            offset = (self.current_page - 1) * self.items_per_page
-
-            # Get paginated transactions
-            transactions = self.db_manager.wallet_helper.get_all_transactions(
+            
+            all_transactions = self.db_manager.wallet_helper.get_all_transactions(
                 search_text=search_text,
                 transaction_type=transaction_type,
                 pocket_id=pocket_id,
                 category_id=category_id,
                 date_from=date_from,
                 date_to=date_to,
-                limit=self.items_per_page,
-                offset=offset
+                limit=None,
+                offset=None
             )
 
-            # Populate table
+            
+            min_amount = None
+            max_amount = None
+            try:
+                min_text = self.amount_min_input.text().strip() if getattr(self, 'amount_min_input', None) else ''
+                max_text = self.amount_max_input.text().strip() if getattr(self, 'amount_max_input', None) else ''
+                if min_text != '':
+                    min_amount = float(min_text)
+                if max_text != '':
+                    max_amount = float(max_text)
+            except Exception:
+                
+                min_amount = None
+                max_amount = None
+
+            def _amount_ok(t):
+                try:
+                    v = float(t.get('total_amount') or 0)
+                except Exception:
+                    v = 0.0
+                if (min_amount is not None) and (v < min_amount):
+                    return False
+                if (max_amount is not None) and (v > max_amount):
+                    return False
+                return True
+
+            filtered = [t for t in all_transactions if _amount_ok(t)]
+
+            
+            try:
+                sort_col = self.sort_field.currentData() if getattr(self, 'sort_field', None) is not None else 1
+                sort_order_data = self.sort_order.currentData() if getattr(self, 'sort_order', None) is not None else Qt.DescendingOrder
+                reverse = True if sort_order_data == Qt.DescendingOrder else False
+
+                def _sort_key(t):
+                    try:
+                        if sort_col == 0:
+                            return (t.get('transaction_name') or '').lower()
+                        if sort_col == 1:
+                            ds = t.get('transaction_date') or ''
+                            if ds:
+                                try:
+                                    return datetime.fromisoformat(ds.split(' ')[0])
+                                except Exception:
+                                    
+                                    try:
+                                        return datetime.strptime(ds.split(' ')[0], '%Y-%m-%d')
+                                    except Exception:
+                                        return datetime.min
+                            return datetime.min
+                        if sort_col == 2:
+                            return (t.get('transaction_type') or '').lower()
+                        if sort_col == 3:
+                            return (t.get('pocket_name') or '').lower()
+                        if sort_col == 4:
+                            return (t.get('card_name') or '').lower()
+                        if sort_col == 5:
+                            return (t.get('category_name') or '').lower()
+                        if sort_col == 6:
+                            return float(t.get('total_amount') or 0)
+                    except Exception:
+                        return ''
+
+                filtered.sort(key=_sort_key, reverse=reverse)
+            except Exception:
+                pass
+
+            
+            self.total_items = len(filtered)
+            self.total_pages = max(1, (self.total_items + self.items_per_page - 1) // self.items_per_page)
+            if self.current_page > self.total_pages:
+                self.current_page = max(1, self.total_pages)
+            offset = (self.current_page - 1) * self.items_per_page
+            transactions = filtered[offset: offset + self.items_per_page]
+
+            
             self.transactions_table.setRowCount(0)
 
             for row_idx, transaction in enumerate(transactions):
                 self.transactions_table.insertRow(row_idx)
 
-                # Store transaction ID in first column for reference
+                
                 name_item = QTableWidgetItem(transaction['transaction_name'] or '')
                 name_item.setData(Qt.UserRole, transaction['id'])
                 self.transactions_table.setItem(row_idx, 0, name_item)
@@ -554,17 +652,26 @@ class WalletTransactionListWidget(QWidget):
                 # Pocket
                 self.transactions_table.setItem(row_idx, 3, QTableWidgetItem(transaction['pocket_name'] or ''))
 
-                # Category
-                self.transactions_table.setItem(row_idx, 4, QTableWidgetItem(transaction['category_name'] or ''))
+                # Card
+                self.transactions_table.setItem(row_idx, 4, QTableWidgetItem(transaction.get('card_name') or ''))
 
-                # Amount with currency
-                amount = transaction['total_amount'] or 0
-                currency = transaction['currency_symbol'] or ''
+                # Category
+                self.transactions_table.setItem(row_idx, 5, QTableWidgetItem(transaction.get('category_name') or ''))
+
+                # Amount with currency (store numeric value in EditRole for proper numeric sorting)
+                amount = float(transaction.get('total_amount') or 0.0)
+                currency = transaction.get('currency_symbol') or ''
                 amount_text = f"{currency} {amount:,.2f}" if currency else f"{amount:,.2f}"
-                self.transactions_table.setItem(row_idx, 5, QTableWidgetItem(amount_text))
+                amount_item = QTableWidgetItem(amount_text)
+                # keep numeric value in UserRole for potential programmatic use, but DISPLAY stays as formatted string
+                amount_item.setData(Qt.UserRole, amount)
+                amount_item.setData(Qt.DisplayRole, amount_text)
+                self.transactions_table.setItem(row_idx, 6, amount_item)
 
             # Update pagination controls
             self.update_pagination_controls()
+
+            # No additional table-level sorting needed because we sorted the data before pagination
         
         except Exception as e:
             print(f"Error loading transactions: {e}")
@@ -747,6 +854,24 @@ class WalletTransactionListWidget(QWidget):
             
         except Exception as e:
             print(f"Error updating pagination controls: {e}")
+
+    def apply_sorting(self):
+        """Apply sorting to the transactions table based on UI controls."""
+        if not hasattr(self, 'transactions_table'):
+            return
+        try:
+            if not hasattr(self, 'sort_field') or not hasattr(self, 'sort_order'):
+                return
+            col = self.sort_field.currentData()
+            order = self.sort_order.currentData()
+            if col is None:
+                return
+            # Ensure sorting is enabled
+            self.transactions_table.setSortingEnabled(True)
+            # Apply sort
+            self.transactions_table.sortItems(int(col), order)
+        except Exception as e:
+            print(f"Error applying sorting: {e}")
 
     def go_to_first_page(self):
         """Go to first page."""
