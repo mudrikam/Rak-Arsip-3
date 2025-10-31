@@ -5,6 +5,50 @@ from PySide6.QtGui import QColor, QPixmap, QCursor
 import qtawesome as qta
 
 
+# Local ICONS mapping and helper used for iconized labels in view dialogs
+ICONS = {
+	'icon': 'fa6s.image',
+	'color': 'fa6s.palette',
+	'note': 'fa6s.note-sticky',
+	'issuer': 'fa6s.university',
+	'status': 'fa6s.circle-check',
+	'virtual': 'fa6s.memory',
+	'issue_date': 'fa6s.calendar-day',
+	'billing_address': 'fa6s.address-card',
+	'phone': 'fa6s.phone',
+	'email': 'fa6s.envelope',
+	'country': 'fa6s.globe'
+}
+
+
+def icon_label_widget(text: str, icon_key: str, size: int = 14):
+	from PySide6.QtWidgets import QWidget, QLabel, QHBoxLayout
+	from PySide6.QtCore import Qt
+
+	w = QWidget()
+	layout = QHBoxLayout()
+	layout.setContentsMargins(0, 0, 0, 0)
+	layout.setSpacing(6)
+
+	icon_name = ICONS.get(icon_key)
+	icon_lbl = QLabel()
+	if icon_name:
+		try:
+			ico = qta.icon(icon_name)
+			icon_lbl.setPixmap(ico.pixmap(size, size))
+		except Exception:
+			pass
+
+	text_lbl = QLabel(text)
+	text_lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+
+	layout.addWidget(icon_lbl)
+	layout.addWidget(text_lbl)
+	layout.addStretch()
+	w.setLayout(layout)
+	return w
+
+
 class PocketViewDialog(QDialog):
 	def __init__(self, pocket_data, db_manager=None, parent=None):
 		super().__init__(parent)
@@ -118,7 +162,8 @@ class PocketViewDialog(QDialog):
 		details_layout.setVerticalSpacing(8)
 		details_layout.setHorizontalSpacing(10)
 		
-		def add_copy_row(label_text, value_text):
+		# helper that can optionally use an iconized label (icon key maps to ICONS)
+		def add_copy_row(label_text, value_text, icon_key=None):
 			value_widget = QWidget()
 			value_layout = QHBoxLayout()
 			value_layout.setContentsMargins(0, 0, 0, 0)
@@ -132,7 +177,12 @@ class PocketViewDialog(QDialog):
 			btn_copy.clicked.connect(lambda: self.copy_to_clipboard(value_text))
 			value_layout.addWidget(btn_copy)
 			value_widget.setLayout(value_layout)
-			details_layout.addRow(label_text, value_widget)
+			# choose label widget: icon_label_widget if icon_key provided, else plain QLabel
+			if icon_key:
+				label_widget = icon_label_widget(label_text, icon_key)
+			else:
+				label_widget = QLabel(label_text)
+			details_layout.addRow(label_widget, value_widget)
 		
 		if self.pocket_data.get('icon'):
 			icon_row_widget = QWidget()
@@ -152,10 +202,10 @@ class PocketViewDialog(QDialog):
 			btn_copy_icon.clicked.connect(lambda: self.copy_to_clipboard(icon_name))
 			icon_row_layout.addWidget(btn_copy_icon)
 			icon_row_widget.setLayout(icon_row_layout)
-			details_layout.addRow("<b>Icon:</b>", icon_row_widget)
+			details_layout.addRow(icon_label_widget("Icon:", 'icon'), icon_row_widget)
 		
 		if self.pocket_data.get('color'):
-			add_copy_row("<b>Color:</b>", self.pocket_data.get('color', 'N/A'))
+			add_copy_row("Color:", self.pocket_data.get('color', 'N/A'), icon_key='color')
 		
 		if self.pocket_data.get('note'):
 			note_text = self.pocket_data.get('note', 'N/A')
@@ -173,7 +223,7 @@ class PocketViewDialog(QDialog):
 			btn_copy_note.clicked.connect(lambda: self.copy_to_clipboard(note_text))
 			note_layout.addWidget(btn_copy_note)
 			note_widget.setLayout(note_layout)
-			details_layout.addRow("<b>Note:</b>", note_widget)
+			details_layout.addRow(icon_label_widget("Note:", 'note'), note_widget)
 		
 		layout.addLayout(details_layout)
 		
@@ -347,7 +397,7 @@ class CardViewDialog(QDialog):
 		details_layout.setVerticalSpacing(8)
 		details_layout.setHorizontalSpacing(10)
 		
-		def add_copy_row(label_text, value_text):
+		def add_copy_row(label_text, value_text, icon_key=None):
 			value_widget = QWidget()
 			value_layout = QHBoxLayout()
 			value_layout.setContentsMargins(0, 0, 0, 0)
@@ -361,31 +411,35 @@ class CardViewDialog(QDialog):
 			btn_copy.clicked.connect(lambda: self.copy_to_clipboard(str(value_text)))
 			value_layout.addWidget(btn_copy)
 			value_widget.setLayout(value_layout)
-			details_layout.addRow(label_text, value_widget)
+			if icon_key:
+				label_widget = icon_label_widget(label_text, icon_key)
+			else:
+				label_widget = QLabel(label_text)
+			details_layout.addRow(label_widget, value_widget)
 		
 		if self.card_data.get('issuer'):
-			add_copy_row("<b>Issuer Bank:</b>", self.card_data.get('issuer', 'N/A'))
+			add_copy_row("Issuer Bank:", self.card_data.get('issuer', 'N/A'), icon_key='issuer')
 		
 		if self.card_data.get('status'):
-			add_copy_row("<b>Status:</b>", self.card_data.get('status', 'N/A'))
+			add_copy_row("Status:", self.card_data.get('status', 'N/A'), icon_key='status')
 		
 		virtual_text = "Yes" if self.card_data.get('virtual') else "No"
-		add_copy_row("<b>Virtual Card:</b>", virtual_text)
+		add_copy_row("Virtual Card:", virtual_text, icon_key='virtual')
 		
 		if self.card_data.get('issue_date'):
-			add_copy_row("<b>Issue Date:</b>", str(self.card_data.get('issue_date', 'N/A')))
+			add_copy_row("Issue Date:", str(self.card_data.get('issue_date', 'N/A')), icon_key='issue_date')
 		
 		if self.card_data.get('billing_address'):
-			add_copy_row("<b>Billing Address:</b>", self.card_data.get('billing_address', 'N/A'))
+			add_copy_row("Billing Address:", self.card_data.get('billing_address', 'N/A'), icon_key='billing_address')
 		
 		if self.card_data.get('phone'):
-			add_copy_row("<b>Phone:</b>", self.card_data.get('phone', 'N/A'))
+			add_copy_row("Phone:", self.card_data.get('phone', 'N/A'), icon_key='phone')
 		
 		if self.card_data.get('email'):
-			add_copy_row("<b>Email:</b>", self.card_data.get('email', 'N/A'))
+			add_copy_row("Email:", self.card_data.get('email', 'N/A'), icon_key='email')
 		
 		if self.card_data.get('country'):
-			add_copy_row("<b>Country:</b>", self.card_data.get('country', 'N/A'))
+			add_copy_row("Country:", self.card_data.get('country', 'N/A'), icon_key='country')
 		
 		if self.card_data.get('note'):
 			note_text = self.card_data.get('note', 'N/A')
@@ -403,7 +457,7 @@ class CardViewDialog(QDialog):
 			btn_copy_note.clicked.connect(lambda: self.copy_to_clipboard(note_text))
 			note_layout.addWidget(btn_copy_note)
 			note_widget.setLayout(note_layout)
-			details_layout.addRow("<b>Note:</b>", note_widget)
+			details_layout.addRow(icon_label_widget("Note:", 'note'), note_widget)
 		
 		scroll_widget.setLayout(details_layout)
 		scroll.setWidget(scroll_widget)

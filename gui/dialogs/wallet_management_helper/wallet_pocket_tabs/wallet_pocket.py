@@ -202,7 +202,7 @@ class WalletPocketTab(QWidget):
 		dialog.exec()
 	
 	def edit_card(self, card_data):
-		dialog = CardDialog(self.db_manager, card_data, self)
+		dialog = CardDialog(self.db_manager, card_data, parent=self)
 		if dialog.exec():
 			if self.selected_pocket:
 				self.load_cards(self.selected_pocket.get('id'))

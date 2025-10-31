@@ -9,6 +9,60 @@ import qtawesome as qta
 from ..wallet_signal_manager import WalletSignalManager
 
 
+# Local icon mapping for card dialog
+ICONS = {
+	'card_name': 'fa6s.tag',
+	'card_number': 'fa6s.credit-card',
+	'card_type': 'fa6s.list-check',
+	'vendor': 'fa6s.building',
+	'issuer': 'fa6s.building-columns',
+	'status': 'fa6s.circle-check',
+	'virtual': 'fa6s.memory',
+	'issue_date': 'fa6s.calendar-day',
+	'expiry_date': 'fa6s.clock',
+	'holder_name': 'fa6s.user',
+	'cvv': 'fa6s.lock',
+	'billing_address': 'fa6s.address-card',
+	'phone': 'fa6s.phone',
+	'email': 'fa6s.envelope',
+	'country': 'fa6s.globe',
+	'card_limit': 'fa6s.chart-line',
+	'image': 'fa6s.image',
+	'color': 'fa6s.palette',
+	'note': 'fa6s.note-sticky'
+}
+
+
+def icon_label_widget(text: str, icon_key: str, size: int = 14):
+	"""Return a QWidget with a small icon (from ICONS) and a label for form rows."""
+	from PySide6.QtWidgets import QWidget, QLabel, QHBoxLayout
+	from PySide6.QtCore import Qt
+
+	w = QWidget()
+	layout = QHBoxLayout()
+	layout.setContentsMargins(0, 0, 0, 0)
+	layout.setSpacing(6)
+
+	icon_name = ICONS.get(icon_key)
+	icon_lbl = QLabel()
+	if icon_name:
+		try:
+			ico = qta.icon(icon_name)
+			pix = ico.pixmap(size, size)
+			icon_lbl.setPixmap(pix)
+		except Exception:
+			pass
+
+	text_lbl = QLabel(text)
+	text_lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+
+	layout.addWidget(icon_lbl)
+	layout.addWidget(text_lbl)
+	layout.addStretch()
+	w.setLayout(layout)
+	return w
+
+
 class CardDialog(QDialog):
 	def __init__(self, db_manager, card_data=None, pocket_id=None, parent=None):
 		super().__init__(parent)
@@ -16,11 +70,12 @@ class CardDialog(QDialog):
 		self.card_data = card_data
 		self.pocket_id = pocket_id if not card_data else card_data.get('pocket_id')
 		self.setWindowTitle("Add Card" if not card_data else "Edit Card")
-		self.setMinimumWidth(500)
-		self.setMinimumHeight(600)
+		self.setMinimumWidth(400)
 		self.selected_color = "#1E3A8A"
 		self.image_data = None
 		self.init_ui()
+		if self.card_data:
+			self.load_card_data()
 	
 	def create_field_with_buttons(self, widget, tooltip=""):
 		container = QWidget()
@@ -131,34 +186,34 @@ class CardDialog(QDialog):
 		
 		self.input_card_name = QLineEdit()
 		self.input_card_name.setPlaceholderText("e.g., Visa Platinum, Mastercard")
-		form_layout.addRow("Card Name:", self.create_field_with_buttons(
+		form_layout.addRow(icon_label_widget("Card Name:", 'card_name'), self.create_field_with_buttons(
 			self.input_card_name, "Name of the card"))
 		
 		self.input_card_number = QLineEdit()
 		self.input_card_number.setPlaceholderText("1234 5678 9012 3456")
-		form_layout.addRow("Card Number:", self.create_field_with_buttons(
+		form_layout.addRow(icon_label_widget("Card Number:", 'card_number'), self.create_field_with_buttons(
 			self.input_card_number, "16-digit card number"))
 		
 		self.input_card_type = QLineEdit()
 		self.input_card_type.setPlaceholderText("e.g., Credit, Debit, Prepaid")
-		form_layout.addRow("Card Type:", self.create_field_with_buttons(
+		form_layout.addRow(icon_label_widget("Card Type:", 'card_type'), self.create_field_with_buttons(
 			self.input_card_type, "Type: Credit, Debit, or Prepaid"))
 		
 		self.input_vendor = QLineEdit()
 		self.input_vendor.setPlaceholderText("e.g., Visa, Mastercard, AmEx")
-		form_layout.addRow("Vendor:", self.create_field_with_buttons(
+		form_layout.addRow(icon_label_widget("Vendor:", 'vendor'), self.create_field_with_buttons(
 			self.input_vendor, "Card vendor/network"))
 		
 		self.input_issuer = QLineEdit()
 		self.input_issuer.setPlaceholderText("e.g., Bank Name")
-		form_layout.addRow("Issuer:", self.create_field_with_buttons(
+		form_layout.addRow(icon_label_widget("Issuer:", 'issuer'), self.create_field_with_buttons(
 			self.input_issuer, "Bank or institution that issued the card"))
 		
 		self.input_status = QComboBox()
 		self.input_status.addItems(["Active", "Blocked", "Expired", "Inactive", "Lost", "Stolen", "Closed"])
 		self.input_status.setEditable(True)
 		self.input_status.setInsertPolicy(QComboBox.NoInsert)
-		form_layout.addRow("Status:", self.input_status)
+		form_layout.addRow(icon_label_widget("Status:", 'status'), self.input_status)
 		
 		virtual_widget = QWidget()
 		virtual_layout = QHBoxLayout(virtual_widget)
@@ -171,31 +226,31 @@ class CardDialog(QDialog):
 		buttons_widget_v.setLayout(buttons_layout_v)
 		virtual_layout.addWidget(buttons_widget_v)
 		virtual_layout.addStretch()
-		form_layout.addRow("Virtual Card:", virtual_widget)
+		form_layout.addRow(icon_label_widget("Virtual Card:", 'virtual'), virtual_widget)
 		
 		self.input_issue_date = QDateEdit()
 		self.input_issue_date.setCalendarPopup(True)
 		self.input_issue_date.setDisplayFormat("yyyy-MM-dd")
 		self.input_issue_date.setDate(QDate.currentDate())
 		self.input_issue_date.setToolTip("Date when card was issued")
-		form_layout.addRow("Issue Date:", self.input_issue_date)
+		form_layout.addRow(icon_label_widget("Issue Date:", 'issue_date'), self.input_issue_date)
 		
 		self.input_expiry = QDateEdit()
 		self.input_expiry.setCalendarPopup(True)
 		self.input_expiry.setDisplayFormat("MM/yy")
 		self.input_expiry.setDate(QDate.currentDate().addYears(3))
 		self.input_expiry.setToolTip("Card expiration date")
-		form_layout.addRow("Expiry Date:", self.input_expiry)
+		form_layout.addRow(icon_label_widget("Expiry Date:", 'expiry_date'), self.input_expiry)
 		
 		self.input_card_holder = QLineEdit()
 		self.input_card_holder.setPlaceholderText("Card Holder Name")
-		form_layout.addRow("Holder Name:", self.create_field_with_buttons(
+		form_layout.addRow(icon_label_widget("Holder Name:", 'holder_name'), self.create_field_with_buttons(
 			self.input_card_holder, "Name on the card"))
 		
 		self.input_cvv = QLineEdit()
 		self.input_cvv.setPlaceholderText("123")
 		self.input_cvv.setMaxLength(4)
-		form_layout.addRow("CVV:", self.create_field_with_buttons(
+		form_layout.addRow(icon_label_widget("CVV:", 'cvv'), self.create_field_with_buttons(
 			self.input_cvv, "Card security code (3 or 4 digits)"))
 		
 		billing_widget = QWidget()
@@ -210,21 +265,21 @@ class CardDialog(QDialog):
 		buttons_layout_b = self.create_copy_paste_buttons(self.input_billing_address)
 		buttons_widget_b.setLayout(buttons_layout_b)
 		billing_layout.addWidget(buttons_widget_b, 0, Qt.AlignRight)
-		form_layout.addRow("Billing Address:", billing_widget)
+		form_layout.addRow(icon_label_widget("Billing Address:", 'billing_address'), billing_widget)
 		
 		self.input_phone = QLineEdit()
 		self.input_phone.setPlaceholderText("Phone number")
-		form_layout.addRow("Phone:", self.create_field_with_buttons(
+		form_layout.addRow(icon_label_widget("Phone:", 'phone'), self.create_field_with_buttons(
 			self.input_phone, "Contact phone number"))
 		
 		self.input_email = QLineEdit()
 		self.input_email.setPlaceholderText("Email address")
-		form_layout.addRow("Email:", self.create_field_with_buttons(
+		form_layout.addRow(icon_label_widget("Email:", 'email'), self.create_field_with_buttons(
 			self.input_email, "Contact email address"))
 		
 		self.input_country = QLineEdit()
 		self.input_country.setPlaceholderText("Country")
-		form_layout.addRow("Country:", self.create_field_with_buttons(
+		form_layout.addRow(icon_label_widget("Country:", 'country'), self.create_field_with_buttons(
 			self.input_country, "Country of issuance"))
 		
 		limit_widget = QWidget()
@@ -240,7 +295,7 @@ class CardDialog(QDialog):
 		buttons_layout_l = self.create_copy_paste_buttons(self.input_card_limit)
 		buttons_widget_l.setLayout(buttons_layout_l)
 		limit_layout.addWidget(buttons_widget_l)
-		form_layout.addRow("Card Limit:", limit_widget)
+		form_layout.addRow(icon_label_widget("Card Limit:", 'card_limit'), limit_widget)
 		
 		image_widget = QWidget()
 		image_layout = QHBoxLayout(image_widget)
@@ -254,7 +309,7 @@ class CardDialog(QDialog):
 		self.image_preview.setFrameShape(QFrame.Box)
 		image_layout.addWidget(self.image_preview)
 		image_layout.addStretch()
-		form_layout.addRow("Image:", image_widget)
+		form_layout.addRow(icon_label_widget("Image:", 'image'), image_widget)
 		
 		color_widget = QWidget()
 		color_layout = QHBoxLayout(color_widget)
@@ -271,7 +326,7 @@ class CardDialog(QDialog):
 		buttons_widget_c.setLayout(buttons_layout_c)
 		color_layout.addWidget(buttons_widget_c)
 		color_layout.addStretch()
-		form_layout.addRow("Color:", color_widget)
+		form_layout.addRow(icon_label_widget("Color:", 'color'), color_widget)
 		
 		note_widget = QWidget()
 		note_layout = QVBoxLayout(note_widget)
@@ -285,7 +340,7 @@ class CardDialog(QDialog):
 		buttons_layout_n = self.create_copy_paste_buttons(self.input_note)
 		buttons_widget_n.setLayout(buttons_layout_n)
 		note_layout.addWidget(buttons_widget_n, 0, Qt.AlignRight)
-		form_layout.addRow("Note:", note_widget)
+		form_layout.addRow(icon_label_widget("Note:", 'note'), note_widget)
 		
 		scroll_widget.setLayout(form_layout)
 		scroll.setWidget(scroll_widget)

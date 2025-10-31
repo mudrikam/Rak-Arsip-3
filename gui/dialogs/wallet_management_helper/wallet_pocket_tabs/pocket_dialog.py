@@ -8,6 +8,46 @@ import qtawesome as qta
 from ..wallet_signal_manager import WalletSignalManager
 
 
+# Local icon mapping for pocket dialog
+ICONS = {
+	'name': 'fa6s.wallet',
+	'pocket_type': 'fa6s.layer-group',
+	'icon': 'fa6s.image',
+	'color': 'fa6s.palette',
+	'image': 'fa6s.upload',
+	'settings': 'fa6s.gears',
+	'note': 'fa6s.note-sticky'
+}
+
+
+def icon_label_widget(text: str, icon_key: str, size: int = 14):
+	from PySide6.QtWidgets import QWidget, QLabel, QHBoxLayout
+	from PySide6.QtCore import Qt
+
+	w = QWidget()
+	layout = QHBoxLayout()
+	layout.setContentsMargins(0, 0, 0, 0)
+	layout.setSpacing(6)
+
+	icon_name = ICONS.get(icon_key)
+	icon_lbl = QLabel()
+	if icon_name:
+		try:
+			ico = qta.icon(icon_name)
+			icon_lbl.setPixmap(ico.pixmap(size, size))
+		except Exception:
+			pass
+
+	text_lbl = QLabel(text)
+	text_lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+
+	layout.addWidget(icon_lbl)
+	layout.addWidget(text_lbl)
+	layout.addStretch()
+	w.setLayout(layout)
+	return w
+
+
 class PocketDialog(QDialog):
 	def __init__(self, db_manager, pocket_data=None, parent=None):
 		super().__init__(parent)
@@ -26,13 +66,13 @@ class PocketDialog(QDialog):
 		self.input_name.setPlaceholderText("e.g., Main Wallet, Savings")
 		self.input_name.setToolTip("Enter the pocket name")
 		name_widget = self.create_field_with_buttons_widget(self.input_name)
-		form_layout.addRow("Name:", name_widget)
+		form_layout.addRow(icon_label_widget("Name:", 'name'), name_widget)
 		
 		self.input_pocket_type = QLineEdit()
 		self.input_pocket_type.setPlaceholderText("e.g., Cash, Digital, Savings")
 		self.input_pocket_type.setToolTip("Type of pocket (Cash, Digital, Savings, etc.)")
 		type_widget = self.create_field_with_buttons_widget(self.input_pocket_type)
-		form_layout.addRow("Pocket Type:", type_widget)
+		form_layout.addRow(icon_label_widget("Pocket Type:", 'pocket_type'), type_widget)
 		
 		icon_widget = QWidget()
 		icon_layout = QHBoxLayout(icon_widget)
@@ -49,7 +89,7 @@ class PocketDialog(QDialog):
 		buttons_layout = self.create_copy_paste_buttons(self.input_icon)
 		buttons_widget.setLayout(buttons_layout)
 		icon_layout.addWidget(buttons_widget)
-		form_layout.addRow("Icon:", icon_widget)
+		form_layout.addRow(icon_label_widget("Icon:", 'icon'), icon_widget)
 		
 		color_widget = QWidget()
 		color_layout = QHBoxLayout(color_widget)
@@ -67,7 +107,7 @@ class PocketDialog(QDialog):
 		buttons_widget2.setLayout(buttons_layout2)
 		color_layout.addWidget(buttons_widget2)
 		color_layout.addStretch()
-		form_layout.addRow("Color:", color_widget)
+		form_layout.addRow(icon_label_widget("Color:", 'color'), color_widget)
 		
 		image_widget = QWidget()
 		image_layout = QHBoxLayout(image_widget)
@@ -82,7 +122,7 @@ class PocketDialog(QDialog):
 		self.image_preview.setFrameShape(QFrame.Box)
 		image_layout.addWidget(self.image_preview)
 		image_layout.addStretch()
-		form_layout.addRow("Image:", image_widget)
+		form_layout.addRow(icon_label_widget("Image:", 'image'), image_widget)
 		
 		settings_widget = QWidget()
 		settings_layout = QVBoxLayout(settings_widget)
@@ -96,7 +136,7 @@ class PocketDialog(QDialog):
 		buttons_layout3 = self.create_copy_paste_buttons(self.input_settings)
 		buttons_widget3.setLayout(buttons_layout3)
 		settings_layout.addWidget(buttons_widget3, 0, Qt.AlignRight)
-		form_layout.addRow("Settings:", settings_widget)
+		form_layout.addRow(icon_label_widget("Settings:", 'settings'), settings_widget)
 		
 		note_widget = QWidget()
 		note_layout = QVBoxLayout(note_widget)
@@ -110,7 +150,7 @@ class PocketDialog(QDialog):
 		buttons_layout4 = self.create_copy_paste_buttons(self.input_note)
 		buttons_widget4.setLayout(buttons_layout4)
 		note_layout.addWidget(buttons_widget4, 0, Qt.AlignRight)
-		form_layout.addRow("Note:", note_widget)
+		form_layout.addRow(icon_label_widget("Note:", 'note'), note_widget)
 		
 		layout.addLayout(form_layout)
 		
