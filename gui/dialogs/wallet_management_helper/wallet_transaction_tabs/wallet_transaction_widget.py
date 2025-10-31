@@ -28,7 +28,8 @@ class TransactionImageLabel(QLabel):
         if self.is_hovered:
             style = "border: 2px dashed #007acc; border-radius: 6px; color: #007acc;"
         else:
-            style = "border: 1px dashed #999; border-radius: 6px; color: #666;"
+            # idle border uses same thickness and dash as hover; only color differs
+            style = "border: 2px dashed #999; border-radius: 6px; color: #666;"
         self.setStyleSheet(style)
     
     def enterEvent(self, event):
@@ -940,14 +941,17 @@ class WalletTransactionWidget(QWidget):
         self.refresh_items_table()
         self.update_total_amount()
         self.transaction_image_path = None
+        # Reset image label text and let the widget restore its own default style
         self.image_label.clear()
         self.image_label.setText("Drop Image Here\nor Click to Open Image")
-        self.image_label.setStyleSheet(
-            "border: 1px dashed #999; border-radius: 6px; color: #666; background-color: #f9f9f9;"
-        )
+        if hasattr(self.image_label, "update_style"):
+            try:
+                self.image_label.update_style()
+            except Exception:
+                self.image_label.setStyleSheet("border: 1px dashed #999; border-radius: 6px; color: #666;")
         # Update UI to reflect Add mode
         self.update_ui_for_mode()
-
+    
     def delete_transaction(self):
         """Delete transaction with detailed warning."""
         if not self.edit_mode or not self.current_transaction_id:
@@ -1667,11 +1671,14 @@ class WalletTransactionWidget(QWidget):
         self.refresh_items_table()
         self.update_total_amount()
         self.transaction_image_path = None
+        # Reset image label text and let the widget restore its own default style
         self.image_label.clear()
         self.image_label.setText("Drop Image Here\nor Click to Open Image")
-        self.image_label.setStyleSheet(
-            "border: 1px dashed #999; border-radius: 6px; color: #666; background-color: #f9f9f9;"
-        )
+        if hasattr(self.image_label, "update_style"):
+            try:
+                self.image_label.update_style()
+            except Exception:
+                self.image_label.setStyleSheet("border: 1px dashed #999; border-radius: 6px; color: #666;")
         # Update UI to reflect Add mode
         self.update_ui_for_mode()
     
@@ -1788,8 +1795,9 @@ class WalletTransactionWidget(QWidget):
             self.image_label.setPixmap(
                 pixmap.scaled(160, 140, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             )
+            # use 2px solid so thickness matches dashed idle/hover borders
             self.image_label.setStyleSheet(
-                "border: 1px solid #999; border-radius: 6px; background-color: #ffffff;"
+                "border: 2px solid #999; border-radius: 6px; background-color: #ffffff;"
             )
         else:
             QMessageBox.warning(self, "Error", "Failed to load image")
