@@ -12,6 +12,15 @@ from .wallet_add_transaction_item_dialog import WalletAddTransactionItemDialog
 from ..wallet_signal_manager import WalletSignalManager
 from .wallet_transaction_deletion_warning_dialog import WalletTransactionDeletionDialog
 
+# Icon map for this module (kept local so it's easy to change)
+ICONS = {
+    'edit_item': 'fa6s.pen-to-square',
+    'delete_item': 'fa6s.trash',
+    'add_item': 'fa6s.plus',
+    'clear_items': 'fa6s.broom',
+    'amount': 'fa6s.coins',
+}
+
 
 class TransactionImageLabel(QLabel):
     """Custom QLabel that accepts drag and drop for images."""
@@ -313,13 +322,13 @@ class WalletTransactionWidget(QWidget):
         self.label_amount.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         items_top_row.addWidget(self.label_amount, alignment=Qt.AlignLeft)
         items_top_row.addStretch()
-        self.btn_add_item = QPushButton(qta.icon("fa6s.plus"), " Add Item")
+        self.btn_add_item = QPushButton(qta.icon(ICONS['add_item']), " Add Item")
         self.btn_add_item.setMaximumWidth(120)
         self.btn_add_item.clicked.connect(self.on_add_item_clicked)
         items_top_row.addWidget(self.btn_add_item)
 
     # Clear Items button
-        self.btn_clear_items = QPushButton(qta.icon("fa6s.broom"), " Clear Items")
+        self.btn_clear_items = QPushButton(qta.icon(ICONS['clear_items']), " Clear Items")
         self.btn_clear_items.setMaximumWidth(120)
         self.btn_clear_items.setToolTip("Delete all items for this transaction")
         self.btn_clear_items.clicked.connect(self.on_clear_items_clicked)
@@ -354,6 +363,8 @@ class WalletTransactionWidget(QWidget):
         header.setMinimumSectionSize(20)
         self.items_table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.items_table.customContextMenuRequested.connect(self.show_item_context_menu)
+        # Double-click an item to edit it (same as Edit action)
+        self.items_table.cellDoubleClicked.connect(self.on_item_double_clicked)
         items_layout.addWidget(self.items_table)
 
         items_group.setLayout(items_layout)
@@ -662,7 +673,7 @@ class WalletTransactionWidget(QWidget):
             
             # Edit button
             btn_edit_item = QPushButton()
-            btn_edit_item.setIcon(qta.icon("fa6s.pen-to-square"))
+            btn_edit_item.setIcon(qta.icon(ICONS['edit_item']))
             btn_edit_item.setFixedSize(20, 20)
             btn_edit_item.setToolTip("Edit Item")
             btn_edit_item.clicked.connect(lambda checked, item_idx=idx: self.edit_item_by_index(item_idx))
@@ -670,7 +681,7 @@ class WalletTransactionWidget(QWidget):
             
             # Delete button
             btn_delete_item = QPushButton()
-            btn_delete_item.setIcon(qta.icon("fa6s.trash"))
+            btn_delete_item.setIcon(qta.icon(ICONS['delete_item']))
             btn_delete_item.setFixedSize(20, 20)
             btn_delete_item.setToolTip("Delete Item")
             btn_delete_item.clicked.connect(lambda checked, item_idx=idx: self.delete_item_by_index(item_idx))
@@ -683,6 +694,19 @@ class WalletTransactionWidget(QWidget):
             for col in range(6):
                 if self.items_table.item(row, col):
                     self.items_table.item(row, col).setData(Qt.UserRole, idx)
+
+    def on_item_double_clicked(self, row, column):
+        """Handle double-click on an item row: open edit dialog for that item."""
+        if row < 0:
+            return
+        item = self.items_table.item(row, 0)
+        if not item:
+            return
+        item_idx = item.data(Qt.UserRole)
+        if item_idx is None or item_idx >= len(self.transaction_items):
+            return
+        # Reuse existing edit-by-index logic
+        self.edit_item_by_index(item_idx)
     
     def show_item_context_menu(self, position):
         """Show context menu for item table."""
@@ -691,11 +715,11 @@ class WalletTransactionWidget(QWidget):
         
         menu = QMenu(self)
         
-        edit_action = QAction(qta.icon("fa6s.pen-to-square"), "Edit Item", self)
+        edit_action = QAction(qta.icon(ICONS['edit_item']), "Edit Item", self)
         edit_action.triggered.connect(self.edit_selected_item)
         menu.addAction(edit_action)
         
-        delete_action = QAction(qta.icon("fa6s.trash"), "Delete Item", self)
+        delete_action = QAction(qta.icon(ICONS['delete_item']), "Delete Item", self)
         delete_action.triggered.connect(self.delete_selected_item)
         menu.addAction(delete_action)
         

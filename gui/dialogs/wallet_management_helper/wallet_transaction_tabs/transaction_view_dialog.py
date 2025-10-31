@@ -3,11 +3,74 @@ from PySide6.QtWidgets import (
     QPushButton, QGroupBox, QFormLayout, QScrollArea, QWidget, QHeaderView,
     QDialogButtonBox, QMenu
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QPixmap, QFont, QAction
 import qtawesome as qta
 from datetime import datetime
 import os
+
+
+# Icon mapping (use this dict to change icons easily)
+ICONS = {
+    # Transaction info
+    'name': 'fa6s.user',
+    'date': 'fa6s.calendar-days',
+    'type': 'fa6s.tags',
+    'pocket': 'fa6s.wallet',
+    'card': 'fa6s.credit-card',
+    'category': 'fa6s.tags',
+    'status': 'fa6s.circle-check',
+    'location': 'fa6s.location-dot',
+    'currency': 'fa6s.coins',
+    'total_amount': 'fa6s.coins',
+    'items': 'fa6s.boxes-stacked',
+    # Item detail
+    'item_type': 'fa6s.tags',
+    'sku': 'fa6s.barcode',
+    'item_name': 'fa6s.box',
+    'description': 'fa6s.align-left',
+    'quantity': 'fa6s.hashtag',
+    'unit': 'fa6s.ruler',
+    'unit_price': 'fa6s.money-bill',
+    'total': 'fa6s.calculator',
+    'dimensions': 'fa6s.ruler-combined',
+    'weight': 'fa6s.weight-scale',
+    'material': 'fa6s.palette',
+    'color': 'fa6s.fill-drip',
+    'file_url': 'fa6s.link',
+    'license_key': 'fa6s.key',
+    'expiry_date': 'fa6s.calendar-days',
+    'digital_type': 'fa6s.cloud',
+}
+
+
+def icon_label_widget(text, icon_key, size=14):
+    """Return a QWidget with an icon (from ICONS) and a text label side-by-side.
+
+    Use this when adding rows to a QFormLayout so the label shows an icon.
+    """
+    w = QWidget()
+    hl = QHBoxLayout()
+    hl.setContentsMargins(0, 0, 0, 0)
+    hl.setSpacing(6)
+
+    icon_name = ICONS.get(icon_key)
+    if icon_name:
+        try:
+            ic = qta.icon(icon_name)
+            pm = ic.pixmap(QSize(size, size))
+            icon_lbl = QLabel()
+            icon_lbl.setPixmap(pm)
+            icon_lbl.setFixedSize(size + 2, size + 2)
+            hl.addWidget(icon_lbl)
+        except Exception:
+            # fallback: empty spacer
+            pass
+
+    text_lbl = QLabel(text)
+    hl.addWidget(text_lbl)
+    w.setLayout(hl)
+    return w
 
 
 class ItemDetailDialog(QDialog):
@@ -24,12 +87,12 @@ class ItemDetailDialog(QDialog):
 
         layout = QVBoxLayout()
         form = QFormLayout()
-        form.setLabelAlignment(Qt.AlignRight)
+        form.setLabelAlignment(Qt.AlignLeft)
 
-        # Basic identity
-        form.addRow("Item Type:", QLabel(str(item_data.get('item_type', ''))))
-        form.addRow("SKU:", QLabel(str(item_data.get('sku', ''))))
-        form.addRow("Item Name:", QLabel(str(item_data.get('item_name', ''))))
+        # Basic identity (with icons)
+        form.addRow(icon_label_widget("Item Type:", 'item_type'), QLabel(str(item_data.get('item_type', ''))))
+        form.addRow(icon_label_widget("SKU:", 'sku'), QLabel(str(item_data.get('sku', ''))))
+        form.addRow(icon_label_widget("Item Name:", 'item_name'), QLabel(str(item_data.get('item_name', ''))))
 
         # Description (multiline)
         desc = item_data.get('item_description', '') or ''
@@ -39,14 +102,14 @@ class ItemDetailDialog(QDialog):
             desc_full = f"{desc}\n\nNote: {note}" if desc else f"Note: {note}"
         desc_label = QLabel(desc_full)
         desc_label.setWordWrap(True)
-        form.addRow("Description:", desc_label)
+        form.addRow(icon_label_widget("Description:", 'description'), desc_label)
 
         # Quantity / unit / price
-        form.addRow("Quantity:", QLabel(str(item_data.get('quantity', ''))))
-        form.addRow("Unit:", QLabel(str(item_data.get('unit', ''))))
-        form.addRow("Unit Price:", QLabel(f"{item_data.get('amount', 0):,.2f}"))
+        form.addRow(icon_label_widget("Quantity:", 'quantity'), QLabel(str(item_data.get('quantity', ''))))
+        form.addRow(icon_label_widget("Unit:", 'unit'), QLabel(str(item_data.get('unit', ''))))
+        form.addRow(icon_label_widget("Unit Price:", 'unit_price'), QLabel(f"{item_data.get('amount', 0):,.2f}"))
         total = (item_data.get('quantity', 0) or 0) * (item_data.get('amount', 0) or 0)
-        form.addRow("Total:", QLabel(f"{total:,.2f}"))
+        form.addRow(icon_label_widget("Total:", 'total'), QLabel(f"{total:,.2f}"))
 
         # Physical properties
         w = item_data.get('width')
@@ -60,19 +123,19 @@ class ItemDetailDialog(QDialog):
         if d:
             dims.append(f"D: {d}")
         dims_text = ", ".join(dims) if dims else "-"
-        form.addRow("Dimensions:", QLabel(dims_text))
+        form.addRow(icon_label_widget("Dimensions:", 'dimensions'), QLabel(dims_text))
 
         wt = item_data.get('weight')
-        form.addRow("Weight:", QLabel(f"{wt} kg" if wt else "-"))
-        form.addRow("Material:", QLabel(str(item_data.get('material', ''))))
-        form.addRow("Color:", QLabel(str(item_data.get('color', ''))))
+        form.addRow(icon_label_widget("Weight:", 'weight'), QLabel(f"{wt} kg" if wt else "-"))
+        form.addRow(icon_label_widget("Material:", 'material'), QLabel(str(item_data.get('material', ''))))
+        form.addRow(icon_label_widget("Color:", 'color'), QLabel(str(item_data.get('color', ''))))
 
         # Links / license / expiry
-        form.addRow("File URL:", QLabel(str(item_data.get('file_url', ''))))
-        form.addRow("License Key:", QLabel(str(item_data.get('license_key', ''))))
+        form.addRow(icon_label_widget("File URL:", 'file_url'), QLabel(str(item_data.get('file_url', ''))))
+        form.addRow(icon_label_widget("License Key:", 'license_key'), QLabel(str(item_data.get('license_key', ''))))
         expiry = item_data.get('expiry_date') or ''
-        form.addRow("Expiry Date:", QLabel(str(expiry)))
-        form.addRow("Digital Type:", QLabel(str(item_data.get('digital_type', ''))))
+        form.addRow(icon_label_widget("Expiry Date:", 'expiry_date'), QLabel(str(expiry)))
+        form.addRow(icon_label_widget("Digital Type:", 'digital_type'), QLabel(str(item_data.get('digital_type', ''))))
 
         layout.addLayout(form)
 
@@ -97,11 +160,11 @@ class TransactionViewDialog(QDialog):
     
     def init_ui(self):
         main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setSpacing(15)
+        main_layout.setContentsMargins(5, 5, 5, 5)
         
         # Header
         header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(10, 10, 10, 10)
         
         self.title_label = QLabel("Transaction Details")
         title_font = QFont()
@@ -126,7 +189,7 @@ class TransactionViewDialog(QDialog):
         # Transaction info group (images will be shown to the left)
         images_group = QGroupBox("Invoice Images")
         images_layout = QVBoxLayout()
-        images_layout.setContentsMargins(6, 6, 6, 6)
+        images_layout.setContentsMargins(0, 0, 0, 0)
 
         self.images_scroll = QScrollArea()
         # increase space for invoice images (allow wider thumbnails)
@@ -161,40 +224,40 @@ class TransactionViewDialog(QDialog):
 
         self.lbl_name = QLabel()
         self.lbl_name.setStyleSheet("font-weight: bold; font-size: 14px;")
-        info_layout.addRow("Name:", self.lbl_name)
-        
+        info_layout.addRow(icon_label_widget("Name:", 'name'), self.lbl_name)
+
         self.lbl_date = QLabel()
-        info_layout.addRow("Date:", self.lbl_date)
-        
+        info_layout.addRow(icon_label_widget("Date:", 'date'), self.lbl_date)
+
         self.lbl_type = QLabel()
-        info_layout.addRow("Type:", self.lbl_type)
-        
+        info_layout.addRow(icon_label_widget("Type:", 'type'), self.lbl_type)
+
         self.lbl_pocket = QLabel()
-        info_layout.addRow("Pocket:", self.lbl_pocket)
-        
+        info_layout.addRow(icon_label_widget("Pocket:", 'pocket'), self.lbl_pocket)
+
         # Card (assigned card for the transaction)
         self.lbl_card = QLabel()
-        info_layout.addRow("Card:", self.lbl_card)
-        
+        info_layout.addRow(icon_label_widget("Card:", 'card'), self.lbl_card)
+
         self.lbl_category = QLabel()
-        info_layout.addRow("Category:", self.lbl_category)
-        
+        info_layout.addRow(icon_label_widget("Category:", 'category'), self.lbl_category)
+
         self.lbl_status = QLabel()
-        info_layout.addRow("Status:", self.lbl_status)
-        
+        info_layout.addRow(icon_label_widget("Status:", 'status'), self.lbl_status)
+
         self.lbl_location = QLabel()
-        info_layout.addRow("Location:", self.lbl_location)
-        
+        info_layout.addRow(icon_label_widget("Location:", 'location'), self.lbl_location)
+
         self.lbl_currency = QLabel()
-        info_layout.addRow("Currency:", self.lbl_currency)
-        
+        info_layout.addRow(icon_label_widget("Currency:", 'currency'), self.lbl_currency)
+
         self.lbl_total_amount = QLabel()
         self.lbl_total_amount.setStyleSheet("font-weight: bold; font-size: 14px; color: #007acc;")
-        info_layout.addRow("Total Amount:", self.lbl_total_amount)
+        info_layout.addRow(icon_label_widget("Total Amount:", 'total_amount'), self.lbl_total_amount)
         # Total items label moved into transaction info for easier visibility
         self.lbl_item_count = QLabel()
         self.lbl_item_count.setStyleSheet("font-weight: bold;")
-        info_layout.addRow("Total Items:", self.lbl_item_count)
+        info_layout.addRow(icon_label_widget("Items:", 'items'), self.lbl_item_count)
         
         info_group.setLayout(info_layout)
         

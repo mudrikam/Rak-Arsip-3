@@ -3,8 +3,60 @@ from PySide6.QtWidgets import (
     QPushButton, QTextEdit, QLabel, QComboBox, QMessageBox,
     QDateTimeEdit, QSpinBox, QDoubleSpinBox
 )
-from PySide6.QtCore import Qt, QDateTime
+from PySide6.QtCore import Qt, QDateTime, QSize
 import qtawesome as qta
+
+
+# Local icon mapping for this dialog
+ICONS = {
+    'item_type': 'fa6s.list-check',
+    'sku': 'fa6s.barcode',
+    'name': 'fa6s.tag',
+    'description': 'fa6s.align-left',
+    'quantity': 'fa6s.hashtag',
+    'unit': 'fa6s.ruler',
+    'amount': 'fa6s.coins',
+    'dimensions': 'fa6s.arrows-left-right',
+    'weight': 'fa6s.weight-hanging',
+    'material': 'fa6s.cube',
+    'color': 'fa6s.palette',
+    'file_url': 'fa6s.link',
+    'license': 'fa6s.key',
+    'expiry': 'fa6s.clock',
+    'digital_type': 'fa6s.computer',
+    'note': 'fa6s.note-sticky'
+}
+
+
+def icon_label_widget(text: str, icon_key: str, size: int = 14):
+    """Create a widget containing an icon and a text label for form rows."""
+    from PySide6.QtWidgets import QWidget, QLabel, QHBoxLayout
+    from PySide6.QtCore import Qt
+
+    w = QWidget()
+    layout = QHBoxLayout()
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(6)
+
+    icon_name = ICONS.get(icon_key)
+    icon_lbl = QLabel()
+    if icon_name:
+        try:
+            icon = qta.icon(icon_name)
+            pix = icon.pixmap(QSize(size, size))
+            icon_lbl.setPixmap(pix)
+        except Exception:
+            # fallback: empty label
+            pass
+
+    text_lbl = QLabel(text)
+    text_lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+
+    layout.addWidget(icon_lbl)
+    layout.addWidget(text_lbl)
+    layout.addStretch()
+    w.setLayout(layout)
+    return w
 
 
 class WalletAddTransactionItemDialog(QDialog):
@@ -31,20 +83,20 @@ class WalletAddTransactionItemDialog(QDialog):
         self.input_item_type = QComboBox()
         self.input_item_type.setEditable(True)
         self.input_item_type.addItems(["Physical", "Digital", "Service"])
-        form_layout.addRow("Item Type:", self.input_item_type)
+        form_layout.addRow(icon_label_widget("Item Type:", 'item_type'), self.input_item_type)
 
         self.input_sku = QLineEdit()
         self.input_sku.setPlaceholderText("Optional SKU/Product code")
-        form_layout.addRow("SKU:", self.input_sku)
+        form_layout.addRow(icon_label_widget("SKU:", 'sku'), self.input_sku)
 
         self.input_item_name = QLineEdit()
         self.input_item_name.setPlaceholderText("Enter item name (required)")
-        form_layout.addRow("Item Name*:", self.input_item_name)
+        form_layout.addRow(icon_label_widget("Item Name*:", 'name'), self.input_item_name)
 
         self.input_item_description = QTextEdit()
         self.input_item_description.setPlaceholderText("Enter item description")
         self.input_item_description.setMaximumHeight(80)
-        form_layout.addRow("Description:", self.input_item_description)
+        form_layout.addRow(icon_label_widget("Description:", 'description'), self.input_item_description)
 
         qty_unit_layout = QHBoxLayout()
         self.input_quantity = QSpinBox()
@@ -56,7 +108,7 @@ class WalletAddTransactionItemDialog(QDialog):
         self.input_unit = QLineEdit()
         self.input_unit.setPlaceholderText("e.g., pcs, kg, m")
         qty_unit_layout.addWidget(self.input_unit)
-        form_layout.addRow("Quantity / Unit:", qty_unit_layout)
+        form_layout.addRow(icon_label_widget("Quantity / Unit:", 'quantity'), qty_unit_layout)
 
         self.input_amount = QDoubleSpinBox()
         self.input_amount.setMinimum(0.0)
@@ -65,7 +117,7 @@ class WalletAddTransactionItemDialog(QDialog):
         self.input_amount.setSingleStep(0.01)
         self.input_amount.setSpecialValueText("")  # Show empty when 0
         self.input_amount.setValue(0.0)
-        form_layout.addRow("Amount*:", self.input_amount)
+        form_layout.addRow(icon_label_widget("Amount*:", 'amount'), self.input_amount)
 
         dimensions_layout = QHBoxLayout()
         self.input_width = QDoubleSpinBox()
@@ -88,46 +140,46 @@ class WalletAddTransactionItemDialog(QDialog):
         self.input_depth.setPrefix("D: ")
         self.input_depth.setSpecialValueText("D: -")
         dimensions_layout.addWidget(self.input_depth)
-        form_layout.addRow("Dimensions:", dimensions_layout)
+        form_layout.addRow(icon_label_widget("Dimensions:", 'dimensions'), dimensions_layout)
 
         self.input_weight = QDoubleSpinBox()
         self.input_weight.setMaximum(99999.99)
         self.input_weight.setDecimals(2)
         self.input_weight.setSuffix(" kg")
         self.input_weight.setSpecialValueText("- kg")
-        form_layout.addRow("Weight:", self.input_weight)
+        form_layout.addRow(icon_label_widget("Weight:", 'weight'), self.input_weight)
 
         self.input_material = QLineEdit()
         self.input_material.setPlaceholderText("e.g., Wood, Metal, Plastic")
-        form_layout.addRow("Material:", self.input_material)
+        form_layout.addRow(icon_label_widget("Material:", 'material'), self.input_material)
 
         self.input_color = QLineEdit()
         self.input_color.setPlaceholderText("e.g., Red, Blue, #FF0000")
-        form_layout.addRow("Color:", self.input_color)
+        form_layout.addRow(icon_label_widget("Color:", 'color'), self.input_color)
 
         self.input_file_url = QLineEdit()
         self.input_file_url.setPlaceholderText("URL to file/download")
-        form_layout.addRow("File URL:", self.input_file_url)
+        form_layout.addRow(icon_label_widget("File URL:", 'file_url'), self.input_file_url)
 
         self.input_license_key = QLineEdit()
         self.input_license_key.setPlaceholderText("License or activation key")
-        form_layout.addRow("License Key:", self.input_license_key)
+        form_layout.addRow(icon_label_widget("License Key:", 'license'), self.input_license_key)
 
         self.input_expiry_date = QDateTimeEdit()
         self.input_expiry_date.setCalendarPopup(True)
         self.input_expiry_date.setDateTime(QDateTime.currentDateTime())
         self.input_expiry_date.setDisplayFormat("yyyy-MM-dd HH:mm")
-        form_layout.addRow("Expiry Date:", self.input_expiry_date)
+        form_layout.addRow(icon_label_widget("Expiry Date:", 'expiry'), self.input_expiry_date)
 
         self.input_digital_type = QComboBox()
         self.input_digital_type.setEditable(True)
         self.input_digital_type.addItems(["", "Software", "eBook", "Music", "Video", "Game", "Subscription"])
-        form_layout.addRow("Digital Type:", self.input_digital_type)
+        form_layout.addRow(icon_label_widget("Digital Type:", 'digital_type'), self.input_digital_type)
 
         self.input_note = QTextEdit()
         self.input_note.setPlaceholderText("Additional notes")
         self.input_note.setMaximumHeight(60)
-        form_layout.addRow("Note:", self.input_note)
+        form_layout.addRow(icon_label_widget("Note:", 'note'), self.input_note)
 
         layout.addLayout(form_layout)
 
