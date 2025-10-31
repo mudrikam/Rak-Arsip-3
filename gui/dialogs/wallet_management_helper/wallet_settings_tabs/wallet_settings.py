@@ -6,6 +6,8 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap, QDragEnterEvent, QDropEvent
 import qtawesome as qta
 from ..wallet_signal_manager import WalletSignalManager
+import os
+import hashlib
 
 
 class LocationImageLabel(QLabel):
@@ -23,7 +25,7 @@ class LocationImageLabel(QLabel):
         if self.is_hovered:
             style = "border: 2px dashed #007acc; border-radius: 6px; color: #007acc;"
         else:
-            style = "border: 1px dashed #999; border-radius: 6px; color: #666;"
+            style = "border: 2px dashed #999; border-radius: 6px; color: #666;"
         self.setStyleSheet(style)
     
     def enterEvent(self, event):
@@ -979,15 +981,8 @@ class WalletSettingsTab(QWidget):
 				return
 			
 			try:
-				from helpers.image_helper import ImageHelper
-				import os
-				
-				self.db_manager.connect(write=False)
-				cursor = self.db_manager.connection.cursor()
-				cursor.execute("SELECT * FROM wallet_transaction_locations WHERE id = ?", (location_id,))
-				location = cursor.fetchone()
-				self.db_manager.close()
-				
+				# Use DB helper to get location record
+				location = self.db_manager.wallet_helper.get_location_by_id(location_id)
 				if location:
 					self.input_location_id.setText(str(location['id']))
 					self.input_location_name.setText(location['name'] or '')
@@ -1003,7 +998,7 @@ class WalletSettingsTab(QWidget):
 					self.input_location_status.setText(location['status'] or '')
 					self.input_location_note.setPlainText(location['note'] or '')
 					
-					self.location_image_path = location['image']
+					self.location_image_path = location.get('image')
 					if self.location_image_path and self.basedir:
 						full_path = os.path.join(self.basedir, self.location_image_path)
 						if os.path.exists(full_path):
@@ -1074,22 +1069,42 @@ class WalletSettingsTab(QWidget):
 			return
 		
 		try:
-			self.db_manager.connect(write=True)
-			cursor = self.db_manager.connection.cursor()
-			cursor.execute("""
-				INSERT INTO wallet_transaction_locations 
-				(name, location_type, address, city, country, postal_code, online_url, contact, phone, email, status, note, image)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			""", (name, location_type, address, city, country, postal_code, online_url, contact, phone, email, status, note, self.location_image_path))
-			self.db_manager.connection.commit()
-			self.db_manager.close()
-			
-			print(f"Location added successfully: {name}")
+			# Prepare absolute image source path if provided
+			image_src = None
+			if self.location_image_path and self.basedir:
+				# if stored as relative path, resolve to absolute for helper
+				if not os.path.isabs(self.location_image_path):
+					image_src = os.path.join(self.basedir, self.location_image_path)
+				else:
+					image_src = self.location_image_path
+
+			location_id = self.db_manager.wallet_helper.add_location(
+				name=name,
+				location_type=location_type,
+				address=address,
+				city=city,
+				country=country,
+				postal_code=postal_code,
+				online_url=online_url,
+				contact=contact,
+				phone=phone,
+				email=email,
+				status=status,
+				note=note,
+				image_src_path=image_src,
+				basedir=self.basedir
+			)
+
+			# Refresh UI and load created record to show image path
+			location = self.db_manager.wallet_helper.get_location_by_id(location_id)
+			if location:
+				self.location_image_path = location.get('image')
+
 			QMessageBox.information(self, "Success", "Location added successfully")
 			self.clear_location_form()
 			self.load_locations()
 			self.signal_manager.emit_location_changed()
-		
+
 		except Exception as e:
 			print(f"ERROR adding location: {e}")
 			import traceback
@@ -1120,23 +1135,37 @@ class WalletSettingsTab(QWidget):
 			return
 		
 		try:
-			self.db_manager.connect(write=True)
-			cursor = self.db_manager.connection.cursor()
-			cursor.execute("""
-				UPDATE wallet_transaction_locations 
-				SET name = ?, location_type = ?, address = ?, city = ?, country = ?, postal_code = ?, 
-				    online_url = ?, contact = ?, phone = ?, email = ?, status = ?, note = ?, image = ?
-				WHERE id = ?
-			""", (name, location_type, address, city, country, postal_code, online_url, contact, phone, email, status, note, self.location_image_path, location_id))
-			self.db_manager.connection.commit()
-			self.db_manager.close()
-			
-			print(f"Location updated successfully: {name}")
+			# Prepare absolute image source path if provided
+			image_src = None
+			if self.location_image_path and self.basedir:
+				if not os.path.isabs(self.location_image_path):
+					image_src = os.path.join(self.basedir, self.location_image_path)
+				else:
+					image_src = self.location_image_path
+
+			self.db_manager.wallet_helper.update_location(
+				location_id=location_id,
+				name=name,
+				location_type=location_type,
+				address=address,
+				city=city,
+				country=country,
+				postal_code=postal_code,
+				online_url=online_url,
+				contact=contact,
+				phone=phone,
+				email=email,
+				status=status,
+				note=note,
+				image_src_path=image_src,
+				basedir=self.basedir
+			)
+
 			QMessageBox.information(self, "Success", "Location updated successfully")
 			self.clear_location_form()
 			self.load_locations()
 			self.signal_manager.emit_location_changed()
-		
+
 		except Exception as e:
 			print(f"ERROR updating location: {e}")
 			import traceback
@@ -1164,13 +1193,8 @@ class WalletSettingsTab(QWidget):
 		
 		if reply == QMessageBox.Yes:
 			try:
-				self.db_manager.connect(write=True)
-				cursor = self.db_manager.connection.cursor()
-				cursor.execute("DELETE FROM wallet_transaction_locations WHERE id = ?", (location_id,))
-				self.db_manager.connection.commit()
-				self.db_manager.close()
-				
-				print(f"Location deleted successfully: {location_name}")
+				# Delegate deletion + cleanup to DB helper
+				self.db_manager.wallet_helper.delete_location(location_id)
 				QMessageBox.information(self, "Success", "Location deleted successfully")
 				self.clear_location_form()
 				self.load_locations()
@@ -1196,25 +1220,67 @@ class WalletSettingsTab(QWidget):
 				"Images (*.png *.jpg *.jpeg *.bmp *.gif)"
 			)
 		
-		if file_path:
-			if not self.basedir:
-				QMessageBox.warning(self, "Error", "Base directory not set")
+		if not file_path:
+			return
+		
+		if not self.basedir:
+			QMessageBox.warning(self, "Error", "Base directory not set")
+			return
+		
+		# If file is already inside managed images/locations, don't re-save; just set relative path
+		try:
+			if ImageHelper.is_path_in_subfolder(self.basedir, file_path, "images", "locations"):
+				rel = os.path.relpath(file_path, self.basedir).replace("\\", "/")
+				# If we're editing and there's an existing image different from this one, attempt cleanup
+				old_rel = self.location_image_path
+				self.location_image_path = rel
+				pixmap = QPixmap(file_path)
+				self.location_image_label.setPixmap(
+					pixmap.scaled(120, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+				)
+				# delete old file if different and exists
+				if old_rel and old_rel != rel:
+					old_abs = os.path.join(self.basedir, old_rel)
+					new_abs = os.path.abspath(file_path)
+					if os.path.exists(old_abs) and os.path.abspath(old_abs) != new_abs:
+						try:
+							os.remove(old_abs)
+							print(f"Removed old location image: {old_abs}")
+						except Exception as e:
+							print(f"Failed to remove old location image '{old_abs}': {e}")
 				return
-			
+		except Exception:
+			# fallback to saving behavior below
+			pass
+
+		# Save new image into managed folder. If we have a location_id, let helper save directly into per-id folder.
+		try:
+			location_id_val = None
+			if self.input_location_id and self.input_location_id.text().strip():
+				location_id_val = self.input_location_id.text().strip()
+
+			# For upload-only (before create), save into tmp folder; if location_id present, still save to tmp so DB helper
+			# can move or handle it consistently when the record is created/updated.
+			tmp_dir = os.path.join(self.basedir, "images", "locations", "tmp")
+			os.makedirs(tmp_dir, exist_ok=True)
 			timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-			dir_path = os.path.join(self.basedir, "images", "locations")
-			filename = f"location_{timestamp}.jpg"
-			output_path = os.path.join(dir_path, filename)
-			
+			hash_part = ImageHelper._compute_hash_for_source(file_path) or hashlib.sha1(timestamp.encode('utf-8')).hexdigest()[:8]
+			if location_id_val:
+				filename = f"location_{location_id_val}_{timestamp}_{hash_part}.jpg"
+			else:
+				filename = f"location_tmp_{timestamp}_{hash_part}.jpg"
+			output_path = os.path.join(tmp_dir, filename)
 			if ImageHelper.save_image_to_file(file_path, output_path):
-				self.location_image_path = os.path.relpath(output_path, self.basedir)
-				
+				new_rel = os.path.relpath(output_path, self.basedir).replace("\\", "/")
+				self.location_image_path = new_rel
 				pixmap = QPixmap(output_path)
 				self.location_image_label.setPixmap(
 					pixmap.scaled(120, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation)
 				)
 			else:
 				QMessageBox.warning(self, "Error", "Failed to process image")
+		except Exception as e:
+			print(f"Error saving location image: {e}")
 	
 	def clear_location_image(self):
 		"""Clear location image."""

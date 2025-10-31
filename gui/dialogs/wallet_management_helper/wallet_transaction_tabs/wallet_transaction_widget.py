@@ -1810,16 +1810,89 @@ class WalletTransactionWidget(QWidget):
         """Save transaction invoice image to file system."""
         if not self.transaction_image_path or not self.basedir:
             return None
-        
+
         from helpers.image_helper import ImageHelper
 
-        # Use ImageHelper.generate_transaction_image_path to get a fully
-        # qualified path with year/month/day subfolders (and ensure dirs exist).
-        output_path = ImageHelper.generate_transaction_image_path(self.basedir, transaction_id)
+        # If the current transaction_image_path is already inside the app's
+        # managed images folder, assume it's already saved and don't re-save.
+        try:
+            if isinstance(self.transaction_image_path, str) and ImageHelper.is_path_in_transaction_images(self.basedir, self.transaction_image_path):
+                # Return path relative to basedir (DB expects relative path)
+                rel = os.path.relpath(self.transaction_image_path, self.basedir).replace("\\", "/")
+                return rel
+        except Exception:
+            # Fall through to saving logic on any unexpected error
+            pass
 
-        if ImageHelper.save_image_to_file(self.transaction_image_path, output_path):
-            # Return relative path
-            relative_path = os.path.relpath(output_path, self.basedir)
-            return relative_path.replace("\\", "/")  # Use forward slashes for consistency
-        else:
+        # Create a placeholder invoice DB row to obtain an invoice_id so we can
+        # include it in the final filename. Insert with empty image_path and then
+        # update it after the file is written.
+        invoice_id = None
+        try:
+            invoice_id = self.db_manager.wallet_helper.add_transaction_invoice_image(
+                transaction_id, image_path=None, image_name=None, image_size=None, image_type=None, description=None
+            )
+        except Exception:
+            # If inserting placeholder fails, fallback to saving without invoice_id in name
+            invoice_id = None
+
+        # Generate final path using invoice_id when available (falls back to transaction-based name)
+        try:
+            if invoice_id:
+                output_path = ImageHelper.generate_invoice_image_path(self.basedir, transaction_id, invoice_id, self.transaction_image_path)
+            else:
+                # fallback to old transaction-based filename
+                output_path = ImageHelper.generate_transaction_image_path(self.basedir, transaction_id)
+
+            saved = ImageHelper.save_image_to_file(self.transaction_image_path, output_path)
+        except Exception as e:
+            print(f"Error saving image file: {e}")
             return None
+
+        if not saved:
+            return None
+
+        # Determine relative path to store in DB
+        relative_path = os.path.relpath(output_path, self.basedir).replace("\\", "/")
+
+        # Prepare metadata and update invoice DB record (update will add new if placeholder wasn't created)
+        try:
+            filename = os.path.basename(output_path)
+            file_size = os.path.getsize(output_path) if os.path.exists(output_path) else None
+            file_type = os.path.splitext(filename)[1][1:] if filename else None
+
+            # Update DB record for this transaction's invoice image
+            self.db_manager.wallet_helper.update_transaction_invoice_image(
+                transaction_id=transaction_id,
+                image_path=relative_path,
+                image_name=filename,
+                image_size=file_size,
+                image_type=file_type,
+                description="Transaction invoice image"
+            )
+        except Exception as e:
+            print(f"Warning: failed to update invoice DB record: {e}")
+
+        # If we're replacing an existing image for this transaction, remove the old file to avoid orphan images
+        try:
+            if self.edit_mode and self.current_transaction_id and self.db_manager:
+                try:
+                    existing = self.db_manager.wallet_helper.get_transaction_invoice_image(transaction_id)
+                    if existing and existing.get('image_path'):
+                        old_rel = existing.get('image_path')
+                        old_abs = os.path.join(self.basedir, old_rel)
+                        new_abs = os.path.abspath(output_path)
+                        # Only remove if old file exists and is different from the newly saved file
+                        if os.path.exists(old_abs) and os.path.abspath(old_abs) != new_abs:
+                            try:
+                                os.remove(old_abs)
+                                print(f"Removed old invoice image: {old_abs}")
+                            except Exception as e:
+                                print(f"Failed to remove old invoice image '{old_abs}': {e}")
+                except Exception as e:
+                    # Don't let cleanup errors interrupt main save flow
+                    print(f"Error checking/deleting previous invoice image: {e}")
+        except Exception:
+            pass
+
+        return relative_path

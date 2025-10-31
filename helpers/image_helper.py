@@ -7,6 +7,9 @@ import os
 import io
 from datetime import datetime
 from PIL import Image
+import hashlib
+import hashlib
+import shutil
 
 
 class ImageHelper:
@@ -101,31 +104,208 @@ class ImageHelper:
     @staticmethod
     def generate_transaction_image_path(basedir, transaction_id=None):
         """
-        Generate path for transaction image organized into year/month/day subfolders.
+        Generate path for transaction image organized in per-transaction folder.
 
-        Args:
-            basedir: Base directory path
-            transaction_id: Transaction ID (optional)
+        New structure (dev, no backward compatibility):
+        basedir/images/transactions/invoices/<Year>/<MonthName>/<day>/<transaction_id>/invoice_<transaction_id>_<YYYYmmdd_HHMMSS>_<hash>.jpg
 
-        Returns:
-            str: Full path for image file (directories are created)
+        If transaction_id is None, files are placed under a tmp folder:
+        basedir/images/transactions/invoices/tmp/<invoice_tmp_<timestamp>_<hash>.jpg>
         """
         now = datetime.now()
         timestamp = now.strftime("%Y%m%d_%H%M%S")
-        year = now.strftime("%Y")
-        month = now.strftime("%B")  # e.g. July
-        day = str(now.day)  # day without leading zero, e.g. 3
-
-        # directory: basedir/images/transactions/invoices/<year>/<MonthName>/<day>/
-        dir_path = os.path.join(basedir, "images", "transactions", "invoices", year, month, day)
-        os.makedirs(dir_path, exist_ok=True)
 
         if transaction_id:
-            filename = f"{transaction_id}_{timestamp}.jpg"
+            year = now.strftime("%Y")
+            month = now.strftime("%B")
+            day = str(now.day)
+            dir_path = os.path.join(basedir, "images", "transactions", "invoices", year, month, day, str(transaction_id))
+            prefix = f"invoice_{transaction_id}"
         else:
-            filename = f"invoice_{timestamp}.jpg"
+            dir_path = os.path.join(basedir, "images", "transactions", "invoices", "tmp")
+            prefix = "invoice_tmp"
 
+        os.makedirs(dir_path, exist_ok=True)
+
+        # compute hash based on timestamp (or content elsewhere) for filename uniqueness
+        short_hash = hashlib.sha1(timestamp.encode('utf-8')).hexdigest()[:8]
+        filename = f"{prefix}_{timestamp}_{short_hash}.jpg"
         return os.path.join(dir_path, filename)
+
+    @staticmethod
+    def _compute_hash_for_source(src):
+        """Compute short sha1 hash for a file path or bytes.
+
+        Returns first 8 hex chars.
+        """
+        try:
+            if isinstance(src, (str, os.PathLike)):
+                with open(src, 'rb') as f:
+                    data = f.read()
+            elif isinstance(src, (bytes, bytearray)):
+                data = bytes(src)
+            else:
+                return '00000000'
+            return hashlib.sha1(data).hexdigest()[:8]
+        except Exception:
+            return '00000000'
+
+    @staticmethod
+    def generate_invoice_image_path(basedir, transaction_id, invoice_id, src_path_or_bytes, timestamp=None):
+        """Generate managed path for a transaction invoice image using invoice_id.
+
+        Directory: basedir/images/transactions/invoices/<Year>/<MonthName>/<day>/<transaction_id>/
+        Filename: invoice_<invoice_id>_<YYYYmmdd_HHMMSS>_<hash>.jpg
+        """
+        now = datetime.now() if timestamp is None else timestamp
+        timestamp_str = now.strftime("%Y%m%d_%H%M%S")
+        year = now.strftime("%Y")
+        month = now.strftime("%B")
+        day = str(now.day)
+
+        dir_path = os.path.join(basedir, "images", "transactions", "invoices", year, month, day, str(transaction_id))
+        os.makedirs(dir_path, exist_ok=True)
+
+        h = ImageHelper._compute_hash_for_source(src_path_or_bytes)
+        filename = f"invoice_{invoice_id}_{timestamp_str}_{h}.jpg"
+        return os.path.join(dir_path, filename)
+
+    @staticmethod
+    def generate_location_image_path(basedir, location_id, src_path_or_bytes=None, timestamp=None):
+        """Generate managed path for a location image using location_id.
+
+        Directory: basedir/images/locations/<Year>/<MonthName>/<day>/<location_id>/
+        Filename: location_<location_id>_<YYYYmmdd_HHMMSS>_<hash>.jpg
+
+        If src_path_or_bytes is None, a timestamp-based short hash will be used.
+        """
+        now = datetime.now() if timestamp is None else timestamp
+        timestamp_str = now.strftime("%Y%m%d_%H%M%S")
+        year = now.strftime("%Y")
+        month = now.strftime("%B")
+        day = str(now.day)
+
+        if location_id is None:
+            # Pre-insert temporary storage for uploaded images. Keep a clear 'tmp' marker
+            # so caller (e.g., add_location) can detect and move the file after DB insert.
+            dir_path = os.path.join(basedir, "images", "locations", "tmp")
+            os.makedirs(dir_path, exist_ok=True)
+            h = hashlib.sha1(timestamp_str.encode('utf-8')).hexdigest()[:8]
+            filename = f"location_tmp_{timestamp_str}_{h}.jpg"
+            return os.path.join(dir_path, filename)
+
+        # Proper per-date per-id location folder
+        dir_path = os.path.join(basedir, "images", "locations", year, month, day, str(location_id))
+        os.makedirs(dir_path, exist_ok=True)
+
+        if src_path_or_bytes:
+            h = ImageHelper._compute_hash_for_source(src_path_or_bytes)
+        else:
+            h = hashlib.sha1(timestamp_str.encode('utf-8')).hexdigest()[:8]
+
+        filename = f"location_{location_id}_{timestamp_str}_{h}.jpg"
+        return os.path.join(dir_path, filename)
+
+    @staticmethod
+    def is_path_in_transaction_images(basedir, path):
+        """
+        Return True if the given path is inside the app's transaction images invoices folder.
+
+        This is used to determine whether an image file already lives under the
+        application's managed images directory (so it doesn't need to be re-saved).
+        """
+        if not path:
+            return False
+        try:
+            abs_basedir = os.path.abspath(basedir)
+            abs_path = os.path.abspath(path)
+            # normalize and compare commonprefix safely
+            images_root = os.path.join(abs_basedir, "images", "transactions", "invoices")
+            images_root = os.path.abspath(images_root)
+            # Ensure the path starts with images_root
+            return os.path.commonpath([images_root, abs_path]) == images_root
+        except Exception:
+            return False
+
+    @staticmethod
+    def is_path_in_subfolder(basedir, path, *subfolders):
+        """
+        Check whether a path lives under a specific subfolder of basedir.
+
+        Example: is_path_in_subfolder(basedir, path, 'images', 'locations')
+                 -> True if path is inside basedir/images/locations
+        """
+        if not path:
+            return False
+        try:
+            abs_basedir = os.path.abspath(basedir)
+            abs_path = os.path.abspath(path)
+            target_root = os.path.join(abs_basedir, *subfolders)
+            target_root = os.path.abspath(target_root)
+            return os.path.commonpath([target_root, abs_path]) == target_root
+        except Exception:
+            return False
+    
+    @staticmethod
+    # NOTE: previous duplicate generate_location_image_path definition removed.
+
+    @staticmethod
+    def compute_hash_of_file(path, length=8):
+        """Return hex sha1 of file content (first `length` chars)."""
+        try:
+            h = hashlib.sha1()
+            with open(path, 'rb') as f:
+                for chunk in iter(lambda: f.read(8192), b''):
+                    h.update(chunk)
+            return h.hexdigest()[:length]
+        except Exception:
+            return None
+
+    @staticmethod
+    def move_image_to_location_folder(basedir, src_rel_or_abs, location_id):
+        """
+        Move existing image (absolute or relative to basedir) into the per-location folder
+        and rename it using the desired naming convention. Returns new relative path or None.
+        """
+        try:
+            # resolve absolute src
+            if os.path.isabs(src_rel_or_abs):
+                src_abs = src_rel_or_abs
+            else:
+                src_abs = os.path.join(basedir, src_rel_or_abs)
+
+            if not os.path.exists(src_abs):
+                return None
+
+            # compute hash and build target path
+            short_hash = ImageHelper.compute_hash_of_file(src_abs) or hashlib.sha1(str(os.path.getmtime(src_abs)).encode()).hexdigest()[:8]
+            now = datetime.now().strftime("%Y%m%d_%H%M%S")
+            # Move into per-date per-id folder (keep consistent with naming scheme)
+            now_dt = datetime.now()
+            year = now_dt.strftime("%Y")
+            month = now_dt.strftime("%B")
+            day = str(now_dt.day)
+            dir_path = os.path.join(basedir, "images", "locations", year, month, day, str(location_id))
+            os.makedirs(dir_path, exist_ok=True)
+            filename = f"location_{location_id}_{now}_{short_hash}.jpg"
+            dest_abs = os.path.join(dir_path, filename)
+
+            # move (prefer rename)
+            try:
+                shutil.move(src_abs, dest_abs)
+            except Exception:
+                # fallback to copy+remove
+                shutil.copy2(src_abs, dest_abs)
+                try:
+                    os.remove(src_abs)
+                except Exception:
+                    pass
+
+            rel = os.path.relpath(dest_abs, basedir).replace('\\', '/')
+            return rel
+        except Exception as e:
+            print(f"Error moving location image: {e}")
+            return None
     
     @staticmethod
     def blob_to_pixmap(blob_data):

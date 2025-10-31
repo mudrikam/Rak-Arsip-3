@@ -1,4 +1,5 @@
 import sqlite3
+import os
 from datetime import datetime
 
 
@@ -74,6 +75,20 @@ class DatabaseWalletHelper:
         locations = [dict(row) for row in rows]
         self.db_manager.close()
         return locations
+
+    def get_location_by_id(self, location_id):
+        """Get a single location record by ID."""
+        try:
+            self.db_manager.connect(write=False)
+            cursor = self.db_manager.connection.cursor()
+            cursor.execute("SELECT * FROM wallet_transaction_locations WHERE id = ?", (location_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+        except Exception as e:
+            print(f"Error getting location by id: {e}")
+            raise
+        finally:
+            self.db_manager.close()
     
     def get_transactions(self, pocket_id=None, limit=100, offset=0):
         """Get wallet transactions, optionally filtered by pocket."""
@@ -325,6 +340,165 @@ class DatabaseWalletHelper:
         self.db_manager.connection.commit()
         self.db_manager.close()
         return pocket_id
+
+    # Location operations moved from GUI into DB helper to centralize DB + filesystem logic
+    def add_location(self, name, location_type="", address="", city="", country="", postal_code="", online_url="", contact="", phone="", email="", status="", note="", image_src_path=None, basedir=None):
+        """Add a new transaction location and save its image into a per-id folder.
+
+        image_src_path: optional path to an uploaded image (on disk)
+        basedir: base project directory used to build managed image paths
+        """
+        try:
+            self.db_manager.connect(write=True)
+            cursor = self.db_manager.connection.cursor()
+            cursor.execute("""
+                INSERT INTO wallet_transaction_locations
+                (name, location_type, address, city, country, postal_code, online_url, contact, phone, email, status, note, image)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (name, location_type, address, city, country, postal_code, online_url, contact, phone, email, status, note, None))
+
+            location_id = cursor.lastrowid
+            self.db_manager.connection.commit()
+
+            # If an image source was provided, save it into managed folder using location_id
+            if image_src_path and basedir:
+                try:
+                    from helpers.image_helper import ImageHelper
+                    output_path = ImageHelper.generate_location_image_path(basedir, location_id, image_src_path)
+                    saved = ImageHelper.save_image_to_file(image_src_path, output_path)
+                    if saved:
+                        rel = os.path.relpath(output_path, basedir).replace("\\", "/")
+                        self.db_manager.connect(write=True)
+                        cursor = self.db_manager.connection.cursor()
+                        cursor.execute("UPDATE wallet_transaction_locations SET image = ? WHERE id = ?", (rel, location_id))
+                        self.db_manager.connection.commit()
+                        # If the source image was saved under the tmp folder, remove the tmp file to avoid leftover junk
+                        try:
+                            # resolve absolute source path
+                            src_abs = image_src_path if os.path.isabs(image_src_path) else os.path.join(basedir, image_src_path)
+                            tmp_root = os.path.abspath(os.path.join(basedir, "images", "locations", "tmp"))
+                            src_abs_norm = os.path.abspath(src_abs)
+                            if os.path.exists(src_abs_norm) and os.path.commonpath([tmp_root, src_abs_norm]) == tmp_root:
+                                try:
+                                    os.remove(src_abs_norm)
+                                except Exception:
+                                    # best-effort cleanup; ignore errors
+                                    pass
+                        except Exception:
+                            pass
+                except Exception as e:
+                    print(f"Warning: failed saving location image for location {location_id}: {e}")
+
+            return location_id
+
+        except Exception as e:
+            print(f"Error adding location: {e}")
+            raise
+        finally:
+            self.db_manager.close()
+
+    def update_location(self, location_id, name, location_type="", address="", city="", country="", postal_code="", online_url="", contact="", phone="", email="", status="", note="", image_src_path=None, basedir=None):
+        """Update an existing location and optionally replace its image.
+
+        If image_src_path is provided, save into per-id managed folder and attempt to remove the old image file.
+        """
+        try:
+            # Retrieve existing image path so we can cleanup if replaced
+            self.db_manager.connect(write=False)
+            cursor = self.db_manager.connection.cursor()
+            cursor.execute("SELECT image FROM wallet_transaction_locations WHERE id = ?", (location_id,))
+            row = cursor.fetchone()
+            existing_image = row['image'] if row and 'image' in row.keys() else None
+            self.db_manager.close()
+
+            new_rel = existing_image
+
+            if image_src_path and basedir:
+                from helpers.image_helper import ImageHelper
+                output_path = ImageHelper.generate_location_image_path(basedir, location_id, image_src_path)
+                saved = ImageHelper.save_image_to_file(image_src_path, output_path)
+                if saved:
+                    new_rel = os.path.relpath(output_path, basedir).replace("\\", "/")
+
+            # Update record (image will be updated if new_rel set)
+            self.db_manager.connect(write=True)
+            cursor = self.db_manager.connection.cursor()
+            cursor.execute("""
+                UPDATE wallet_transaction_locations
+                SET name = ?, location_type = ?, address = ?, city = ?, country = ?, postal_code = ?,
+                    online_url = ?, contact = ?, phone = ?, email = ?, status = ?, note = ?, image = ?
+                WHERE id = ?
+            """, (name, location_type, address, city, country, postal_code, online_url, contact, phone, email, status, note, new_rel, location_id))
+            self.db_manager.connection.commit()
+
+            # If we saved a new image, try to remove old image file to prevent orphan
+            if image_src_path and basedir and existing_image and existing_image != new_rel:
+                try:
+                    old_abs = os.path.join(basedir, existing_image)
+                    new_abs = os.path.abspath(os.path.join(basedir, new_rel)) if new_rel else None
+                    if os.path.exists(old_abs) and (not new_abs or os.path.abspath(old_abs) != new_abs):
+                        os.remove(old_abs)
+                        print(f"Removed old location image: {old_abs}")
+                except Exception as e:
+                    print(f"Warning: could not remove old location image {existing_image}: {e}")
+
+            # If the source image came from the tmp upload folder, remove the tmp source file as well
+            # This prevents accumulation of files under images/locations/tmp
+            if image_src_path and basedir:
+                try:
+                    # resolve absolute source path
+                    src_abs = image_src_path if os.path.isabs(image_src_path) else os.path.join(basedir, image_src_path)
+                    tmp_root = os.path.abspath(os.path.join(basedir, "images", "locations", "tmp"))
+                    src_abs_norm = os.path.abspath(src_abs)
+                    if os.path.exists(src_abs_norm) and os.path.commonpath([tmp_root, src_abs_norm]) == tmp_root:
+                        try:
+                            os.remove(src_abs_norm)
+                        except Exception:
+                            # best-effort cleanup; ignore errors
+                            pass
+                except Exception:
+                    pass
+
+            return location_id
+
+        except Exception as e:
+            print(f"Error updating location: {e}")
+            raise
+        finally:
+            self.db_manager.close()
+
+    def delete_location(self, location_id):
+        """Delete a location and its associated image file (if basedir is available on db_manager).
+
+        Note: db_manager may expose `basedir` attribute so we can delete the physical file.
+        """
+        try:
+            self.db_manager.connect(write=True)
+            cursor = self.db_manager.connection.cursor()
+            # fetch image path for cleanup
+            cursor.execute("SELECT image FROM wallet_transaction_locations WHERE id = ?", (location_id,))
+            row = cursor.fetchone()
+            image_path = row['image'] if row and 'image' in row.keys() else None
+
+            cursor.execute("DELETE FROM wallet_transaction_locations WHERE id = ?", (location_id,))
+            self.db_manager.connection.commit()
+
+            # Cleanup physical file
+            try:
+                basedir = getattr(self.db_manager, 'basedir', None)
+                if basedir and image_path:
+                    full_path = os.path.join(basedir, image_path)
+                    if os.path.exists(full_path):
+                        os.remove(full_path)
+                        print(f"Deleted location image file: {full_path}")
+            except Exception as e:
+                print(f"Warning: could not delete physical location image: {e}")
+
+        except Exception as e:
+            print(f"Error deleting location: {e}")
+            raise
+        finally:
+            self.db_manager.close()
     
     def update_pocket(self, pocket_id, name, pocket_type="", icon="", color="", image="", settings="", note=""):
         """Update an existing wallet pocket."""
