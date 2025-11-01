@@ -82,6 +82,12 @@ class PocketDialog(QDialog):
 		self.input_icon.setToolTip("FontAwesome icon name (without fa6s. prefix)")
 		self.input_icon.textChanged.connect(self.update_icon_preview)
 		icon_layout.addWidget(self.input_icon)
+		# Icon picker button to open a dialog with searchable fontawesome icons
+		self.btn_icon_picker = QPushButton(qta.icon("fa6s.magnifying-glass"), "")
+		self.btn_icon_picker.setFixedSize(28, 28)
+		self.btn_icon_picker.setToolTip("Open icon picker")
+		self.btn_icon_picker.clicked.connect(self.open_icon_picker)
+		icon_layout.addWidget(self.btn_icon_picker)
 		self.icon_preview = QLabel()
 		self.icon_preview.setFixedSize(24, 24)
 		icon_layout.addWidget(self.icon_preview)
@@ -95,7 +101,9 @@ class PocketDialog(QDialog):
 		color_layout = QHBoxLayout(color_widget)
 		color_layout.setContentsMargins(0, 0, 0, 0)
 		self.selected_color = "#FF9100"
-		self.btn_color = QPushButton("Choose Color")
+		# Use an icon-only button for color picker (no text)
+		self.btn_color = QPushButton(qta.icon("fa6s.eye-dropper"), "")
+		self.btn_color.setFixedSize(28, 28)
 		self.btn_color.setToolTip("Click to pick a color")
 		self.btn_color.clicked.connect(self.pick_color)
 		self.btn_color.setStyleSheet(f"background-color: {self.selected_color}; padding: 5px;")
@@ -238,6 +246,22 @@ class PocketDialog(QDialog):
 				self.icon_preview.clear()
 		else:
 			self.icon_preview.clear()
+
+	def open_icon_picker(self):
+		"""Open the icon picker dialog and set the chosen icon into the input field."""
+		try:
+			from .pocket_icon_picker_dialog import PocketIconPickerDialog
+		except Exception:
+			# fallback absolute import path if relative fails
+			from gui.dialogs.wallet_management_helper.wallet_pocket_tabs.pocket_icon_picker_dialog import PocketIconPickerDialog
+
+		dlg = PocketIconPickerDialog(self, current_icon=self.input_icon.text().strip())
+		if dlg.exec_() == QDialog.Accepted:
+			chosen = dlg.get_selected_icon()
+			if chosen:
+				# chosen is like 'wallet' or 'file-invoice' (no 'fa6s.' prefix)
+				self.input_icon.setText(chosen)
+				self.update_icon_preview(chosen)
 	
 	def pick_color(self):
 		color = QColorDialog.getColor(QColor(self.selected_color), self, "Choose Color")

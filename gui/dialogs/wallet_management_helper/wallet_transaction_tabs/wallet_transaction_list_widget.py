@@ -393,8 +393,6 @@ class WalletTransactionListWidget(QWidget):
             
             if self.filter_pocket.completer():
                 self.filter_pocket.completer().setModel(self.filter_pocket.model())
-            
-            print("Pocket filter reloaded")
         except Exception as e:
             print(f"Error reloading pocket filter: {e}")
     
@@ -849,9 +847,7 @@ class WalletTransactionListWidget(QWidget):
             
             # Update total info
             self.label_total.setText(f"Total: {self.total_items} transactions")
-            
-            print(f"Pagination updated - Page {self.current_page}/{self.total_pages}, Items: {self.total_items}")
-            
+                        
         except Exception as e:
             print(f"Error updating pagination controls: {e}")
 
