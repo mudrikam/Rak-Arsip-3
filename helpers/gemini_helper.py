@@ -118,31 +118,32 @@ class GeminiHelper:
                     
                     context_parts.append("\nPockets (use pocket_id):")
                     for pocket in pockets:
-                        context_parts.append(f"  - id: {pocket['id']}, name: {pocket['name']}")
+                        context_parts.append(f"  - id: {pocket['id']}, : {pocket['name']}")
                     
                     context_parts.append("\nCategories (use category_id):")
                     for category in categories:
-                        context_parts.append(f"  - id: {category['id']}, name: {category['name']}")
+                        context_parts.append(f"  - id: {category['id']}, : {category['name']}")
                     
                     context_parts.append("\nCurrencies (use currency_id):")
                     for currency in currencies:
-                        context_parts.append(f"  - id: {currency['id']}, code: {currency['code']}, symbol: {currency['symbol']}")
+                        context_parts.append(f"  - id: {currency['id']}, code: {currency['code']}")
                     
                     context_parts.append("\nLocations (use location_id):")
                     for location in locations:
-                        context_parts.append(f"  - id: {location['id']}, name: {location['name']}")
+                        context_parts.append(f"  - id: {location['id']}, : {location['name']}")
                     
                     context_parts.append("\nTransaction Statuses (use status_id):")
                     for status in statuses:
-                        context_parts.append(f"  - id: {status['id']}, name: {status['name']}")
+                        context_parts.append(f"  - id: {status['id']}, : {status['name']}")
                     
                     context_parts.append("\nTransaction types: income, expense, transfer")
-                    context_parts.append("\nItem types: product, service, digital")
+                    context_parts.append("\nItems type: Physical, Digital, Service, Subscription, Other")
                     
                 except Exception as e:
                     print(f"Error getting database options: {e}")
             
             full_prompt = prompt + "".join(context_parts)
+            print(full_prompt)
             
             print("\n=== DEBUG: Analyzing Invoice ===")
             print(f"Image: {image_path}")

@@ -190,7 +190,8 @@ class WalletTransactionWidget(QWidget):
         date_currency_row.setSpacing(8)
         from PySide6.QtWidgets import QDateTimeEdit
         self.date_edit = QDateTimeEdit()
-        self.date_edit.setDateTime(self.date_edit.minimumDateTime())
+        # Set default to current date/time, not minimum
+        self.date_edit.setDateTime(QDateTime.currentDateTime())
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDisplayFormat("yyyy-MM-dd HH:mm")
         self.date_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -948,11 +949,8 @@ class WalletTransactionWidget(QWidget):
         self.edit_mode = False
         self.current_transaction_id = None
         self.input_name.clear()
-        try:
-            from PySide6.QtCore import QDateTime
-            self.date_edit.setDateTime(QDateTime.currentDateTime())
-        except Exception:
-            pass
+        # Set date to current date/time
+        self.date_edit.setDateTime(QDateTime.currentDateTime())
         self.combo_pocket.setCurrentIndex(0)
         self.combo_card.setCurrentIndex(0)
         self.combo_currency.setCurrentIndex(0)
@@ -1117,15 +1115,12 @@ class WalletTransactionWidget(QWidget):
         
         if transaction_details.get('transaction_date'):
             date_str = transaction_details['transaction_date']
-            from PySide6.QtCore import QDateTime
             qdatetime = QDateTime.fromString(date_str, "yyyy-MM-dd HH:mm")
             if not qdatetime.isValid():
-                # fallback ke tanggal saja jika format tidak lengkap
                 qdatetime = QDateTime.fromString(date_str, "yyyy-MM-dd")
             if qdatetime.isValid():
                 self.date_edit.setDateTime(qdatetime)
             else:
-                from PySide6.QtCore import QDateTime
                 self.date_edit.setDateTime(QDateTime.currentDateTime())
         
         if transaction_details.get('type'):
@@ -1490,18 +1485,15 @@ class WalletTransactionWidget(QWidget):
             # Set transaction date
             if transaction.get('transaction_date'):
                 date_str = transaction['transaction_date']
-                if isinstance(date_str, str):
-                    if ' ' in date_str:
-                        date_str = date_str.split(' ')[0]
-                    qdate = QDate.fromString(date_str, "yyyy-MM-dd")
-                    if qdate.isValid():
-                        self.date_edit.setDate(qdate)
-                    else:
-                        self.date_edit.setDate(QDate.currentDate())
+                qdatetime = QDateTime.fromString(date_str, "yyyy-MM-dd HH:mm")
+                if not qdatetime.isValid():
+                    qdatetime = QDateTime.fromString(date_str, "yyyy-MM-dd")
+                if qdatetime.isValid():
+                    self.date_edit.setDateTime(qdatetime)
                 else:
-                    self.date_edit.setDate(QDate.currentDate())
+                    self.date_edit.setDateTime(QDateTime.currentDateTime())
             else:
-                self.date_edit.setDate(QDate.currentDate())
+                self.date_edit.setDateTime(QDateTime.currentDateTime())
             
             # Find and set combo values
             self.set_combo_value_by_id(self.combo_pocket, transaction['pocket_id'])
@@ -1688,11 +1680,8 @@ class WalletTransactionWidget(QWidget):
         self.edit_mode = False
         self.current_transaction_id = None
         self.input_name.clear()
-        try:
-            from PySide6.QtCore import QDateTime
-            self.date_edit.setDateTime(QDateTime.currentDateTime())
-        except Exception:
-            pass
+        # Set date to current date/time
+        self.date_edit.setDateTime(QDateTime.currentDateTime())
         self.combo_pocket.setCurrentIndex(0)
         self.combo_card.setCurrentIndex(0)
         self.combo_currency.setCurrentIndex(0)
