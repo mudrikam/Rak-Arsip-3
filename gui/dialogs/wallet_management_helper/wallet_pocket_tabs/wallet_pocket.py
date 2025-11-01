@@ -70,13 +70,15 @@ class WalletPocketTab(QWidget):
 		layout.setContentsMargins(10, 10, 10, 10)
 		layout.setSpacing(8)
 
-		# action bar for the pockets tab (right-aligned Add Pocket button)
-		actions_layout = QHBoxLayout()
-		actions_layout.addStretch()
+		header_layout = QHBoxLayout()
+		self.pockets_count_label = QLabel("Pockets: 0")
+		self.pockets_count_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+		header_layout.addWidget(self.pockets_count_label)
+		header_layout.addStretch()
 		self.btn_add_pocket = QPushButton(qta.icon("fa6s.plus"), " Add Pocket")
 		self.btn_add_pocket.clicked.connect(self.add_pocket)
-		actions_layout.addWidget(self.btn_add_pocket)
-		layout.addLayout(actions_layout)
+		header_layout.addWidget(self.btn_add_pocket)
+		layout.addLayout(header_layout)
 		scroll = QScrollArea()
 		scroll.setWidgetResizable(True)
 		scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -137,6 +139,11 @@ class WalletPocketTab(QWidget):
 		
 		try:
 			pockets = self.db_manager.wallet_helper.get_all_pockets()
+			try:
+				count = len(pockets) if pockets is not None else 0
+				self.pockets_count_label.setText(f"Pockets: {count}")
+			except Exception:
+				pass
 			row, col = 0, 0
 			for pocket in pockets:
 				card = PocketCard(pocket, self.db_manager)
@@ -150,6 +157,10 @@ class WalletPocketTab(QWidget):
 					row += 1
 		
 		except Exception as e:
+			try:
+				self.pockets_count_label.setText("Pockets: 0")
+			except Exception:
+				pass
 			QMessageBox.critical(self, "Error", f"Failed to load pockets: {str(e)}")
 	
 	def on_pocket_selected(self, pocket_data):
