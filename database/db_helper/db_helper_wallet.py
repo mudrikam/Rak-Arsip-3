@@ -342,7 +342,7 @@ class DatabaseWalletHelper:
         return pocket_id
 
     # Location operations moved from GUI into DB helper to centralize DB + filesystem logic
-    def add_location(self, name, location_type="", address="", city="", country="", postal_code="", online_url="", contact="", phone="", email="", status="", note="", image_src_path=None, basedir=None):
+    def add_location(self, name, location_type="", address="", city="", country="", postal_code="", online_url="", contact="", phone="", email="", status="", description="", rating=None, note="", image_src_path=None, basedir=None):
         """Add a new transaction location and save its image into a per-id folder.
 
         image_src_path: optional path to an uploaded image (on disk)
@@ -353,9 +353,9 @@ class DatabaseWalletHelper:
             cursor = self.db_manager.connection.cursor()
             cursor.execute("""
                 INSERT INTO wallet_transaction_locations
-                (name, location_type, address, city, country, postal_code, online_url, contact, phone, email, status, note, image)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (name, location_type, address, city, country, postal_code, online_url, contact, phone, email, status, note, None))
+                (name, location_type, address, city, country, postal_code, online_url, contact, phone, email, status, description, rating, note, image)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (name, location_type, address, city, country, postal_code, online_url, contact, phone, email, status, description, rating, note, None))
 
             location_id = cursor.lastrowid
             self.db_manager.connection.commit()
@@ -394,7 +394,7 @@ class DatabaseWalletHelper:
         finally:
             self.db_manager.close()
 
-    def update_location(self, location_id, name, location_type="", address="", city="", country="", postal_code="", online_url="", contact="", phone="", email="", status="", note="", image_src_path=None, basedir=None):
+    def update_location(self, location_id, name, location_type="", address="", city="", country="", postal_code="", online_url="", contact="", phone="", email="", status="", description="", rating=None, note="", image_src_path=None, basedir=None):
         """Update an existing location and optionally replace its image.
 
         If image_src_path is provided, save into per-id managed folder and attempt to remove the old image file.
@@ -423,9 +423,9 @@ class DatabaseWalletHelper:
             cursor.execute("""
                 UPDATE wallet_transaction_locations
                 SET name = ?, location_type = ?, address = ?, city = ?, country = ?, postal_code = ?,
-                    online_url = ?, contact = ?, phone = ?, email = ?, status = ?, note = ?, image = ?
+                    online_url = ?, contact = ?, phone = ?, email = ?, status = ?, description = ?, rating = ?, note = ?, image = ?
                 WHERE id = ?
-            """, (name, location_type, address, city, country, postal_code, online_url, contact, phone, email, status, note, new_rel, location_id))
+            """, (name, location_type, address, city, country, postal_code, online_url, contact, phone, email, status, description, rating, note, new_rel, location_id))
             self.db_manager.connection.commit()
 
             # If we saved a new image, try to remove old image file to prevent orphan

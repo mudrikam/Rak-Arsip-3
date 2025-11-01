@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                QTableWidget, QTableWidgetItem, QPushButton, 
                                QLineEdit, QTextEdit, QMessageBox, QHeaderView,
                                QTabWidget, QGroupBox, QFormLayout, QDialog, QFileDialog, QScrollArea)
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QPixmap, QDragEnterEvent, QDropEvent
 import qtawesome as qta
 from ..wallet_signal_manager import WalletSignalManager
@@ -64,6 +64,51 @@ class LocationImageLabel(QLabel):
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton and self.parent_widget:
             self.parent_widget.upload_location_image()
+
+
+class StarRating(QWidget):
+	"""A simple clickable 5-star rating widget."""
+	def __init__(self, max_stars=5, parent=None):
+		super().__init__(parent)
+		self.max_stars = max_stars
+		self._value = 0
+		self.buttons = []
+		layout = QHBoxLayout()
+		layout.setContentsMargins(0, 0, 0, 0)
+		for i in range(1, max_stars + 1):
+			btn = QPushButton()
+			btn.setFlat(True)
+			btn.setCursor(Qt.PointingHandCursor)
+			btn.setCheckable(False)
+			# use solid star but default (vanilla) color for unselected
+			btn.setIcon(qta.icon('fa6s.star'))
+			btn.setIconSize(QSize(18, 18))
+			# capture current index with default arg
+			btn.clicked.connect(lambda checked, v=i: self.setValue(v))
+			layout.addWidget(btn)
+			self.buttons.append(btn)
+		layout.addStretch()
+		self.setLayout(layout)
+
+	def setValue(self, value: int):
+		# normalize value
+		try:
+			v = int(value)
+		except Exception:
+			v = 0
+		v = max(0, min(self.max_stars, v))
+		self._value = v
+		for i, btn in enumerate(self.buttons, start=1):
+			if i <= v:
+				btn.setIcon(qta.icon('fa6s.star', color='#FFD54F'))
+			else:
+				btn.setIcon(qta.icon('fa6s.star'))
+
+	def value(self) -> int:
+		return self._value
+
+	def clear(self):
+		self.setValue(0)
 
 
 class WalletSettingsTab(QWidget):
@@ -885,6 +930,16 @@ class WalletSettingsTab(QWidget):
 		self.input_location_status.setPlaceholderText("e.g., Active, Closed")
 		form_layout.addRow("Status:", self.input_location_status)
 		
+		# Description and rating fields (DB has `description` and `rating`)
+		self.input_location_description = QTextEdit()
+		self.input_location_description.setPlaceholderText("Enter location description (optional)")
+		self.input_location_description.setMaximumHeight(100)
+		form_layout.addRow("Description:", self.input_location_description)
+
+		# star-based rating input
+		self.input_location_rating = StarRating(5)
+		form_layout.addRow("Rating:", self.input_location_rating)
+
 		self.input_location_note = QTextEdit()
 		self.input_location_note.setPlaceholderText("Enter location note (optional)")
 		self.input_location_note.setMaximumHeight(100)
@@ -1010,6 +1065,16 @@ class WalletSettingsTab(QWidget):
 					self.input_location_phone.setText(location['phone'] or '')
 					self.input_location_email.setText(location['email'] or '')
 					self.input_location_status.setText(location['status'] or '')
+					self.input_location_description.setPlainText(location.get('description') or '')
+					# rating stored as numeric - set star control
+					rating_val = location.get('rating')
+					if rating_val is not None:
+						try:
+							self.input_location_rating.setValue(int(rating_val))
+						except Exception:
+							self.input_location_rating.clear()
+					else:
+						self.input_location_rating.clear()
 					self.input_location_note.setPlainText(location['note'] or '')
 					
 					self.location_image_path = location.get('image')
@@ -1049,6 +1114,8 @@ class WalletSettingsTab(QWidget):
 		self.input_location_phone.clear()
 		self.input_location_email.clear()
 		self.input_location_status.clear()
+		self.input_location_description.clear()
+		self.input_location_rating.clear()
 		self.input_location_note.clear()
 		self.location_table.clearSelection()
 		
@@ -1076,6 +1143,9 @@ class WalletSettingsTab(QWidget):
 		phone = self.input_location_phone.text().strip()
 		email = self.input_location_email.text().strip()
 		status = self.input_location_status.text().strip()
+		description = self.input_location_description.toPlainText().strip()
+		# rating from star widget (int 0..5) or None
+		rating = self.input_location_rating.value() if hasattr(self.input_location_rating, 'value') else None
 		note = self.input_location_note.toPlainText().strip()
 		
 		if not name:
@@ -1104,6 +1174,8 @@ class WalletSettingsTab(QWidget):
 				phone=phone,
 				email=email,
 				status=status,
+				description=description,
+				rating=rating,
 				note=note,
 				image_src_path=image_src,
 				basedir=self.basedir
@@ -1142,6 +1214,8 @@ class WalletSettingsTab(QWidget):
 		phone = self.input_location_phone.text().strip()
 		email = self.input_location_email.text().strip()
 		status = self.input_location_status.text().strip()
+		description = self.input_location_description.toPlainText().strip()
+		rating = self.input_location_rating.value() if hasattr(self.input_location_rating, 'value') else None
 		note = self.input_location_note.toPlainText().strip()
 		
 		if not location_id or not name:
@@ -1170,6 +1244,8 @@ class WalletSettingsTab(QWidget):
 				phone=phone,
 				email=email,
 				status=status,
+				description=description,
+				rating=rating,
 				note=note,
 				image_src_path=image_src,
 				basedir=self.basedir

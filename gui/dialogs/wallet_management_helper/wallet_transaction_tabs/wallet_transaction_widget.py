@@ -289,8 +289,6 @@ class WalletTransactionWidget(QWidget):
         form_layout.addWidget(self.input_tags)
 
     # Note
-        note_label = QLabel("Note:")
-        form_layout.addWidget(note_label)
         self.input_note = QTextEdit()
         self.input_note.setPlaceholderText("Additional notes about this transaction...")
         self.input_note.setMaximumHeight(80)
