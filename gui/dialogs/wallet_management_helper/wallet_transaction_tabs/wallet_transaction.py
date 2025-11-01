@@ -4,6 +4,8 @@ from PySide6.QtCore import Qt
 # use the widget implementation for the transaction form
 from .wallet_transaction_widget import WalletTransactionWidget
 from .wallet_transaction_list_widget import WalletTransactionListWidget
+from ..wallet_header import WalletHeader
+import qtawesome as qta
 
 
 class WalletTransactionTab(QWidget):
@@ -18,10 +20,15 @@ class WalletTransactionTab(QWidget):
     def init_ui(self):
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
-        
+
+        # page header
+        header = WalletHeader("Transactions", "Create, edit and search wallet transactions")
+        layout.addWidget(header)
+		
         self.tab_widget = QTabWidget()
-        self.tab_widget.addTab(self.create_transactions_tab(), "Transactions")
-        self.tab_widget.addTab(self.create_transaction_list_tab(), "Transaction List")
+        # add icons to tabs for consistency with other wallet pages
+        self.tab_widget.addTab(self.create_transactions_tab(), qta.icon("fa6s.list"), "Transactions")
+        self.tab_widget.addTab(self.create_transaction_list_tab(), qta.icon("fa6s.list-check"), "Transaction List")
         
         layout.addWidget(self.tab_widget)
         self.setLayout(layout)

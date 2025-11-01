@@ -13,6 +13,7 @@ from .view_dialogs import PocketViewDialog, CardViewDialog
 from .pocket_dialog import PocketDialog
 from .card_dialog import CardDialog
 from ..wallet_signal_manager import WalletSignalManager
+from ..wallet_header import WalletHeader
 
 
 class WalletPocketTab(QWidget):
@@ -41,22 +42,11 @@ class WalletPocketTab(QWidget):
 	
 	def init_ui(self):
 		main_layout = QVBoxLayout()
-		main_layout.setContentsMargins(10, 10, 10, 10)
-		main_layout.setSpacing(10)
-		
-		header_layout = QHBoxLayout()
-		
-		self.title_label = QLabel("Pockets & Cards")
-		self.title_label.setStyleSheet("font-weight: bold; font-size: 18px;")
-		header_layout.addWidget(self.title_label)
-		
-		header_layout.addStretch()
-		
-		self.btn_add_pocket = QPushButton(qta.icon("fa6s.plus"), " Add Pocket")
-		self.btn_add_pocket.clicked.connect(self.add_pocket)
-		header_layout.addWidget(self.btn_add_pocket)
-		
-		main_layout.addLayout(header_layout)
+		main_layout.setContentsMargins(0, 0, 0, 0)
+
+		# consistent page header (actions belong inside individual tabs)
+		header = WalletHeader("Pockets & Cards", "Manage pockets and associated cards")
+		main_layout.addWidget(header)
 		
 		self.tabs = QTabWidget()
 		
@@ -77,7 +67,16 @@ class WalletPocketTab(QWidget):
 	
 	def init_pockets_tab(self):
 		layout = QVBoxLayout()
-		
+		layout.setContentsMargins(10, 10, 10, 10)
+		layout.setSpacing(8)
+
+		# action bar for the pockets tab (right-aligned Add Pocket button)
+		actions_layout = QHBoxLayout()
+		actions_layout.addStretch()
+		self.btn_add_pocket = QPushButton(qta.icon("fa6s.plus"), " Add Pocket")
+		self.btn_add_pocket.clicked.connect(self.add_pocket)
+		actions_layout.addWidget(self.btn_add_pocket)
+		layout.addLayout(actions_layout)
 		scroll = QScrollArea()
 		scroll.setWidgetResizable(True)
 		scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -95,7 +94,9 @@ class WalletPocketTab(QWidget):
 	
 	def init_cards_tab(self):
 		layout = QVBoxLayout()
-		
+		layout.setContentsMargins(10, 10, 10, 10)
+		layout.setSpacing(8)
+
 		header_layout = QHBoxLayout()
 		
 		self.cards_pocket_label = QLabel("No pocket selected")

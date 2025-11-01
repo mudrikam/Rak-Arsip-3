@@ -1,13 +1,15 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-                               QTableWidget, QTableWidgetItem, QPushButton, 
-                               QLineEdit, QTextEdit, QMessageBox, QHeaderView,
-                               QTabWidget, QGroupBox, QFormLayout, QDialog, QFileDialog, QScrollArea)
+							   QTableWidget, QTableWidgetItem, QPushButton, 
+							   QLineEdit, QTextEdit, QMessageBox, QHeaderView,
+							   QTabWidget, QGroupBox, QFormLayout, QDialog, QFileDialog, QScrollArea)
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QPixmap, QDragEnterEvent, QDropEvent
 import qtawesome as qta
 from ..wallet_signal_manager import WalletSignalManager
 import os
 import hashlib
+from ..wallet_header import WalletHeader
+import qtawesome as qta
 
 
 class LocationImageLabel(QLabel):
@@ -122,12 +124,17 @@ class WalletSettingsTab(QWidget):
 	def init_ui(self):
 		layout = QVBoxLayout()
 		layout.setContentsMargins(0, 0, 0, 0)
+
+		# page header
+		header = WalletHeader("Settings", "Manage categories, currencies, statuses and locations")
+		layout.addWidget(header)
 		
 		self.tab_widget = QTabWidget()
-		self.tab_widget.addTab(self.create_categories_tab(), "Categories")
-		self.tab_widget.addTab(self.create_currency_tab(), "Currency")
-		self.tab_widget.addTab(self.create_transaction_status_tab(), "Transaction Status")
-		self.tab_widget.addTab(self.create_transaction_locations_tab(), "Transaction Locations")
+		# add icons so each tab consistently shows an icon like other wallet pages
+		self.tab_widget.addTab(self.create_categories_tab(), qta.icon("fa6s.tags"), "Categories")
+		self.tab_widget.addTab(self.create_currency_tab(), qta.icon("fa6s.coins"), "Currency")
+		self.tab_widget.addTab(self.create_transaction_status_tab(), qta.icon("fa6s.flag"), "Transaction Status")
+		self.tab_widget.addTab(self.create_transaction_locations_tab(), qta.icon("fa6s.location-dot"), "Transaction Locations")
 		
 		layout.addWidget(self.tab_widget)
 		self.setLayout(layout)
