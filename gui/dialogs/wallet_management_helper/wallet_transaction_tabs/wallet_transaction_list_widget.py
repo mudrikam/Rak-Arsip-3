@@ -644,8 +644,16 @@ class WalletTransactionListWidget(QWidget):
                         date_str = date_str.split(' ')[0]
                 self.transactions_table.setItem(row_idx, 1, QTableWidgetItem(date_str))
 
-                # Type
-                self.transactions_table.setItem(row_idx, 2, QTableWidgetItem(transaction['transaction_type'] or ''))
+                # Type with color
+                trans_type = transaction['transaction_type'] or ''
+                type_item = QTableWidgetItem(trans_type.capitalize())
+                if trans_type == 'income':
+                    type_item.setForeground(Qt.green)
+                elif trans_type == 'expense':
+                    type_item.setForeground(Qt.red)
+                elif trans_type == 'transfer':
+                    type_item.setForeground(Qt.cyan)
+                self.transactions_table.setItem(row_idx, 2, type_item)
 
                 # Pocket
                 self.transactions_table.setItem(row_idx, 3, QTableWidgetItem(transaction['pocket_name'] or ''))

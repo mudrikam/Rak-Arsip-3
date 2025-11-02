@@ -1,14 +1,13 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem,
                                QHeaderView, QMessageBox, QGridLayout, QLabel, QFrame, QHBoxLayout)
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor
 import qtawesome as qta
 from .wallet_report_actions import (WalletReportFilter, WalletReportActions, 
                                    WalletReportExporter, WalletReportPagination)
 
 
-class WalletReportSummaryTab(QWidget):
-    """Summary report showing income, expense, and transfer totals."""
+class WalletReportByLocationTab(QWidget):
+    """Report showing transactions grouped by location."""
 
     def __init__(self, db_manager, parent=None):
         super().__init__(parent)
@@ -53,8 +52,8 @@ class WalletReportSummaryTab(QWidget):
         layout.addLayout(summary_container)
         
         self.table = QTableWidget()
-        self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(["Type", "Transactions", "Total Amount", "Currency"])
+        self.table.setColumnCount(5)
+        self.table.setHorizontalHeaderLabels(["Location", "Type", "Transactions", "Total Amount", "Currency"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setAlternatingRowColors(True)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -151,11 +150,12 @@ class WalletReportSummaryTab(QWidget):
             
             filters = self.filter_widget.get_filters()
             
-            data = wallet_helper.get_summary_report(
+            data = wallet_helper.get_transactions_by_location(
                 filters['date_from'],
                 filters['date_to'],
                 filters.get('pocket_id'),
                 filters.get('category_id'),
+                filters.get('location_id'),
                 filters.get('transaction_type', '')
             )
             self.total_items = len(data)
@@ -175,12 +175,15 @@ class WalletReportSummaryTab(QWidget):
             currency_symbol = "Rp"
             
             for row_data in data:
-                if row_data['transaction_type'] == 'income':
-                    total_income += row_data['total_amount']
-                elif row_data['transaction_type'] == 'expense':
-                    total_expense += row_data['total_amount']
-                elif row_data['transaction_type'] == 'transfer':
-                    total_transfer += row_data['total_amount']
+                trans_type = row_data.get('transaction_type', '')
+                amount = row_data.get('total_amount', 0)
+                
+                if trans_type == 'income':
+                    total_income += amount
+                elif trans_type == 'expense':
+                    total_expense += amount
+                elif trans_type == 'transfer':
+                    total_transfer += amount
                 
                 if row_data.get('currency_symbol'):
                     currency_symbol = row_data['currency_symbol']
@@ -189,10 +192,13 @@ class WalletReportSummaryTab(QWidget):
                 row = self.table.rowCount()
                 self.table.insertRow(row)
                 
+                location_name = row_data.get('location_name', 'Unknown')
                 trans_type = row_data['transaction_type'].capitalize()
                 trans_count = str(row_data['transaction_count'])
                 amount = row_data['total_amount']
                 symbol = row_data.get('currency_symbol', 'Rp')
+                
+                self.table.setItem(row, 0, QTableWidgetItem(location_name))
                 
                 type_item = QTableWidgetItem(trans_type)
                 if row_data['transaction_type'] == 'income':
@@ -201,15 +207,15 @@ class WalletReportSummaryTab(QWidget):
                     type_item.setForeground(Qt.red)
                 else:
                     type_item.setForeground(Qt.cyan)
-                self.table.setItem(row, 0, type_item)
+                self.table.setItem(row, 1, type_item)
                 
-                self.table.setItem(row, 1, QTableWidgetItem(trans_count))
+                self.table.setItem(row, 2, QTableWidgetItem(trans_count))
                 
                 amount_item = QTableWidgetItem(f"{amount:,.2f}")
                 amount_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                self.table.setItem(row, 2, amount_item)
+                self.table.setItem(row, 3, amount_item)
                 
-                self.table.setItem(row, 3, QTableWidgetItem(symbol))
+                self.table.setItem(row, 4, QTableWidgetItem(symbol))
             
             self.update_card_amount(self.income_card, f"{currency_symbol} {total_income:,.2f}")
             self.update_card_amount(self.expense_card, f"{currency_symbol} {total_expense:,.2f}")
@@ -219,12 +225,12 @@ class WalletReportSummaryTab(QWidget):
             self.pagination_widget.update_pagination(self.current_page, self.total_items, self.items_per_page)
             
         except Exception as e:
-            print(f"Error loading summary report: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to load summary report: {str(e)}")
+            print(f"Error loading by location report: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to load report: {str(e)}")
     
     def export_csv(self):
         try:
-            headers = ["Type", "Transactions", "Total Amount", "Currency"]
+            headers = ["Location", "Type", "Transactions", "Total Amount", "Currency"]
             data = []
             
             for row in range(self.table.rowCount()):
@@ -243,7 +249,7 @@ class WalletReportSummaryTab(QWidget):
     
     def export_pdf(self):
         try:
-            headers = ["Type", "Transactions", "Total Amount", "Currency"]
+            headers = ["Location", "Type", "Transactions", "Total Amount", "Currency"]
             data = []
             
             for row in range(self.table.rowCount()):
@@ -255,7 +261,7 @@ class WalletReportSummaryTab(QWidget):
             
             filters = self.filter_widget.get_filters()
             
-            if WalletReportExporter.export_to_pdf(data, headers, "Wallet Summary Report", filters, parent=self):
+            if WalletReportExporter.export_to_pdf(data, headers, "Wallet Transactions by Location", filters, parent=self):
                 QMessageBox.information(self, "Success", "Report exported to PDF successfully.")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to export PDF: {str(e)}")

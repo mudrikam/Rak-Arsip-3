@@ -51,20 +51,36 @@ class WalletOverviewCharts(QWidget):
         
         self.trend_tabs = QTabWidget()
         
+        # Monthly scroll area
+        monthly_scroll_area = QScrollArea()
+        monthly_scroll_area.setWidgetResizable(True)
+        monthly_scroll_area.setFrameShape(QFrame.NoFrame)
+        monthly_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        
         self.monthly_scroll = QWidget()
         self.monthly_layout = QVBoxLayout(self.monthly_scroll)
         self.monthly_layout.setSpacing(4)
-        self.monthly_layout.setContentsMargins(0, 0, 0, 0)
+        self.monthly_layout.setContentsMargins(12, 12, 12, 12)
         self.monthly_layout.addStretch()
+        
+        monthly_scroll_area.setWidget(self.monthly_scroll)
+
+        # Yearly scroll area
+        yearly_scroll_area = QScrollArea()
+        yearly_scroll_area.setWidgetResizable(True)
+        yearly_scroll_area.setFrameShape(QFrame.NoFrame)
+        yearly_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         
         self.yearly_scroll = QWidget()
         self.yearly_layout = QVBoxLayout(self.yearly_scroll)
         self.yearly_layout.setSpacing(4)
-        self.yearly_layout.setContentsMargins(0, 0, 0, 0)
+        self.yearly_layout.setContentsMargins(12, 12, 12, 12)
         self.yearly_layout.addStretch()
         
-        self.trend_tabs.addTab(self.monthly_scroll, "Monthly")
-        self.trend_tabs.addTab(self.yearly_scroll, "Yearly")
+        yearly_scroll_area.setWidget(self.yearly_scroll)
+        
+        self.trend_tabs.addTab(monthly_scroll_area, "Monthly")
+        self.trend_tabs.addTab(yearly_scroll_area, "Yearly")
         
         layout.addWidget(self.trend_tabs)
         
@@ -76,8 +92,8 @@ class WalletOverviewCharts(QWidget):
         frame.setFrameShape(QFrame.StyledPanel)
         
         layout = QVBoxLayout(frame)
-        layout.setSpacing(8)
-        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(12)
+        layout.setContentsMargins(16, 16, 16, 16)
         
         title_label = QLabel("This Month vs Last Month")
         title_font = QFont()
@@ -166,7 +182,7 @@ class WalletOverviewCharts(QWidget):
             if max_value == 0:
                 max_value = 1
             
-            for month, data in sorted(months_dict.items(), reverse=True)[:6]:
+            for month, data in sorted(months_dict.items(), reverse=True)[:12]:
                 item_widget = self.create_bar_chart_item(month, data, max_value)
                 self.monthly_layout.insertWidget(0, item_widget)
         
@@ -200,7 +216,7 @@ class WalletOverviewCharts(QWidget):
             if max_value == 0:
                 max_value = 1
             
-            for year, data in sorted(years_dict.items(), reverse=True):
+            for year, data in sorted(years_dict.items(), reverse=True)[:5]:
                 item_widget = self.create_bar_chart_item(year, data, max_value)
                 self.yearly_layout.insertWidget(0, item_widget)
     
@@ -290,45 +306,56 @@ class WalletOverviewCharts(QWidget):
         """Create a comparison item"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setContentsMargins(0, 4, 0, 4)
-        layout.setSpacing(4)
-        
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
+
         header_layout = QHBoxLayout()
-        
+
         label_widget = QLabel(label)
-        label_widget.setStyleSheet(f"font-weight: bold; font-size: 11px; color: {color};")
+        label_widget.setStyleSheet(f"font-weight: bold; font-size: 15px; color: {color};")
         header_layout.addWidget(label_widget)
-        
+
         header_layout.addStretch()
-        
+
+        # Arrow icon
+        arrow_label = QLabel()
+        arrow_label.setFixedWidth(18)
         if previous > 0:
             change = ((current - previous) / previous) * 100
             change_text = f"{change:+.1f}%"
             change_color = "#28a745" if change >= 0 else "#dc3545"
+            if change > 0:
+                arrow_label.setText("▲")
+                arrow_label.setStyleSheet("color: #28a745; font-size: 15px; font-weight: bold;")
+            else:
+                arrow_label.setText("▼")
+                arrow_label.setStyleSheet("color: #dc3545; font-size: 15px; font-weight: bold;")
         else:
             change_text = "New"
             change_color = "#6c757d"
-        
+            arrow_label.setText("")
+        header_layout.addWidget(arrow_label)
+
         change_label = QLabel(change_text)
-        change_label.setStyleSheet(f"font-size: 10px; color: {change_color}; font-weight: bold;")
+        change_label.setStyleSheet(f"font-size: 15px; color: {change_color}; font-weight: bold;")
         header_layout.addWidget(change_label)
-        
+
         layout.addLayout(header_layout)
-        
+
         values_layout = QHBoxLayout()
-        
+
         current_label = QLabel(f"{self.currency_symbol} {current:,.0f}")
-        current_label.setStyleSheet("font-size: 10px;")
+        current_label.setStyleSheet("font-size: 13px;")
         values_layout.addWidget(current_label)
-        
+
         values_layout.addStretch()
-        
+
         previous_label = QLabel(f"(prev: {self.currency_symbol} {previous:,.0f})")
-        previous_label.setStyleSheet("font-size: 9px; color: #6c757d;")
+        previous_label.setStyleSheet("font-size: 12px; color: #6c757d;")
         values_layout.addWidget(previous_label)
-        
+
         layout.addLayout(values_layout)
-        
+
         return widget
     
     def update_pie_charts(self, categories, pockets, locations, currency_symbol="Rp"):
@@ -436,7 +463,7 @@ class WalletOverviewCharts(QWidget):
         legend_widget = QWidget()
         legend_layout = QVBoxLayout(legend_widget)
         legend_layout.setSpacing(6)
-        legend_layout.setContentsMargins(0, 0, 0, 0)
+        legend_layout.setContentsMargins(12, 12, 12, 12)
         
         total = sum(item.get('total', 0) or item.get('total_amount', 0) or item.get('balance', 0) for item in data[:8])
         

@@ -196,6 +196,7 @@ class DatabaseWalletHelper:
         cursor = self.db_manager.connection.cursor()
         cursor.execute("DELETE FROM wallet_transactions WHERE pocket_id = ?", (pocket_id,))
         self.db_manager.connection.commit()
+        self.db_manager.create_temp_file()
         self.db_manager.close()
     
     def delete_transactions_by_card(self, card_id):
@@ -204,6 +205,7 @@ class DatabaseWalletHelper:
         cursor = self.db_manager.connection.cursor()
         cursor.execute("DELETE FROM wallet_transactions WHERE card_id = ?", (card_id,))
         self.db_manager.connection.commit()
+        self.db_manager.create_temp_file()
         self.db_manager.close()
     
     def delete_transaction_items_by_pocket(self, pocket_id):
@@ -217,6 +219,7 @@ class DatabaseWalletHelper:
             )
         """, (pocket_id,))
         self.db_manager.connection.commit()
+        self.db_manager.create_temp_file()
         self.db_manager.close()
     
     def delete_transaction_items_by_card(self, card_id):
@@ -230,6 +233,7 @@ class DatabaseWalletHelper:
             )
         """, (card_id,))
         self.db_manager.connection.commit()
+        self.db_manager.create_temp_file()
         self.db_manager.close()
     
     def add_category(self, name, note=""):
@@ -242,6 +246,7 @@ class DatabaseWalletHelper:
         )
         category_id = cursor.lastrowid
         self.db_manager.connection.commit()
+        self.db_manager.create_temp_file()
         self.db_manager.close()
         return category_id
     
@@ -254,6 +259,7 @@ class DatabaseWalletHelper:
             (name, note, category_id)
         )
         self.db_manager.connection.commit()
+        self.db_manager.create_temp_file()
         self.db_manager.close()
     
     def delete_category(self, category_id):
@@ -262,6 +268,7 @@ class DatabaseWalletHelper:
         cursor = self.db_manager.connection.cursor()
         cursor.execute("DELETE FROM wallet_categories WHERE id = ?", (category_id,))
         self.db_manager.connection.commit()
+        self.db_manager.create_temp_file()
         self.db_manager.close()
     
     def add_currency(self, code, name, symbol, note=""):
@@ -274,6 +281,7 @@ class DatabaseWalletHelper:
         )
         currency_id = cursor.lastrowid
         self.db_manager.connection.commit()
+        self.db_manager.create_temp_file()
         self.db_manager.close()
         return currency_id
     
@@ -286,6 +294,7 @@ class DatabaseWalletHelper:
             (code, name, symbol, note, currency_id)
         )
         self.db_manager.connection.commit()
+        self.db_manager.create_temp_file()
         self.db_manager.close()
     
     def delete_currency(self, currency_id):
@@ -294,6 +303,7 @@ class DatabaseWalletHelper:
         cursor = self.db_manager.connection.cursor()
         cursor.execute("DELETE FROM wallet_currency WHERE id = ?", (currency_id,))
         self.db_manager.connection.commit()
+        self.db_manager.create_temp_file()
         self.db_manager.close()
     
     def add_transaction_status(self, name, note=""):
@@ -306,6 +316,7 @@ class DatabaseWalletHelper:
         )
         status_id = cursor.lastrowid
         self.db_manager.connection.commit()
+        self.db_manager.create_temp_file()
         self.db_manager.close()
         return status_id
     
@@ -318,6 +329,7 @@ class DatabaseWalletHelper:
             (name, note, status_id)
         )
         self.db_manager.connection.commit()
+        self.db_manager.create_temp_file()
         self.db_manager.close()
     
     def delete_transaction_status(self, status_id):
@@ -326,6 +338,7 @@ class DatabaseWalletHelper:
         cursor = self.db_manager.connection.cursor()
         cursor.execute("DELETE FROM wallet_transaction_statuses WHERE id = ?", (status_id,))
         self.db_manager.connection.commit()
+        self.db_manager.create_temp_file()
         self.db_manager.close()
     
     def add_pocket(self, name, pocket_type="", icon="", color="", image="", settings="", note=""):
@@ -338,6 +351,7 @@ class DatabaseWalletHelper:
         )
         pocket_id = cursor.lastrowid
         self.db_manager.connection.commit()
+        self.db_manager.create_temp_file()
         self.db_manager.close()
         return pocket_id
 
@@ -359,6 +373,7 @@ class DatabaseWalletHelper:
 
             location_id = cursor.lastrowid
             self.db_manager.connection.commit()
+            self.db_manager.create_temp_file()
 
             # If an image source was provided, save it into managed folder using location_id
             if image_src_path and basedir:
@@ -372,6 +387,7 @@ class DatabaseWalletHelper:
                         cursor = self.db_manager.connection.cursor()
                         cursor.execute("UPDATE wallet_transaction_locations SET image = ? WHERE id = ?", (rel, location_id))
                         self.db_manager.connection.commit()
+                        self.db_manager.create_temp_file()
                         try:
                             src_abs = image_src_path if os.path.isabs(image_src_path) else os.path.join(basedir, image_src_path)
                             tmp_root = os.path.abspath(os.path.join(basedir, "images", "locations", "tmp"))
@@ -427,6 +443,7 @@ class DatabaseWalletHelper:
                 WHERE id = ?
             """, (name, location_type, address, city, country, postal_code, online_url, contact, phone, email, status, description, rating, note, new_rel, location_id))
             self.db_manager.connection.commit()
+            self.db_manager.create_temp_file()
 
             # If we saved a new image, try to remove old image file to prevent orphan
             if image_src_path and basedir and existing_image and existing_image != new_rel:
@@ -475,6 +492,7 @@ class DatabaseWalletHelper:
 
             cursor.execute("DELETE FROM wallet_transaction_locations WHERE id = ?", (location_id,))
             self.db_manager.connection.commit()
+            self.db_manager.create_temp_file()
 
             
             try:
@@ -502,6 +520,7 @@ class DatabaseWalletHelper:
             (name, pocket_type, icon, color, image, settings, note, pocket_id)
         )
         self.db_manager.connection.commit()
+        self.db_manager.create_temp_file()
         self.db_manager.close()
     
     def delete_pocket(self, pocket_id):
@@ -510,6 +529,7 @@ class DatabaseWalletHelper:
         cursor = self.db_manager.connection.cursor()
         cursor.execute("DELETE FROM wallet_pockets WHERE id = ?", (pocket_id,))
         self.db_manager.connection.commit()
+        self.db_manager.create_temp_file()
         self.db_manager.close()
     
     def add_card(self, pocket_id, card_name, card_number, card_type="", vendor="", issuer="", 
@@ -531,6 +551,7 @@ class DatabaseWalletHelper:
         )
         card_id = cursor.lastrowid
         self.db_manager.connection.commit()
+        self.db_manager.create_temp_file()
         self.db_manager.close()
         return card_id
     
@@ -553,6 +574,7 @@ class DatabaseWalletHelper:
              country, card_limit, image, color, note, card_id)
         )
         self.db_manager.connection.commit()
+        self.db_manager.create_temp_file()
         self.db_manager.close()
     
     def delete_card(self, card_id):
@@ -561,6 +583,7 @@ class DatabaseWalletHelper:
         cursor = self.db_manager.connection.cursor()
         cursor.execute("DELETE FROM wallet_cards WHERE id = ?", (card_id,))
         self.db_manager.connection.commit()
+        self.db_manager.create_temp_file()
         self.db_manager.close()
     
     # Transaction operations
@@ -693,6 +716,7 @@ class DatabaseWalletHelper:
         
         transaction_id = cursor.lastrowid
         self.db_manager.connection.commit()
+        self.db_manager.create_temp_file()
         self.db_manager.close()
         return transaction_id
     
@@ -715,6 +739,7 @@ class DatabaseWalletHelper:
         
         item_id = cursor.lastrowid
         self.db_manager.connection.commit()
+        self.db_manager.create_temp_file()
         self.db_manager.close()
         return item_id
     
@@ -738,6 +763,7 @@ class DatabaseWalletHelper:
                   file_url, license_key, expiry_date, digital_type, note, item_id))
             
             self.db_manager.connection.commit()
+            self.db_manager.create_temp_file()
             
         except Exception as e:
             print(f"Error updating transaction item: {e}")
@@ -764,6 +790,7 @@ class DatabaseWalletHelper:
             cursor.execute("DELETE FROM wallet_transactions WHERE id = ?", (transaction_id,))
             
             self.db_manager.connection.commit()
+            self.db_manager.create_temp_file()
             
             import os
             for image_path in invoice_paths:
@@ -850,6 +877,7 @@ class DatabaseWalletHelper:
                   transaction_name, transaction_date, transaction_type, tags, note, transaction_id))
             
             self.db_manager.connection.commit()
+            self.db_manager.create_temp_file()
             return transaction_id
             
         except Exception as e:
@@ -868,6 +896,7 @@ class DatabaseWalletHelper:
                           (transaction_id,))
             
             self.db_manager.connection.commit()
+            self.db_manager.create_temp_file()
             
         except Exception as e:
             print(f"Error deleting transaction items: {e}")
@@ -885,6 +914,7 @@ class DatabaseWalletHelper:
                           (item_id,))
             
             self.db_manager.connection.commit()
+            self.db_manager.create_temp_file()
             
         except Exception as e:
             print(f"Error deleting transaction item: {e}")
@@ -958,6 +988,7 @@ class DatabaseWalletHelper:
             
             invoice_id = cursor.lastrowid
             self.db_manager.connection.commit()
+            self.db_manager.create_temp_file()
             return invoice_id
             
         except Exception as e:
@@ -1008,6 +1039,7 @@ class DatabaseWalletHelper:
                 """, (image_path, image_name, image_size, image_type, description, transaction_id))
                 
                 self.db_manager.connection.commit()
+                self.db_manager.create_temp_file()
                 return existing['id']
             else:
                 # Add new
@@ -1030,6 +1062,7 @@ class DatabaseWalletHelper:
                           (transaction_id,))
             
             self.db_manager.connection.commit()
+            self.db_manager.create_temp_file()
             
         except Exception as e:
             print(f"Error deleting transaction invoice image: {e}")
@@ -1158,6 +1191,27 @@ class DatabaseWalletHelper:
             
         except Exception as e:
             print(f"Error getting pockets with transactions: {e}")
+            return []
+        finally:
+            self.db_manager.close()
+    
+    def get_locations_with_transactions(self):
+        """Get only locations that have transactions."""
+        try:
+            self.db_manager.connect(write=False)
+            cursor = self.db_manager.connection.cursor()
+            cursor.execute("""
+                SELECT DISTINCT l.id, l.name
+                FROM wallet_locations l
+                INNER JOIN wallet_transactions t ON l.id = t.location_id
+                ORDER BY l.name
+            """)
+            rows = cursor.fetchall()
+            locations = [dict(row) for row in rows]
+            return locations
+            
+        except Exception as e:
+            print(f"Error getting locations with transactions: {e}")
             return []
         finally:
             self.db_manager.close()
@@ -1329,6 +1383,62 @@ class DatabaseWalletHelper:
         finally:
             self.db_manager.close()
     
+    def get_transactions_by_location(self, date_from, date_to, pocket_id=None, category_id=None, location_id=None, transaction_type=""):
+        """Get transactions grouped by location."""
+        try:
+            self.db_manager.connect(write=False)
+            cursor = self.db_manager.connection.cursor()
+            
+            where_clauses = []
+            params = []
+            
+            if date_from and date_to:
+                where_clauses.append("DATE(t.transaction_date) BETWEEN ? AND ?")
+                params.extend([date_from, date_to])
+            
+            if pocket_id:
+                where_clauses.append("t.pocket_id = ?")
+                params.append(pocket_id)
+            
+            if category_id:
+                where_clauses.append("t.category_id = ?")
+                params.append(category_id)
+            
+            if location_id:
+                where_clauses.append("t.location_id = ?")
+                params.append(location_id)
+            
+            if transaction_type:
+                where_clauses.append("t.transaction_type = ?")
+                params.append(transaction_type)
+            
+            where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
+            
+            cursor.execute(f"""
+                SELECT 
+                    COALESCE(l.name, 'Unknown') as location_name,
+                    t.transaction_type,
+                    COUNT(DISTINCT t.id) as transaction_count,
+                    COALESCE(SUM(ti.quantity * ti.amount), 0) as total_amount,
+                    cu.symbol as currency_symbol
+                FROM wallet_transactions t
+                LEFT JOIN wallet_locations l ON t.location_id = l.id
+                LEFT JOIN wallet_transaction_items ti ON t.id = ti.wallet_transaction_id
+                LEFT JOIN wallet_currency cu ON t.currency_id = cu.id
+                WHERE {where_sql}
+                GROUP BY l.name, t.transaction_type, cu.symbol
+                ORDER BY l.name, t.transaction_type
+            """, params)
+            
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+            
+        except Exception as e:
+            print(f"Error getting transactions by location: {e}")
+            return []
+        finally:
+            self.db_manager.close()
+    
     def get_transaction_trends(self, date_from, date_to, pocket_id=None, category_id=None, transaction_type="", group_by="month"):
         """Get transaction trends over time."""
         try:
@@ -1427,15 +1537,15 @@ class DatabaseWalletHelper:
         query = f"""
             SELECT 
                 wt.transaction_date,
-                wt.transaction_name,
+                COALESCE(wt.transaction_name, '') as transaction_name,
                 wt.transaction_type,
-                wp.name as pocket_name,
-                wc.name as category_name,
-                wcard.card_name,
-                wl.name as location_name,
-                SUM(wti.amount * wti.quantity) as total_amount,
-                curr.symbol as currency_symbol,
-                wts.name as status_name
+                COALESCE(wp.name, '') as pocket_name,
+                COALESCE(wc.name, 'Uncategorized') as category_name,
+                COALESCE(wcard.card_name, '-') as card_name,
+                COALESCE(wl.name, '-') as location_name,
+                COALESCE(SUM(wti.amount * wti.quantity), 0) as total_amount,
+                COALESCE(curr.symbol, 'Rp') as currency_symbol,
+                COALESCE(wts.name, '-') as status_name
             FROM wallet_transactions wt
             LEFT JOIN wallet_pockets wp ON wt.pocket_id = wp.id
             LEFT JOIN wallet_categories wc ON wt.category_id = wc.id
@@ -1492,7 +1602,7 @@ class DatabaseWalletHelper:
         cursor.execute("""
             SELECT 
                 wt.transaction_type,
-                SUM(wti.amount * wti.quantity) as total,
+                COALESCE(SUM(wti.amount * wti.quantity), 0) as total,
                 curr.symbol
             FROM wallet_transactions wt
             LEFT JOIN wallet_transaction_items wti ON wt.id = wti.wallet_transaction_id
@@ -1505,12 +1615,16 @@ class DatabaseWalletHelper:
             if row_dict.get('symbol'):
                 summary['currency_symbol'] = row_dict['symbol']
             
+            total_value = row_dict.get('total', 0)
+            if total_value is None:
+                total_value = 0.0
+            
             if row_dict['transaction_type'] == 'income':
-                summary['total_income'] = row_dict['total'] or 0.0
+                summary['total_income'] = float(total_value)
             elif row_dict['transaction_type'] == 'expense':
-                summary['total_expense'] = row_dict['total'] or 0.0
+                summary['total_expense'] = float(total_value)
             elif row_dict['transaction_type'] == 'transfer':
-                summary['total_transfer'] = row_dict['total'] or 0.0
+                summary['total_transfer'] = float(total_value)
         
         summary['net_balance'] = summary['total_income'] - summary['total_expense']
         
@@ -1560,12 +1674,12 @@ class DatabaseWalletHelper:
             SELECT 
                 wt.id,
                 wt.transaction_date,
-                wt.transaction_name,
+                COALESCE(wt.transaction_name, '') as transaction_name,
                 wt.transaction_type,
-                wp.name as pocket_name,
-                wc.name as category_name,
-                SUM(wti.amount * wti.quantity) as amount,
-                curr.symbol as currency_symbol
+                COALESCE(wp.name, '') as pocket_name,
+                COALESCE(wc.name, '') as category_name,
+                COALESCE(SUM(wti.amount * wti.quantity), 0) as amount,
+                COALESCE(curr.symbol, 'Rp') as currency_symbol
             FROM wallet_transactions wt
             LEFT JOIN wallet_pockets wp ON wt.pocket_id = wp.id
             LEFT JOIN wallet_categories wc ON wt.category_id = wc.id
@@ -1580,14 +1694,15 @@ class DatabaseWalletHelper:
         # Get category breakdown
         cursor.execute("""
             SELECT 
-                wc.name as category_name,
+                COALESCE(wc.name, 'Uncategorized') as category_name,
                 wt.transaction_type,
-                SUM(wti.amount * wti.quantity) as total
+                COALESCE(SUM(wti.amount * wti.quantity), 0) as total
             FROM wallet_transactions wt
             LEFT JOIN wallet_categories wc ON wt.category_id = wc.id
             LEFT JOIN wallet_transaction_items wti ON wt.id = wti.wallet_transaction_id
             WHERE wt.transaction_type IN ('income', 'expense')
             GROUP BY wc.id, wt.transaction_type
+            HAVING total > 0
             ORDER BY total DESC
             LIMIT 10
         """)
@@ -1598,7 +1713,7 @@ class DatabaseWalletHelper:
             SELECT 
                 strftime('%Y-%m', wt.transaction_date) as month,
                 wt.transaction_type,
-                SUM(wti.amount * wti.quantity) as total
+                COALESCE(SUM(wti.amount * wti.quantity), 0) as total
             FROM wallet_transactions wt
             LEFT JOIN wallet_transaction_items wti ON wt.id = wti.wallet_transaction_id
             WHERE wt.transaction_date >= date('now', '-6 months')
@@ -1612,12 +1727,13 @@ class DatabaseWalletHelper:
             SELECT 
                 wl.name as location_name,
                 COUNT(wt.id) as transaction_count,
-                SUM(wti.amount * wti.quantity) as total_amount
+                COALESCE(SUM(wti.amount * wti.quantity), 0) as total_amount
             FROM wallet_transactions wt
             LEFT JOIN wallet_transaction_locations wl ON wt.location_id = wl.id
             LEFT JOIN wallet_transaction_items wti ON wt.id = wti.wallet_transaction_id
             WHERE wl.name IS NOT NULL
             GROUP BY wl.id
+            HAVING total_amount > 0
             ORDER BY transaction_count DESC
             LIMIT 5
         """)
@@ -1635,7 +1751,7 @@ class DatabaseWalletHelper:
             SELECT 
                 strftime('%Y', wt.transaction_date) as year,
                 wt.transaction_type,
-                SUM(wti.amount * wti.quantity) as total
+                COALESCE(SUM(wti.amount * wti.quantity), 0) as total
             FROM wallet_transactions wt
             LEFT JOIN wallet_transaction_items wti ON wt.id = wti.wallet_transaction_id
             GROUP BY year, wt.transaction_type
@@ -1658,7 +1774,7 @@ class DatabaseWalletHelper:
                     WHEN strftime('%Y-%m', wt.transaction_date) = strftime('%Y-%m', 'now', '-1 month') THEN 'previous'
                 END as period,
                 wt.transaction_type,
-                SUM(wti.amount * wti.quantity) as total
+                COALESCE(SUM(wti.amount * wti.quantity), 0) as total
             FROM wallet_transactions wt
             LEFT JOIN wallet_transaction_items wti ON wt.id = wti.wallet_transaction_id
             WHERE wt.transaction_date >= date('now', 'start of month', '-1 month')
@@ -1672,10 +1788,14 @@ class DatabaseWalletHelper:
         previous = {'income': 0, 'expense': 0, 'transfer': 0}
         
         for row in rows:
+            total_val = row.get('total', 0)
+            if total_val is None:
+                total_val = 0
+            
             if row['period'] == 'current':
-                current[row['transaction_type']] = row['total'] or 0
+                current[row['transaction_type']] = float(total_val)
             elif row['period'] == 'previous':
-                previous[row['transaction_type']] = row['total'] or 0
+                previous[row['transaction_type']] = float(total_val)
         
         return {'current': current, 'previous': previous}
     
@@ -1715,15 +1835,15 @@ class DatabaseWalletHelper:
             cursor.execute(f"""
                 SELECT 
                     t.transaction_date,
-                    t.transaction_name,
+                    COALESCE(t.transaction_name, '') as transaction_name,
                     t.transaction_type,
-                    p.name as pocket_name,
+                    COALESCE(p.name, '') as pocket_name,
                     COALESCE(c.name, 'Uncategorized') as category_name,
                     COALESCE(ca.card_name, '-') as card_name,
                     COALESCE(l.name, '-') as location_name,
                     COALESCE(SUM(ti.quantity * ti.amount), 0) as total_amount,
-                    cu.symbol as currency_symbol,
-                    s.name as status_name
+                    COALESCE(cu.symbol, 'Rp') as currency_symbol,
+                    COALESCE(s.name, '-') as status_name
                 FROM wallet_transactions t
                 LEFT JOIN wallet_pockets p ON t.pocket_id = p.id
                 LEFT JOIN wallet_categories c ON t.category_id = c.id

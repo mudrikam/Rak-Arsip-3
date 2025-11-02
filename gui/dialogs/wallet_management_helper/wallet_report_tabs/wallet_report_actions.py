@@ -51,7 +51,12 @@ class WalletReportFilter(QWidget):
         self.category_combo.currentIndexChanged.connect(self.on_filter_changed)
         filter_row1.addWidget(self.category_combo)
         
-        filter_layout.addRow("Type/Pocket/Category:", filter_row1)
+        self.location_combo = QComboBox()
+        self.location_combo.addItem("All Locations", None)
+        self.location_combo.currentIndexChanged.connect(self.on_filter_changed)
+        filter_row1.addWidget(self.location_combo)
+        
+        filter_layout.addRow("Type/Pocket/Category/Location:", filter_row1)
         
         filter_row2 = QHBoxLayout()
         filter_row2.setSpacing(8)
@@ -110,6 +115,12 @@ class WalletReportFilter(QWidget):
         for category in categories:
             self.category_combo.addItem(category['name'], category['id'])
     
+    def load_locations(self, locations):
+        self.location_combo.clear()
+        self.location_combo.addItem("All Locations", None)
+        for location in locations:
+            self.location_combo.addItem(location['name'], location['id'])
+    
     def on_filter_changed(self):
         filters = self.get_filters()
         self.filter_changed.emit(filters)
@@ -131,6 +142,7 @@ class WalletReportFilter(QWidget):
             'transaction_type': transaction_type_text,
             'pocket_id': self.pocket_combo.currentData(),
             'category_id': self.category_combo.currentData(),
+            'location_id': self.location_combo.currentData(),
             'search_text': self.search_input.text()
         }
     
@@ -141,6 +153,7 @@ class WalletReportFilter(QWidget):
         self.transaction_type.setCurrentIndex(0)
         self.pocket_combo.setCurrentIndex(0)
         self.category_combo.setCurrentIndex(0)
+        self.location_combo.setCurrentIndex(0)
         self.search_input.clear()
 
 

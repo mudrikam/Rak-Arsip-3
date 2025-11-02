@@ -11,6 +11,7 @@ class WalletOverviewTab(QWidget):
     def __init__(self, db_manager, parent=None):
         super().__init__(parent)
         self.db_manager = db_manager
+        self.db_manager.data_changed.connect(self.on_data_changed)
         self.init_ui()
         self.load_data()
     
@@ -123,4 +124,13 @@ class WalletOverviewTab(QWidget):
                 parent.open_transaction_details(transaction_id)
                 break
             parent = parent.parent()
+    
+    def on_data_changed(self):
+        """Handle database changes by refreshing all data"""
+        self.load_data()
+    
+    def showEvent(self, event):
+        """Override showEvent to reload data when page is displayed"""
+        super().showEvent(event)
+        self.load_data()
 
