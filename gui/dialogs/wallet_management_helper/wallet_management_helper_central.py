@@ -21,7 +21,7 @@ class WalletCentral(QWidget):
 
         self.stacked_widget = QStackedWidget()
 
-        self.overview_tab = WalletOverviewTab()
+        self.overview_tab = WalletOverviewTab(db_manager=self.db_manager)
         self.transaction_tab = WalletTransactionTab(db_manager=self.db_manager, basedir=self.basedir)
         self.pocket_tab = WalletPocketTab(db_manager=self.db_manager)
         self.report_tab = WalletReportTab(db_manager=self.db_manager)
@@ -49,3 +49,34 @@ class WalletCentral(QWidget):
         
         if section_name in section_map:
             self.stacked_widget.setCurrentIndex(section_map[section_name])
+    
+    def switch_to_tab(self, target):
+        """Switch to a specific tab based on target name"""
+        tab_map = {
+            "report": 3,      # All financial summary cards go to Report
+            "pockets": 2,     # Pockets and Cards stats go to Pockets
+            "transactions": 1 # Transactions stat goes to Transactions
+        }
+        
+        if target in tab_map:
+            index = tab_map[target]
+            self.stacked_widget.setCurrentIndex(index)
+            # Update sidebar selection
+            self.update_sidebar_selection(index)
+    
+    def open_transaction_details(self, transaction_id):
+        """Select transaction and open its details dialog"""
+        if hasattr(self.transaction_tab, 'select_and_open_transaction'):
+            self.transaction_tab.select_and_open_transaction(transaction_id)
+    
+    def update_sidebar_selection(self, index):
+        """Update sidebar to match the current page"""
+        parent = self.parent()
+        while parent:
+            if hasattr(parent, 'sidebar'):
+                sidebar = parent.sidebar
+                if hasattr(sidebar, 'menu_list'):
+                    sidebar.menu_list.setCurrentRow(index)
+                break
+            parent = parent.parent()
+

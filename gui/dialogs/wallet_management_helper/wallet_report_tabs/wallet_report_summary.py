@@ -45,10 +45,10 @@ class WalletReportSummaryTab(QWidget):
         summary_container.addWidget(self.expense_card, 0, 1)
         
         self.transfer_card = self.create_summary_card("Total Transfer", "Rp 0", "#17a2b8", "#ffffff", "fa6s.right-left")
-        summary_container.addWidget(self.transfer_card, 1, 0)
+        summary_container.addWidget(self.transfer_card, 0, 2)
         
         self.balance_card = self.create_summary_card("Net Balance", "Rp 0", "#6c757d", "#ffffff", "fa6s.scale-balanced")
-        summary_container.addWidget(self.balance_card, 1, 1)
+        summary_container.addWidget(self.balance_card, 0, 3)
         
         layout.addLayout(summary_container)
         
@@ -77,23 +77,22 @@ class WalletReportSummaryTab(QWidget):
             QFrame {{
                 background-color: {bg_color};
                 border-radius: 6px;
-                padding: 8px;
             }}
         """)
         
-        card_layout = QVBoxLayout()
-        card_layout.setContentsMargins(0, 0, 0, 0)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(8, 8, 8, 8)
         card_layout.setSpacing(4)
         
         header_layout = QHBoxLayout()
-        header_layout.setSpacing(4)
+        header_layout.setSpacing(6)
         
         icon_label = QLabel()
         icon_label.setPixmap(qta.icon(icon_name, color=text_color).pixmap(18, 18))
         header_layout.addWidget(icon_label)
         
         title_label = QLabel(title)
-        title_label.setStyleSheet(f"font-size: 11px; color: {text_color}; font-weight: bold;")
+        title_label.setStyleSheet(f"color: {text_color}; font-weight: bold; font-size: 11px;")
         header_layout.addWidget(title_label)
         header_layout.addStretch()
         
@@ -101,11 +100,9 @@ class WalletReportSummaryTab(QWidget):
         
         amount_label = QLabel(amount)
         amount_label.setObjectName("amount_label")
-        amount_label.setStyleSheet(f"font-size: 16px; font-weight: bold; color: {text_color};")
-        amount_label.setAlignment(Qt.AlignLeft)
+        amount_label.setStyleSheet(f"color: {text_color}; font-size: 16px; font-weight: bold;")
         card_layout.addWidget(amount_label)
         
-        card.setLayout(card_layout)
         card.setProperty("text_color", text_color)
         return card
     
@@ -115,11 +112,11 @@ class WalletReportSummaryTab(QWidget):
         if amount_label:
             amount_label.setText(amount)
             if custom_color:
-                amount_label.setStyleSheet(f"font-size: 16px; font-weight: bold; color: {custom_color};")
+                amount_label.setStyleSheet(f"color: {custom_color}; font-size: 16px; font-weight: bold;")
             else:
                 text_color = card.property("text_color")
                 if text_color:
-                    amount_label.setStyleSheet(f"font-size: 16px; font-weight: bold; color: {text_color};")
+                    amount_label.setStyleSheet(f"color: {text_color}; font-size: 16px; font-weight: bold;")
     
     def on_filter_changed(self):
         self.current_page = 1

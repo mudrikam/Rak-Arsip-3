@@ -1391,6 +1391,297 @@ class DatabaseWalletHelper:
     
     def get_detailed_transactions_report(self, date_from, date_to, pocket_id=None, category_id=None, 
                                         transaction_type="", search_text=""):
+        """Get detailed transaction report with all related information."""
+        self.db_manager.connect(write=False)
+        cursor = self.db_manager.connection.cursor()
+        
+        where_clauses = ["1=1"]
+        params = []
+        
+        if date_from:
+            where_clauses.append("wt.transaction_date >= ?")
+            params.append(date_from)
+        
+        if date_to:
+            where_clauses.append("wt.transaction_date <= ?")
+            params.append(date_to)
+        
+        if pocket_id:
+            where_clauses.append("wt.pocket_id = ?")
+            params.append(pocket_id)
+        
+        if category_id:
+            where_clauses.append("wt.category_id = ?")
+            params.append(category_id)
+        
+        if transaction_type:
+            where_clauses.append("wt.transaction_type = ?")
+            params.append(transaction_type)
+        
+        if search_text:
+            where_clauses.append("wt.transaction_name LIKE ?")
+            params.append(f"%{search_text}%")
+        
+        where_clause = " AND ".join(where_clauses)
+        
+        query = f"""
+            SELECT 
+                wt.transaction_date,
+                wt.transaction_name,
+                wt.transaction_type,
+                wp.name as pocket_name,
+                wc.name as category_name,
+                wcard.card_name,
+                wl.name as location_name,
+                SUM(wti.amount * wti.quantity) as total_amount,
+                curr.symbol as currency_symbol,
+                wts.name as status_name
+            FROM wallet_transactions wt
+            LEFT JOIN wallet_pockets wp ON wt.pocket_id = wp.id
+            LEFT JOIN wallet_categories wc ON wt.category_id = wc.id
+            LEFT JOIN wallet_cards wcard ON wt.card_id = wcard.id
+            LEFT JOIN wallet_transaction_locations wl ON wt.location_id = wl.id
+            LEFT JOIN wallet_currency curr ON wt.currency_id = curr.id
+            LEFT JOIN wallet_transaction_statuses wts ON wt.status_id = wts.id
+            LEFT JOIN wallet_transaction_items wti ON wt.id = wti.wallet_transaction_id
+            WHERE {where_clause}
+            GROUP BY wt.id
+            ORDER BY wt.transaction_date DESC
+        """
+        
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        transactions = [dict(row) for row in rows]
+        self.db_manager.close()
+        return transactions
+    
+    def get_overview_summary(self):
+        """Get comprehensive overview summary for dashboard."""
+        self.db_manager.connect(write=False)
+        cursor = self.db_manager.connection.cursor()
+        
+        summary = {
+            'total_pockets': 0,
+            'total_cards': 0,
+            'total_transactions': 0,
+            'total_income': 0.0,
+            'total_expense': 0.0,
+            'total_transfer': 0.0,
+            'net_balance': 0.0,
+            'pocket_balances': [],
+            'recent_transactions': [],
+            'category_breakdown': [],
+            'monthly_trend': [],
+            'top_locations': [],
+            'currency_symbol': 'Rp'
+        }
+        
+        # Get total pockets
+        cursor.execute("SELECT COUNT(*) as count FROM wallet_pockets")
+        summary['total_pockets'] = cursor.fetchone()['count']
+        
+        # Get total cards
+        cursor.execute("SELECT COUNT(*) as count FROM wallet_cards")
+        summary['total_cards'] = cursor.fetchone()['count']
+        
+        # Get total transactions
+        cursor.execute("SELECT COUNT(*) as count FROM wallet_transactions")
+        summary['total_transactions'] = cursor.fetchone()['count']
+        
+        # Get income, expense, transfer totals
+        cursor.execute("""
+            SELECT 
+                wt.transaction_type,
+                SUM(wti.amount * wti.quantity) as total,
+                curr.symbol
+            FROM wallet_transactions wt
+            LEFT JOIN wallet_transaction_items wti ON wt.id = wti.wallet_transaction_id
+            LEFT JOIN wallet_currency curr ON wt.currency_id = curr.id
+            GROUP BY wt.transaction_type
+        """)
+        
+        for row in cursor.fetchall():
+            row_dict = dict(row)
+            if row_dict.get('symbol'):
+                summary['currency_symbol'] = row_dict['symbol']
+            
+            if row_dict['transaction_type'] == 'income':
+                summary['total_income'] = row_dict['total'] or 0.0
+            elif row_dict['transaction_type'] == 'expense':
+                summary['total_expense'] = row_dict['total'] or 0.0
+            elif row_dict['transaction_type'] == 'transfer':
+                summary['total_transfer'] = row_dict['total'] or 0.0
+        
+        summary['net_balance'] = summary['total_income'] - summary['total_expense']
+        
+        # Get pocket balances
+        cursor.execute("""
+            SELECT 
+                wp.id,
+                wp.name,
+                wp.color,
+                wp.icon,
+                COALESCE(income.total, 0) - COALESCE(expense.total, 0) + COALESCE(transfer_in.total, 0) - COALESCE(transfer_out.total, 0) as balance
+            FROM wallet_pockets wp
+            LEFT JOIN (
+                SELECT pocket_id, SUM(wti.amount * wti.quantity) as total
+                FROM wallet_transactions wt
+                JOIN wallet_transaction_items wti ON wt.id = wti.wallet_transaction_id
+                WHERE wt.transaction_type = 'income'
+                GROUP BY pocket_id
+            ) income ON wp.id = income.pocket_id
+            LEFT JOIN (
+                SELECT pocket_id, SUM(wti.amount * wti.quantity) as total
+                FROM wallet_transactions wt
+                JOIN wallet_transaction_items wti ON wt.id = wti.wallet_transaction_id
+                WHERE wt.transaction_type = 'expense'
+                GROUP BY pocket_id
+            ) expense ON wp.id = expense.pocket_id
+            LEFT JOIN (
+                SELECT destination_pocket_id as pocket_id, SUM(wti.amount * wti.quantity) as total
+                FROM wallet_transactions wt
+                JOIN wallet_transaction_items wti ON wt.id = wti.wallet_transaction_id
+                WHERE wt.transaction_type = 'transfer' AND destination_pocket_id IS NOT NULL
+                GROUP BY destination_pocket_id
+            ) transfer_in ON wp.id = transfer_in.pocket_id
+            LEFT JOIN (
+                SELECT pocket_id, SUM(wti.amount * wti.quantity) as total
+                FROM wallet_transactions wt
+                JOIN wallet_transaction_items wti ON wt.id = wti.wallet_transaction_id
+                WHERE wt.transaction_type = 'transfer'
+                GROUP BY pocket_id
+            ) transfer_out ON wp.id = transfer_out.pocket_id
+            ORDER BY balance DESC
+        """)
+        summary['pocket_balances'] = [dict(row) for row in cursor.fetchall()]
+        
+        # Get recent transactions (last 5)
+        cursor.execute("""
+            SELECT 
+                wt.id,
+                wt.transaction_date,
+                wt.transaction_name,
+                wt.transaction_type,
+                wp.name as pocket_name,
+                wc.name as category_name,
+                SUM(wti.amount * wti.quantity) as amount,
+                curr.symbol as currency_symbol
+            FROM wallet_transactions wt
+            LEFT JOIN wallet_pockets wp ON wt.pocket_id = wp.id
+            LEFT JOIN wallet_categories wc ON wt.category_id = wc.id
+            LEFT JOIN wallet_transaction_items wti ON wt.id = wti.wallet_transaction_id
+            LEFT JOIN wallet_currency curr ON wt.currency_id = curr.id
+            GROUP BY wt.id
+            ORDER BY wt.transaction_date DESC, wt.created_at DESC
+            LIMIT 5
+        """)
+        summary['recent_transactions'] = [dict(row) for row in cursor.fetchall()]
+        
+        # Get category breakdown
+        cursor.execute("""
+            SELECT 
+                wc.name as category_name,
+                wt.transaction_type,
+                SUM(wti.amount * wti.quantity) as total
+            FROM wallet_transactions wt
+            LEFT JOIN wallet_categories wc ON wt.category_id = wc.id
+            LEFT JOIN wallet_transaction_items wti ON wt.id = wti.wallet_transaction_id
+            WHERE wt.transaction_type IN ('income', 'expense')
+            GROUP BY wc.id, wt.transaction_type
+            ORDER BY total DESC
+            LIMIT 10
+        """)
+        summary['category_breakdown'] = [dict(row) for row in cursor.fetchall()]
+        
+        # Get monthly trend (last 6 months)
+        cursor.execute("""
+            SELECT 
+                strftime('%Y-%m', wt.transaction_date) as month,
+                wt.transaction_type,
+                SUM(wti.amount * wti.quantity) as total
+            FROM wallet_transactions wt
+            LEFT JOIN wallet_transaction_items wti ON wt.id = wti.wallet_transaction_id
+            WHERE wt.transaction_date >= date('now', '-6 months')
+            GROUP BY month, wt.transaction_type
+            ORDER BY month ASC
+        """)
+        summary['monthly_trend'] = [dict(row) for row in cursor.fetchall()]
+        
+        # Get top locations
+        cursor.execute("""
+            SELECT 
+                wl.name as location_name,
+                COUNT(wt.id) as transaction_count,
+                SUM(wti.amount * wti.quantity) as total_amount
+            FROM wallet_transactions wt
+            LEFT JOIN wallet_transaction_locations wl ON wt.location_id = wl.id
+            LEFT JOIN wallet_transaction_items wti ON wt.id = wti.wallet_transaction_id
+            WHERE wl.name IS NOT NULL
+            GROUP BY wl.id
+            ORDER BY transaction_count DESC
+            LIMIT 5
+        """)
+        summary['top_locations'] = [dict(row) for row in cursor.fetchall()]
+        
+        self.db_manager.close()
+        return summary
+    
+    def get_yearly_trend(self):
+        """Get yearly transaction trends."""
+        self.db_manager.connect(write=False)
+        cursor = self.db_manager.connection.cursor()
+        
+        cursor.execute("""
+            SELECT 
+                strftime('%Y', wt.transaction_date) as year,
+                wt.transaction_type,
+                SUM(wti.amount * wti.quantity) as total
+            FROM wallet_transactions wt
+            LEFT JOIN wallet_transaction_items wti ON wt.id = wti.wallet_transaction_id
+            GROUP BY year, wt.transaction_type
+            ORDER BY year DESC
+        """)
+        
+        result = [dict(row) for row in cursor.fetchall()]
+        self.db_manager.close()
+        return result
+    
+    def get_month_comparison(self):
+        """Get comparison between current month and last month."""
+        self.db_manager.connect(write=False)
+        cursor = self.db_manager.connection.cursor()
+        
+        cursor.execute("""
+            SELECT 
+                CASE 
+                    WHEN strftime('%Y-%m', wt.transaction_date) = strftime('%Y-%m', 'now') THEN 'current'
+                    WHEN strftime('%Y-%m', wt.transaction_date) = strftime('%Y-%m', 'now', '-1 month') THEN 'previous'
+                END as period,
+                wt.transaction_type,
+                SUM(wti.amount * wti.quantity) as total
+            FROM wallet_transactions wt
+            LEFT JOIN wallet_transaction_items wti ON wt.id = wti.wallet_transaction_id
+            WHERE wt.transaction_date >= date('now', 'start of month', '-1 month')
+            GROUP BY period, wt.transaction_type
+        """)
+        
+        rows = [dict(row) for row in cursor.fetchall()]
+        self.db_manager.close()
+        
+        current = {'income': 0, 'expense': 0, 'transfer': 0}
+        previous = {'income': 0, 'expense': 0, 'transfer': 0}
+        
+        for row in rows:
+            if row['period'] == 'current':
+                current[row['transaction_type']] = row['total'] or 0
+            elif row['period'] == 'previous':
+                previous[row['transaction_type']] = row['total'] or 0
+        
+        return {'current': current, 'previous': previous}
+    
+    def get_detailed_transactions(self, date_from=None, date_to=None, pocket_id=None,
+                                 category_id=None, transaction_type=None, search_text=None, 
+                                 limit=None, offset=None):
         """Get detailed transactions for reporting."""
         try:
             self.db_manager.connect(write=False)

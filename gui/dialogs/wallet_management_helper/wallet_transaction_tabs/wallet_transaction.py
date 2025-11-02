@@ -58,3 +58,11 @@ class WalletTransactionTab(QWidget):
             self.transaction_widget.load_transaction_for_edit(transaction_id)
             # Switch to transaction tab (index 0)
             self.tab_widget.setCurrentIndex(0)
+    
+    def select_and_open_transaction(self, transaction_id):
+        """Switch to transaction list, select item, and open details dialog"""
+        self.tab_widget.setCurrentIndex(1)
+        
+        if self.transaction_list_widget:
+            self.transaction_list_widget.select_and_open_details(transaction_id)
+

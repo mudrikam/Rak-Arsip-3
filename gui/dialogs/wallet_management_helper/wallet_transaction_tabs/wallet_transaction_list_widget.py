@@ -905,3 +905,15 @@ class WalletTransactionListWidget(QWidget):
         self.items_per_page = int(self.combo_per_page.currentText())
         self.current_page = 1
         self.load_transactions()
+    
+    def select_and_open_details(self, transaction_id):
+        """Select transaction in table and open details dialog"""
+        for row in range(self.transactions_table.rowCount()):
+            row_trans_id = self.transactions_table.item(row, 0).data(Qt.UserRole)
+            if row_trans_id == transaction_id:
+                self.transactions_table.selectRow(row)
+                self.transactions_table.scrollToItem(self.transactions_table.item(row, 0))
+                dialog = TransactionViewDialog(self.db_manager, transaction_id, self)
+                dialog.exec()
+                break
+

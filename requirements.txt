@@ -1,4 +1,5 @@
 PySide6
+PySide6-Charts
 qtawesome
 google-genai
 google-api-python-client
