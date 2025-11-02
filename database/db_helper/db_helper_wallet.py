@@ -1182,3 +1182,275 @@ class DatabaseWalletHelper:
             return []
         finally:
             self.db_manager.close()
+    
+    def get_summary_report(self, date_from, date_to, pocket_id=None, category_id=None, transaction_type=""):
+        """Get summary report data."""
+        try:
+            self.db_manager.connect(write=False)
+            cursor = self.db_manager.connection.cursor()
+            
+            where_clauses = []
+            params = []
+            
+            if date_from and date_to:
+                where_clauses.append("DATE(t.transaction_date) BETWEEN ? AND ?")
+                params.extend([date_from, date_to])
+            
+            if pocket_id:
+                where_clauses.append("t.pocket_id = ?")
+                params.append(pocket_id)
+            
+            if category_id:
+                where_clauses.append("t.category_id = ?")
+                params.append(category_id)
+            
+            if transaction_type:
+                where_clauses.append("t.transaction_type = ?")
+                params.append(transaction_type)
+            
+            where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
+            
+            cursor.execute(f"""
+                SELECT 
+                    t.transaction_type,
+                    COUNT(DISTINCT t.id) as transaction_count,
+                    COALESCE(SUM(ti.quantity * ti.amount), 0) as total_amount,
+                    cu.symbol as currency_symbol
+                FROM wallet_transactions t
+                LEFT JOIN wallet_transaction_items ti ON t.id = ti.wallet_transaction_id
+                LEFT JOIN wallet_currency cu ON t.currency_id = cu.id
+                WHERE {where_sql}
+                GROUP BY t.transaction_type, cu.symbol
+                ORDER BY t.transaction_type
+            """, params)
+            
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+            
+        except Exception as e:
+            print(f"Error getting summary report: {e}")
+            return []
+        finally:
+            self.db_manager.close()
+    
+    def get_transactions_by_pocket(self, date_from, date_to, category_id=None, transaction_type=""):
+        """Get transactions grouped by pocket."""
+        try:
+            self.db_manager.connect(write=False)
+            cursor = self.db_manager.connection.cursor()
+            
+            where_clauses = []
+            params = []
+            
+            if date_from and date_to:
+                where_clauses.append("DATE(t.transaction_date) BETWEEN ? AND ?")
+                params.extend([date_from, date_to])
+            
+            if category_id:
+                where_clauses.append("t.category_id = ?")
+                params.append(category_id)
+            
+            if transaction_type:
+                where_clauses.append("t.transaction_type = ?")
+                params.append(transaction_type)
+            
+            where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
+            
+            cursor.execute(f"""
+                SELECT 
+                    p.name as pocket_name,
+                    t.transaction_type,
+                    COUNT(DISTINCT t.id) as transaction_count,
+                    COALESCE(SUM(ti.quantity * ti.amount), 0) as total_amount,
+                    cu.symbol as currency_symbol
+                FROM wallet_transactions t
+                LEFT JOIN wallet_pockets p ON t.pocket_id = p.id
+                LEFT JOIN wallet_transaction_items ti ON t.id = ti.wallet_transaction_id
+                LEFT JOIN wallet_currency cu ON t.currency_id = cu.id
+                WHERE {where_sql}
+                GROUP BY p.name, t.transaction_type, cu.symbol
+                ORDER BY p.name, t.transaction_type
+            """, params)
+            
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+            
+        except Exception as e:
+            print(f"Error getting transactions by pocket: {e}")
+            return []
+        finally:
+            self.db_manager.close()
+    
+    def get_transactions_by_category(self, date_from, date_to, pocket_id=None, transaction_type=""):
+        """Get transactions grouped by category."""
+        try:
+            self.db_manager.connect(write=False)
+            cursor = self.db_manager.connection.cursor()
+            
+            where_clauses = []
+            params = []
+            
+            if date_from and date_to:
+                where_clauses.append("DATE(t.transaction_date) BETWEEN ? AND ?")
+                params.extend([date_from, date_to])
+            
+            if pocket_id:
+                where_clauses.append("t.pocket_id = ?")
+                params.append(pocket_id)
+            
+            if transaction_type:
+                where_clauses.append("t.transaction_type = ?")
+                params.append(transaction_type)
+            
+            where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
+            
+            cursor.execute(f"""
+                SELECT 
+                    COALESCE(c.name, 'Uncategorized') as category_name,
+                    t.transaction_type,
+                    COUNT(DISTINCT t.id) as transaction_count,
+                    COALESCE(SUM(ti.quantity * ti.amount), 0) as total_amount,
+                    cu.symbol as currency_symbol
+                FROM wallet_transactions t
+                LEFT JOIN wallet_categories c ON t.category_id = c.id
+                LEFT JOIN wallet_transaction_items ti ON t.id = ti.wallet_transaction_id
+                LEFT JOIN wallet_currency cu ON t.currency_id = cu.id
+                WHERE {where_sql}
+                GROUP BY c.name, t.transaction_type, cu.symbol
+                ORDER BY c.name, t.transaction_type
+            """, params)
+            
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+            
+        except Exception as e:
+            print(f"Error getting transactions by category: {e}")
+            return []
+        finally:
+            self.db_manager.close()
+    
+    def get_transaction_trends(self, date_from, date_to, pocket_id=None, category_id=None, transaction_type="", group_by="month"):
+        """Get transaction trends over time."""
+        try:
+            self.db_manager.connect(write=False)
+            cursor = self.db_manager.connection.cursor()
+            
+            if group_by == "day":
+                date_format = "%Y-%m-%d"
+            elif group_by == "week":
+                date_format = "%Y-W%W"
+            elif group_by == "year":
+                date_format = "%Y"
+            else:
+                date_format = "%Y-%m"
+            
+            where_clauses = []
+            params = []
+            
+            if date_from and date_to:
+                where_clauses.append("DATE(t.transaction_date) BETWEEN ? AND ?")
+                params.extend([date_from, date_to])
+            
+            if pocket_id:
+                where_clauses.append("t.pocket_id = ?")
+                params.append(pocket_id)
+            
+            if category_id:
+                where_clauses.append("t.category_id = ?")
+                params.append(category_id)
+            
+            if transaction_type:
+                where_clauses.append("t.transaction_type = ?")
+                params.append(transaction_type)
+            
+            where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
+            
+            cursor.execute(f"""
+                SELECT 
+                    strftime('{date_format}', t.transaction_date) as period,
+                    t.transaction_type,
+                    COUNT(DISTINCT t.id) as transaction_count,
+                    COALESCE(SUM(ti.quantity * ti.amount), 0) as total_amount,
+                    cu.symbol as currency_symbol
+                FROM wallet_transactions t
+                LEFT JOIN wallet_transaction_items ti ON t.id = ti.wallet_transaction_id
+                LEFT JOIN wallet_currency cu ON t.currency_id = cu.id
+                WHERE {where_sql}
+                GROUP BY period, t.transaction_type, cu.symbol
+                ORDER BY period, t.transaction_type
+            """, params)
+            
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+            
+        except Exception as e:
+            print(f"Error getting transaction trends: {e}")
+            return []
+        finally:
+            self.db_manager.close()
+    
+    def get_detailed_transactions_report(self, date_from, date_to, pocket_id=None, category_id=None, 
+                                        transaction_type="", search_text=""):
+        """Get detailed transactions for reporting."""
+        try:
+            self.db_manager.connect(write=False)
+            cursor = self.db_manager.connection.cursor()
+            
+            where_clauses = []
+            params = []
+            
+            if date_from and date_to:
+                where_clauses.append("DATE(t.transaction_date) BETWEEN ? AND ?")
+                params.extend([date_from, date_to])
+            
+            if pocket_id:
+                where_clauses.append("t.pocket_id = ?")
+                params.append(pocket_id)
+            
+            if category_id:
+                where_clauses.append("t.category_id = ?")
+                params.append(category_id)
+            
+            if transaction_type:
+                where_clauses.append("t.transaction_type = ?")
+                params.append(transaction_type)
+            
+            if search_text:
+                where_clauses.append("t.transaction_name LIKE ?")
+                params.append(f"%{search_text}%")
+            
+            where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
+            
+            cursor.execute(f"""
+                SELECT 
+                    t.transaction_date,
+                    t.transaction_name,
+                    t.transaction_type,
+                    p.name as pocket_name,
+                    COALESCE(c.name, 'Uncategorized') as category_name,
+                    COALESCE(ca.card_name, '-') as card_name,
+                    COALESCE(l.name, '-') as location_name,
+                    COALESCE(SUM(ti.quantity * ti.amount), 0) as total_amount,
+                    cu.symbol as currency_symbol,
+                    s.name as status_name
+                FROM wallet_transactions t
+                LEFT JOIN wallet_pockets p ON t.pocket_id = p.id
+                LEFT JOIN wallet_categories c ON t.category_id = c.id
+                LEFT JOIN wallet_cards ca ON t.card_id = ca.id
+                LEFT JOIN wallet_transaction_locations l ON t.location_id = l.id
+                LEFT JOIN wallet_transaction_items ti ON t.id = ti.wallet_transaction_id
+                LEFT JOIN wallet_currency cu ON t.currency_id = cu.id
+                LEFT JOIN wallet_transaction_statuses s ON t.status_id = s.id
+                WHERE {where_sql}
+                GROUP BY t.id
+                ORDER BY t.transaction_date DESC
+            """, params)
+            
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+            
+        except Exception as e:
+            print(f"Error getting detailed transactions report: {e}")
+            return []
+        finally:
+            self.db_manager.close()

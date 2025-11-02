@@ -24,7 +24,7 @@ class WalletCentral(QWidget):
         self.overview_tab = WalletOverviewTab()
         self.transaction_tab = WalletTransactionTab(db_manager=self.db_manager, basedir=self.basedir)
         self.pocket_tab = WalletPocketTab(db_manager=self.db_manager)
-        self.report_tab = WalletReportTab()
+        self.report_tab = WalletReportTab(db_manager=self.db_manager)
         self.settings_tab = WalletSettingsTab(db_manager=self.db_manager)
         if self.basedir:
             self.settings_tab.set_basedir(self.basedir)
