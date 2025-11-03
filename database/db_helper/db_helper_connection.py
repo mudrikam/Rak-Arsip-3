@@ -16,9 +16,13 @@ class DatabaseConnectionHelper(QObject):
         db_dir = os.path.dirname(self.db_manager.db_path)
         if db_dir and not os.path.exists(db_dir):
             os.makedirs(db_dir)
+            print(f"[DB] Created database directory: {db_dir}")
         if not os.path.exists(self.db_manager.temp_dir):
             os.makedirs(self.db_manager.temp_dir)
         if self.db_manager.db_config.get("create_if_not_exists"):
+            db_exists = os.path.exists(self.db_manager.db_path)
+            if not db_exists:
+                print(f"[DB] Creating new database: {self.db_manager.db_path}")
             self.db_manager.connect()
             self.create_tables()
             self.initialize_statuses()
@@ -47,11 +51,11 @@ class DatabaseConnectionHelper(QObject):
                     if not os.path.exists(f):
                         break
                 except Exception as e:
-                    print(f"Error removing {f} (attempt {retry+1}): {e}")
+                    print(f"[DB] Error removing {f} (attempt {retry+1}): {e}")
                     time.sleep(retry_delay)
                 retry += 1
             if os.path.exists(f):
-                print(f"WARNING: {f} still exists after {max_retry} attempts. May be locked or on NAS.")
+                print(f"[DB] WARNING: {f} still exists after {max_retry} attempts.")
 
     def setup_file_watcher(self):
         """Setup file watcher timer for change detection."""
@@ -81,7 +85,7 @@ class DatabaseConnectionHelper(QObject):
                             except:
                                 pass
         except Exception as e:
-            print(f"Error checking temp files: {e}")
+            print(f"[DB] Error checking temp files: {e}")
 
     def create_temp_file(self):
         """Create temporary file to signal database changes."""
@@ -92,7 +96,7 @@ class DatabaseConnectionHelper(QObject):
             with open(temp_path, 'w') as f:
                 f.write(f"Database change by session {self.db_manager.session_id} at {timestamp}")
         except Exception as e:
-            print(f"Error creating temp file: {e}")
+            print(f"[DB] Error creating temp file: {e}")
 
     def connect(self, write=True):
         """Connect to database with proper error handling."""
@@ -115,6 +119,7 @@ class DatabaseConnectionHelper(QObject):
                     time.sleep(1)
                     retry += 1
                 else:
+                    print(f"[DB] Connection error: {e}")
                     raise
 
     def close(self):
@@ -129,7 +134,10 @@ class DatabaseConnectionHelper(QObject):
         try:
             self.db_manager.connect()
             cursor = self.db_manager.connection.cursor()
-            for table_name, columns in self.db_manager.tables_config.items():
+            table_count = len(self.db_manager.tables_config)
+            tables_created = []
+            
+            for idx, (table_name, columns) in enumerate(self.db_manager.tables_config.items(), 1):
                 column_defs = []
                 foreign_keys = []
                 for column_name, column_def in columns.items():
@@ -137,10 +145,45 @@ class DatabaseConnectionHelper(QObject):
                         foreign_keys.append(f"{column_name} {column_def}")
                     else:
                         column_defs.append(f"{column_name} {column_def}")
+                
                 all_defs = column_defs + foreign_keys
                 create_sql = f"CREATE TABLE IF NOT EXISTS {table_name} ({', '.join(all_defs)})"
-                cursor.execute(create_sql)
+                
+                try:
+                    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'")
+                    table_exists = cursor.fetchone() is not None
+                    cursor.execute(create_sql)
+                    if not table_exists:
+                        tables_created.append({
+                            'name': table_name,
+                            'columns': [col for col in column_defs],
+                            'foreign_keys': [fk for fk in foreign_keys]
+                        })
+                except Exception as e:
+                    print(f"[DB] Error creating table {table_name}: {e}")
+                    print(f"[DB] SQL: {create_sql}")
+                    raise
+            
             self.db_manager.connection.commit()
+            if tables_created:
+                print(f"\n[DB] Database initialized: {len(tables_created)} new tables created")
+                print(f"[DB] Database path: {self.db_manager.db_path}")
+                print(f"[DB] Database type: {self.db_manager.db_config.get('type', 'sqlite')}")
+                print(f"\n[DB] Tables created:")
+                for table_info in tables_created:
+                    print(f"  • {table_info['name']}")
+                    print(f"    Fields: {len(table_info['columns'])}")
+                    for col in table_info['columns']:
+                        col_name = col.split()[0]
+                        print(f"      - {col_name}")
+                    if table_info['foreign_keys']:
+                        print(f"    Foreign Keys: {len(table_info['foreign_keys'])}")
+                        for fk in table_info['foreign_keys']:
+                            print(f"      - {fk}")
+                print()
+        except Exception as e:
+            print(f"[DB] CRITICAL ERROR in create_tables: {e}")
+            raise
         finally:
             self.db_manager.close()
 
@@ -149,16 +192,21 @@ class DatabaseConnectionHelper(QObject):
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute("SELECT COUNT(*) FROM statuses")
-        if cursor.fetchone()[0] > 0:
+        count = cursor.fetchone()[0]
+        if count > 0:
             self.db_manager.close()
             return
+        
         status_config = self.db_manager.window_config_manager.get("status_options")
+        status_list = []
         for status_name, config in status_config.items():
             cursor.execute(
                 "INSERT INTO statuses (name, color, font_weight) VALUES (?, ?, ?)",
                 (status_name, config["color"], config["font_weight"])
             )
+            status_list.append(f"{status_name} ({config['color']})")
         self.db_manager.connection.commit()
+        print(f"[DB] Initialized {len(status_config)} default statuses: {', '.join(status_list)}")
         self.db_manager.close()
 
     def get_status_id(self, status_name):
@@ -169,7 +217,7 @@ class DatabaseConnectionHelper(QObject):
         result = cursor.fetchone()
         self.db_manager.close()
         if result is not None:
-            return result[0]  # Return the ID even if it's 0
+            return result[0]
         return None
 
     def get_status_name_by_id(self, status_id):

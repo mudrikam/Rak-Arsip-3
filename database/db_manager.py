@@ -16,6 +16,7 @@ from .db_helper.db_helper_price import DatabasePriceHelper
 from .db_helper.db_helper_backup import DatabaseBackupHelper
 from .db_helper.db_helper_urls import DatabaseUrlsHelper
 from .db_helper.db_helper_batch_manager import DatabaseBatchManagerHelper
+from .db_helper.db_helper_wallet import DatabaseWalletHelper
 
 
 class DatabaseManager(QObject):
@@ -29,9 +30,12 @@ class DatabaseManager(QObject):
         super().__init__()
         self.config_manager = config_manager
         self.window_config_manager = window_config_manager
+        
         self.db_config = config_manager.get("database")
         self.tables_config = config_manager.get("tables")
-        self.db_path = self.db_config["path"]
+        
+        self.db_path = self.db_config.get("path") if isinstance(self.db_config, dict) else "database/archieve_database.db"
+        
         self.connection = None
         self.session_id = str(int(time.time() * 1000))
         self.temp_dir = os.path.join(os.path.dirname(self.db_path), "temp")
@@ -40,7 +44,6 @@ class DatabaseManager(QObject):
         self._wal_shm_debounce_seconds = 5
         self._wal_shm_handled = False
 
-        # Initialize helper classes
         self.connection_helper = DatabaseConnectionHelper(self)
         self.categories_helper = DatabaseCategoriesHelper(self)
         self.templates_helper = DatabaseTemplatesHelper(self)
@@ -51,8 +54,8 @@ class DatabaseManager(QObject):
         self.backup_helper = DatabaseBackupHelper(self)
         self.urls_helper = DatabaseUrlsHelper(self)
         self.batch_manager_helper = DatabaseBatchManagerHelper(self)
+        self.wallet_helper = DatabaseWalletHelper(self)
 
-        # Initialize database
         self.connection_helper.ensure_database_exists()
         self.connection_helper.setup_file_watcher()
         if first_launch:
@@ -458,6 +461,7 @@ class DatabaseManager(QObject):
     def update_files_status_by_batch(self, batch_number, client_id, status_id):
         """Update status of all files in a batch."""
         return self.clients_helper.update_files_status_by_batch(batch_number, client_id, status_id)
+    
     def rename_category(self, old_name, new_name):
         """Rename a category (delegated to categories helper)"""
         return DatabaseCategoriesHelper(self).rename_category(old_name, new_name)
@@ -512,3 +516,27 @@ class DatabaseManager(QObject):
 
     def get_all_batches_with_status_counts(self):
         return self.batch_manager_helper.get_all_batches_with_status_counts()
+    
+    def get_all_wallet_pockets(self):
+        return self.wallet_helper.get_all_pockets()
+    
+    def get_all_wallet_cards(self, pocket_id=None):
+        return self.wallet_helper.get_all_cards(pocket_id)
+    
+    def get_all_wallet_categories(self):
+        return self.wallet_helper.get_all_categories()
+    
+    def get_all_wallet_currencies(self):
+        return self.wallet_helper.get_all_currencies()
+    
+    def get_all_wallet_transaction_statuses(self):
+        return self.wallet_helper.get_all_transaction_statuses()
+    
+    def get_all_wallet_locations(self):
+        return self.wallet_helper.get_all_locations()
+    
+    def get_wallet_transactions(self, pocket_id=None, limit=100, offset=0):
+        return self.wallet_helper.get_transactions(pocket_id, limit, offset)
+    
+    def get_wallet_transaction_items(self, transaction_id):
+        return self.wallet_helper.get_transaction_items(transaction_id)

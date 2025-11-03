@@ -16,6 +16,7 @@ import sys
 class MainWindow(QMainWindow):
     def __init__(self, basedir):
         super().__init__()
+        self.basedir = basedir
         self.config_manager = get_window_config(basedir)
         window_config = self.config_manager.get("window")
         set_app_user_model_id(window_config["app_id"])

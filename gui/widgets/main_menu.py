@@ -54,6 +54,10 @@ class MainMenu(QMenuBar):
         self.batch_action.triggered.connect(self.show_batch_management_dialog)
         self.addAction(self.batch_action)
 
+        self.wallet_action = QAction("Wallet", self)
+        self.addAction(self.wallet_action)
+        self.wallet_action.triggered.connect(self.show_wallet_dialog)
+
         help_menu = QMenu("Help", self)
         self.about_action = QAction(qta.icon('fa6s.circle-info'), "About", self)
         self.repo_action = QAction(qta.icon('fa6b.github'), "Repo", self)
@@ -93,6 +97,14 @@ class MainMenu(QMenuBar):
     def show_batch_management_dialog(self):
         from gui.dialogs.batch_management_dialog import BatchManagementDialog
         dialog = BatchManagementDialog(self)
+        dialog.exec()
+
+    def show_wallet_dialog(self):
+        from gui.dialogs.wallet_management_dialog import WalletManagementDialog
+        parent = self.parent()
+        db_manager = getattr(parent, 'db_manager', None)
+        basedir = getattr(parent, 'basedir', None)
+        dialog = WalletManagementDialog(self, db_manager=db_manager, basedir=basedir)
         dialog.exec()
 
     def _get_central_widget(self):
