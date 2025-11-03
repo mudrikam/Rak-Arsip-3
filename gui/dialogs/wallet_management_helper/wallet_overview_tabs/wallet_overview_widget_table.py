@@ -93,11 +93,11 @@ class WalletOverviewTable(QWidget):
             trans_type = trans.get('transaction_type', '').capitalize()
             type_item = QTableWidgetItem(trans_type)
             if trans.get('transaction_type') == 'income':
-                type_item.setForeground(Qt.darkGreen)
+                type_item.setForeground(Qt.green)
             elif trans.get('transaction_type') == 'expense':
                 type_item.setForeground(Qt.red)
             else:
-                type_item.setForeground(Qt.blue)
+                type_item.setForeground(Qt.cyan)
             self.table.setItem(row, 2, type_item)
             
             self.table.setItem(row, 3, QTableWidgetItem(trans.get('pocket_name', '')))

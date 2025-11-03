@@ -1,9 +1,9 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
                                QProgressBar, QTabWidget, QGridLayout, QScrollArea)
-from PySide6.QtCore import Qt, QMargins
-from PySide6.QtGui import QFont
-from PySide6.QtCharts import QChart, QChartView, QPieSeries, QPieSlice
-from PySide6.QtGui import QPainter, QColor
+from PySide6.QtCore import Qt, QMargins, QPointF
+from PySide6.QtGui import QFont, QPainter, QColor
+from PySide6.QtCharts import (QChart, QChartView, QPieSeries, QPieSlice, 
+                              QLineSeries, QValueAxis, QBarCategoryAxis)
 
 
 class WalletOverviewCharts(QWidget):
@@ -51,36 +51,16 @@ class WalletOverviewCharts(QWidget):
         
         self.trend_tabs = QTabWidget()
         
-        # Monthly scroll area
-        monthly_scroll_area = QScrollArea()
-        monthly_scroll_area.setWidgetResizable(True)
-        monthly_scroll_area.setFrameShape(QFrame.NoFrame)
-        monthly_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.monthly_chart_widget = QWidget()
+        self.monthly_chart_layout = QVBoxLayout(self.monthly_chart_widget)
+        self.monthly_chart_layout.setContentsMargins(0, 0, 0, 0)
         
-        self.monthly_scroll = QWidget()
-        self.monthly_layout = QVBoxLayout(self.monthly_scroll)
-        self.monthly_layout.setSpacing(4)
-        self.monthly_layout.setContentsMargins(12, 12, 12, 12)
-        self.monthly_layout.addStretch()
+        self.yearly_chart_widget = QWidget()
+        self.yearly_chart_layout = QVBoxLayout(self.yearly_chart_widget)
+        self.yearly_chart_layout.setContentsMargins(0, 0, 0, 0)
         
-        monthly_scroll_area.setWidget(self.monthly_scroll)
-
-        # Yearly scroll area
-        yearly_scroll_area = QScrollArea()
-        yearly_scroll_area.setWidgetResizable(True)
-        yearly_scroll_area.setFrameShape(QFrame.NoFrame)
-        yearly_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        
-        self.yearly_scroll = QWidget()
-        self.yearly_layout = QVBoxLayout(self.yearly_scroll)
-        self.yearly_layout.setSpacing(4)
-        self.yearly_layout.setContentsMargins(12, 12, 12, 12)
-        self.yearly_layout.addStretch()
-        
-        yearly_scroll_area.setWidget(self.yearly_scroll)
-        
-        self.trend_tabs.addTab(monthly_scroll_area, "Monthly")
-        self.trend_tabs.addTab(yearly_scroll_area, "Yearly")
+        self.trend_tabs.addTab(self.monthly_chart_widget, "Monthly")
+        self.trend_tabs.addTab(self.yearly_chart_widget, "Yearly")
         
         layout.addWidget(self.trend_tabs)
         
@@ -152,15 +132,16 @@ class WalletOverviewCharts(QWidget):
         """Update trend charts with monthly and yearly data"""
         self.currency_symbol = currency_symbol
         
-        while self.monthly_layout.count() > 1:
-            item = self.monthly_layout.takeAt(0)
+        while self.monthly_chart_layout.count():
+            item = self.monthly_chart_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
         
         if not monthly_data:
             no_data = QLabel("No data available")
             no_data.setStyleSheet("color: #6c757d; font-style: italic;")
-            self.monthly_layout.insertWidget(0, no_data)
+            no_data.setAlignment(Qt.AlignCenter)
+            self.monthly_chart_layout.addWidget(no_data)
         else:
             months_dict = {}
             for item in monthly_data:
@@ -169,32 +150,25 @@ class WalletOverviewCharts(QWidget):
                 total = item.get('total', 0)
                 
                 if month not in months_dict:
-                    months_dict[month] = {'income': 0, 'expense': 0}
+                    months_dict[month] = {'income': 0, 'expense': 0, 'transfer': 0}
                 
-                if trans_type in ['income', 'expense']:
+                if trans_type in ['income', 'expense', 'transfer']:
                     months_dict[month][trans_type] = total
             
-            max_value = max(
-                (max(data.get('income', 0), data.get('expense', 0)) 
-                 for data in months_dict.values()),
-                default=1
-            )
-            if max_value == 0:
-                max_value = 1
-            
-            for month, data in sorted(months_dict.items(), reverse=True)[:12]:
-                item_widget = self.create_bar_chart_item(month, data, max_value)
-                self.monthly_layout.insertWidget(0, item_widget)
+            sorted_months = sorted(months_dict.items())[-12:]
+            monthly_chart = self.create_line_chart(sorted_months, "Monthly Trends")
+            self.monthly_chart_layout.addWidget(monthly_chart)
         
-        while self.yearly_layout.count() > 1:
-            item = self.yearly_layout.takeAt(0)
+        while self.yearly_chart_layout.count():
+            item = self.yearly_chart_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
         
         if not yearly_data:
             no_data = QLabel("No data available")
             no_data.setStyleSheet("color: #6c757d; font-style: italic;")
-            self.yearly_layout.insertWidget(0, no_data)
+            no_data.setAlignment(Qt.AlignCenter)
+            self.yearly_chart_layout.addWidget(no_data)
         else:
             years_dict = {}
             for item in yearly_data:
@@ -203,85 +177,92 @@ class WalletOverviewCharts(QWidget):
                 total = item.get('total', 0)
                 
                 if year not in years_dict:
-                    years_dict[year] = {'income': 0, 'expense': 0}
+                    years_dict[year] = {'income': 0, 'expense': 0, 'transfer': 0}
                 
-                if trans_type in ['income', 'expense']:
+                if trans_type in ['income', 'expense', 'transfer']:
                     years_dict[year][trans_type] = total
             
-            max_value = max(
-                (max(data.get('income', 0), data.get('expense', 0)) 
-                 for data in years_dict.values()),
-                default=1
-            )
-            if max_value == 0:
-                max_value = 1
-            
-            for year, data in sorted(years_dict.items(), reverse=True)[:5]:
-                item_widget = self.create_bar_chart_item(year, data, max_value)
-                self.yearly_layout.insertWidget(0, item_widget)
+            sorted_years = sorted(years_dict.items())[-3:]
+            yearly_chart = self.create_line_chart(sorted_years, "Yearly Trends")
+            self.yearly_chart_layout.addWidget(yearly_chart)
     
-    def create_bar_chart_item(self, period, data, max_value):
-        """Create a minimal bar chart item"""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-        layout.setContentsMargins(0, 4, 0, 4)
-        layout.setSpacing(4)
+    def create_line_chart(self, data_items, title):
+        """Create a line chart for trends"""
+        income_series = QLineSeries()
+        income_series.setName("Income")
+        income_series.setColor(QColor("#28a745"))
         
-        period_label = QLabel(period)
-        period_label.setStyleSheet("font-weight: bold; font-size: 11px;")
-        layout.addWidget(period_label)
+        pen_income = income_series.pen()
+        pen_income.setWidth(3)
+        income_series.setPen(pen_income)
         
-        income_layout = QHBoxLayout()
-        income_label = QLabel("Income:")
-        income_label.setStyleSheet("color: #28a745; font-size: 10px; min-width: 60px;")
-        income_layout.addWidget(income_label)
+        expense_series = QLineSeries()
+        expense_series.setName("Expense")
+        expense_series.setColor(QColor("#dc3545"))
         
-        income_bar = QProgressBar()
-        income_bar.setMaximum(int(max_value))
-        income_bar.setValue(int(data.get('income', 0)))
-        income_bar.setTextVisible(True)
-        income_bar.setFormat(f"{self.currency_symbol} {data.get('income', 0):,.0f}")
-        income_bar.setMaximumHeight(20)
-        income_bar.setStyleSheet("""
-            QProgressBar {
-                background-color: rgba(233, 236, 239, 0.05);
-                text-align: center;
-                font-size: 10px;
-                border: none;
-            }
-            QProgressBar::chunk {
-                background-color: #28a745;
-            }
-        """)
-        income_layout.addWidget(income_bar)
-        layout.addLayout(income_layout)
+        pen_expense = expense_series.pen()
+        pen_expense.setWidth(3)
+        expense_series.setPen(pen_expense)
         
-        expense_layout = QHBoxLayout()
-        expense_label = QLabel("Expense:")
-        expense_label.setStyleSheet("color: #dc3545; font-size: 10px; min-width: 60px;")
-        expense_layout.addWidget(expense_label)
+        transfer_series = QLineSeries()
+        transfer_series.setName("Transfer")
+        transfer_series.setColor(QColor("#17a2b8"))
         
-        expense_bar = QProgressBar()
-        expense_bar.setMaximum(int(max_value))
-        expense_bar.setValue(int(data.get('expense', 0)))
-        expense_bar.setTextVisible(True)
-        expense_bar.setFormat(f"{self.currency_symbol} {data.get('expense', 0):,.0f}")
-        expense_bar.setMaximumHeight(20)
-        expense_bar.setStyleSheet("""
-            QProgressBar {
-                background-color: rgba(233, 236, 239, 0.05);
-                text-align: center;
-                font-size: 10px;
-                border: none;
-            }
-            QProgressBar::chunk {
-                background-color: #dc3545;
-            }
-        """)
-        expense_layout.addWidget(expense_bar)
-        layout.addLayout(expense_layout)
+        pen_transfer = transfer_series.pen()
+        pen_transfer.setWidth(3)
+        transfer_series.setPen(pen_transfer)
         
-        return widget
+        categories = []
+        max_value = 0
+        
+        for idx, (period, data) in enumerate(data_items):
+            income = data.get('income', 0)
+            expense = data.get('expense', 0)
+            transfer = data.get('transfer', 0)
+            
+            income_series.append(QPointF(idx, income))
+            expense_series.append(QPointF(idx, expense))
+            transfer_series.append(QPointF(idx, transfer))
+            
+            categories.append(str(period))
+            max_value = max(max_value, income, expense, transfer)
+        
+        chart = QChart()
+        chart.addSeries(income_series)
+        chart.addSeries(expense_series)
+        chart.addSeries(transfer_series)
+        chart.setAnimationOptions(QChart.SeriesAnimations)
+        chart.setBackgroundVisible(False)
+        chart.legend().setVisible(True)
+        chart.legend().setAlignment(Qt.AlignBottom)
+        
+        axis_x = QBarCategoryAxis()
+        axis_x.append(categories)
+        axis_x.setLabelsAngle(-45)
+        axis_x.setGridLineVisible(True)
+        axis_x.setGridLineColor(QColor(128, 128, 128, 13))
+        chart.addAxis(axis_x, Qt.AlignBottom)
+        income_series.attachAxis(axis_x)
+        expense_series.attachAxis(axis_x)
+        transfer_series.attachAxis(axis_x)
+        
+        axis_y = QValueAxis()
+        axis_y.setLabelFormat("%i")
+        axis_y.setRange(0, max_value * 1.1 if max_value > 0 else 100)
+        axis_y.setGridLineVisible(True)
+        axis_y.setGridLineColor(QColor(128, 128, 128, 13))
+        chart.addAxis(axis_y, Qt.AlignLeft)
+        income_series.attachAxis(axis_y)
+        expense_series.attachAxis(axis_y)
+        transfer_series.attachAxis(axis_y)
+        
+        chart.setMargins(QMargins(0, 0, 0, 0))
+        
+        chart_view = QChartView(chart)
+        chart_view.setRenderHint(QPainter.Antialiasing)
+        chart_view.setMinimumHeight(250)
+        
+        return chart_view
     
     def update_comparison_data(self, this_month, last_month, currency_symbol="Rp"):
         """Update month-to-month comparison"""

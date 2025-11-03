@@ -70,6 +70,7 @@ class WalletOverviewStats(QWidget):
                 QFrame#stat_card {
                     background-color: rgba(255, 255, 255, 0.05);
                     border-radius: 6px;
+                    border: 1px solid rgba(255, 255, 255, 0.05);
                 }
             """)
         else:
