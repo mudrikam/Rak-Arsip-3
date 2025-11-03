@@ -1202,7 +1202,7 @@ class DatabaseWalletHelper:
             cursor = self.db_manager.connection.cursor()
             cursor.execute("""
                 SELECT DISTINCT l.id, l.name
-                FROM wallet_locations l
+                FROM wallet_transaction_locations l
                 INNER JOIN wallet_transactions t ON l.id = t.location_id
                 ORDER BY l.name
             """)
@@ -1422,7 +1422,7 @@ class DatabaseWalletHelper:
                     COALESCE(SUM(ti.quantity * ti.amount), 0) as total_amount,
                     cu.symbol as currency_symbol
                 FROM wallet_transactions t
-                LEFT JOIN wallet_locations l ON t.location_id = l.id
+                LEFT JOIN wallet_transaction_locations l ON t.location_id = l.id
                 LEFT JOIN wallet_transaction_items ti ON t.id = ti.wallet_transaction_id
                 LEFT JOIN wallet_currency cu ON t.currency_id = cu.id
                 WHERE {where_sql}
