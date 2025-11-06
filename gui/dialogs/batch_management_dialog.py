@@ -768,9 +768,7 @@ class BatchManagementDialog(QDialog):
     def get_batch_queue_data_and_header(self):
         """Prepare header and data for Batch Queue spreadsheet."""
         from datetime import datetime
-        header = [
-            "Batch Number", "File Count", "Draft", "Modelling", "Rendering", "Photoshop", "Need Upload", "Pending", "Created At"
-        ]
+        
         data = []
         
         # Get batches with status breakdown
@@ -804,6 +802,28 @@ class BatchManagementDialog(QDialog):
             
         # Sort ascending by created_at (oldest at top)
         data.sort(key=lambda x: x[9] if x[9] else "", reverse=False)
+        
+        # Calculate totals for header
+        total_file_count = sum(d[1] for d in data)
+        total_draft = sum(d[2] for d in data)
+        total_modelling = sum(d[3] for d in data)
+        total_rendering = sum(d[4] for d in data)
+        total_photoshop = sum(d[5] for d in data)
+        total_need_upload = sum(d[6] for d in data)
+        total_pending = sum(d[7] for d in data)
+        
+        # Build header with totals
+        header = [
+            "Batch Number",
+            f"File Count ({total_file_count})",
+            f"Draft ({total_draft})",
+            f"Modelling ({total_modelling})",
+            f"Rendering ({total_rendering})",
+            f"Photoshop ({total_photoshop})",
+            f"Need Upload ({total_need_upload})",
+            f"Pending ({total_pending})",
+            "Created At"
+        ]
         
         # Remove the raw created_at from data for sheet output
         data = [[d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8]] for d in data]
@@ -1187,41 +1207,13 @@ class BatchManagementDialog(QDialog):
                     "fields": "pixelSize"
                 }
             },
-            # Set column widths
+            # Set column widths - all columns 120px
             {
                 "updateDimensionProperties": {
                     "range": {
                         "sheetId": 0,
                         "dimension": "COLUMNS",
                         "startIndex": 0,
-                        "endIndex": 1
-                    },
-                    "properties": {
-                        "pixelSize": 100
-                    },
-                    "fields": "pixelSize"
-                }
-            },
-            {
-                "updateDimensionProperties": {
-                    "range": {
-                        "sheetId": 0,
-                        "dimension": "COLUMNS",
-                        "startIndex": 1,
-                        "endIndex": 8
-                    },
-                    "properties": {
-                        "pixelSize": 80
-                    },
-                    "fields": "pixelSize"
-                }
-            },
-            {
-                "updateDimensionProperties": {
-                    "range": {
-                        "sheetId": 0,
-                        "dimension": "COLUMNS",
-                        "startIndex": 8,
                         "endIndex": 9
                     },
                     "properties": {
