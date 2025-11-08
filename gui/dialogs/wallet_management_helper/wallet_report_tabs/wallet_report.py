@@ -5,6 +5,7 @@ from .wallet_report_summary import WalletReportSummaryTab
 from .wallet_report_by_pocket import WalletReportByPocketTab
 from .wallet_report_by_category import WalletReportByCategoryTab
 from .wallet_report_by_location import WalletReportByLocationTab
+from .wallet_report_by_tags import WalletReportByTagsTab
 from .wallet_report_trends import WalletReportTrendsTab
 from .wallet_report_export import WalletReportExportTab
 from ..wallet_header import WalletHeader
@@ -31,6 +32,7 @@ class WalletReportTab(QWidget):
         self.tab_widget.addTab(WalletReportByPocketTab(self.db_manager), qta.icon("fa6s.wallet"), "By Pocket")
         self.tab_widget.addTab(WalletReportByCategoryTab(self.db_manager), qta.icon("fa6s.sitemap"), "By Category")
         self.tab_widget.addTab(WalletReportByLocationTab(self.db_manager), qta.icon("fa6s.location-dot"), "By Location")
+        self.tab_widget.addTab(WalletReportByTagsTab(self.db_manager), qta.icon("fa6s.tags"), "By Tags")
         self.tab_widget.addTab(WalletReportTrendsTab(self.db_manager), qta.icon("fa6s.chart-line"), "Trends")
         self.tab_widget.addTab(WalletReportExportTab(self.db_manager), qta.icon("fa6s.file-export"), "Export")
 

@@ -1953,3 +1953,112 @@ class DatabaseWalletHelper:
             return []
         finally:
             self.db_manager.close()
+    
+    def get_all_unique_tags(self):
+        """Get all unique tags from transactions (case-insensitive)."""
+        try:
+            self.db_manager.connect(write=False)
+            cursor = self.db_manager.connection.cursor()
+            
+            cursor.execute("""
+                SELECT DISTINCT tags
+                FROM wallet_transactions
+                WHERE tags IS NOT NULL AND tags != ''
+            """)
+            
+            rows = cursor.fetchall()
+            tags_dict = {}
+            
+            for row in rows:
+                tags_str = row[0]
+                if tags_str:
+                    tag_list = [tag.strip() for tag in tags_str.split(',') if tag.strip()]
+                    for tag in tag_list:
+                        tag_lower = tag.lower()
+                        if tag_lower not in tags_dict:
+                            tags_dict[tag_lower] = tag
+            
+            return sorted(list(tags_dict.values()), key=str.lower)
+            
+        except Exception as e:
+            print(f"Error getting unique tags: {e}")
+            return []
+        finally:
+            self.db_manager.close()
+    
+    def get_transactions_by_tag(self, tag, date_from="", date_to="", pocket_id=None, category_id=None, transaction_type=""):
+        """Get all transactions that contain a specific tag (case-insensitive)."""
+        try:
+            self.db_manager.connect(write=False)
+            cursor = self.db_manager.connection.cursor()
+            
+            where_clauses = []
+            params = []
+            
+            cursor.execute("""
+                SELECT id, tags FROM wallet_transactions
+                WHERE tags IS NOT NULL AND tags != ''
+            """)
+            
+            matching_ids = []
+            tag_lower = tag.lower()
+            
+            for row in cursor.fetchall():
+                transaction_id = row[0]
+                tags_str = row[1]
+                if tags_str:
+                    tag_list = [t.strip().lower() for t in tags_str.split(',') if t.strip()]
+                    if tag_lower in tag_list:
+                        matching_ids.append(transaction_id)
+            
+            if not matching_ids:
+                return []
+            
+            where_clauses.append(f"t.id IN ({','.join('?' * len(matching_ids))})")
+            params.extend(matching_ids)
+            
+            if date_from and date_to:
+                where_clauses.append("DATE(t.transaction_date) BETWEEN ? AND ?")
+                params.extend([date_from, date_to])
+            
+            if pocket_id:
+                where_clauses.append("t.pocket_id = ?")
+                params.append(pocket_id)
+            
+            if category_id:
+                where_clauses.append("t.category_id = ?")
+                params.append(category_id)
+            
+            if transaction_type:
+                where_clauses.append("t.transaction_type = ?")
+                params.append(transaction_type)
+            
+            where_sql = " AND ".join(where_clauses)
+            
+            cursor.execute(f"""
+                SELECT 
+                    t.id,
+                    t.transaction_date,
+                    t.transaction_name,
+                    t.transaction_type,
+                    COALESCE(p.name, '') as pocket_name,
+                    COALESCE(c.name, 'Uncategorized') as category_name,
+                    COALESCE(cu.code, 'IDR') as currency_code,
+                    COALESCE(cu.symbol, 'Rp') as currency_symbol,
+                    t.tags
+                FROM wallet_transactions t
+                LEFT JOIN wallet_pockets p ON t.pocket_id = p.id
+                LEFT JOIN wallet_categories c ON t.category_id = c.id
+                LEFT JOIN wallet_currency cu ON t.currency_id = cu.id
+                WHERE {where_sql}
+                ORDER BY t.transaction_date DESC
+            """, params)
+            
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+            
+        except Exception as e:
+            print(f"Error getting transactions by tag: {e}")
+            return []
+        finally:
+            self.db_manager.close()

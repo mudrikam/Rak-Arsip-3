@@ -24,6 +24,7 @@ ICONS = {
     'currency': 'fa6s.coins',
     'total_amount': 'fa6s.coins',
     'items': 'fa6s.boxes-stacked',
+    'tags': 'fa6s.tags',
     # Item detail
     'item_type': 'fa6s.tags',
     'sku': 'fa6s.barcode',
@@ -251,6 +252,10 @@ class TransactionViewDialog(QDialog):
         self.lbl_currency = QLabel()
         info_layout.addRow(icon_label_widget("Currency:", 'currency'), self.lbl_currency)
 
+        self.lbl_tags = QLabel()
+        self.lbl_tags.setWordWrap(True)
+        info_layout.addRow(icon_label_widget("Tags:", 'tags'), self.lbl_tags)
+
         self.lbl_total_amount = QLabel()
         self.lbl_total_amount.setStyleSheet("font-weight: bold; font-size: 14px; color: #007acc;")
         info_layout.addRow(icon_label_widget("Total Amount:", 'total_amount'), self.lbl_total_amount)
@@ -353,6 +358,9 @@ class TransactionViewDialog(QDialog):
         self.lbl_status.setText(data.get('status_name', 'N/A'))
         self.lbl_location.setText(data.get('location_name', 'N/A'))
         self.lbl_currency.setText(data.get('currency_code', 'N/A'))
+        
+        tags = data.get('tags', '') or ''
+        self.lbl_tags.setText(tags if tags else 'N/A')
         
         # Calculate total amount from items
         total_amount = sum(item.get('quantity', 0) * item.get('amount', 0) for item in self.transaction_items)
