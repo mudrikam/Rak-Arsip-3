@@ -458,6 +458,7 @@ class WalletOverviewCharts(QWidget):
             item_widget = QWidget()
             item_widget.setObjectName(f"legend_item_{idx}")
             item_widget.setCursor(Qt.PointingHandCursor)
+            item_widget.setStyleSheet("QWidget#legend_item_%d { background-color: transparent; border-radius: 4px; } QWidget#legend_item_%d:hover { background-color: rgba(255, 255, 255, 0.1); }" % (idx, idx))
             item_layout = QHBoxLayout(item_widget)
             item_layout.setContentsMargins(4, 4, 4, 4)
             
@@ -517,27 +518,22 @@ class WalletOverviewCharts(QWidget):
                     # Highlight legend
                     legend_item = slice.property("legend_item")
                     if legend_item:
-                        legend_item.setStyleSheet("background-color: rgba(255, 255, 255, 0.1); border-radius: 4px;")
+                        idx = slice.property("index")
+                        legend_item.setStyleSheet("QWidget#legend_item_%d { background-color: rgba(255, 255, 255, 0.1); border-radius: 4px; }" % idx)
                 else:
                     slice.setExploded(False)
-                    original_color = slice.color()
                     gray_color = QColor(200, 200, 200, 100)
                     slice.setColor(gray_color)
-                    # Gray out legend
-                    legend_item = slice.property("legend_item")
-                    if legend_item:
-                        legend_item.setStyleSheet("opacity: 0.3;")
         else:
             # Reset all slices
             for slice in all_slices:
                 slice.setExploded(False)
                 idx = slice.property("index")
-                colors = ['#28a745', '#dc3545', '#17a2b8', '#ffc107', '#6f42c1', '#fd7e14', '#20c997', '#e83e8c']
-                slice.setColor(QColor(colors[idx % len(colors)]))
+                slice.setColor(QColor(PIE_CHART_COLORS[idx % len(PIE_CHART_COLORS)]))
                 # Reset legend
                 legend_item = slice.property("legend_item")
                 if legend_item:
-                    legend_item.setStyleSheet("")
+                    legend_item.setStyleSheet("QWidget#legend_item_%d { background-color: transparent; border-radius: 4px; } QWidget#legend_item_%d:hover { background-color: rgba(255, 255, 255, 0.1); }" % (idx, idx))
     
     def eventFilter(self, obj, event):
         """Handle legend item hover"""
@@ -545,34 +541,24 @@ class WalletOverviewCharts(QWidget):
             slice = obj.property("slice")
             all_slices = obj.property("all_slices")
             if slice and all_slices:
+                idx = obj.property("index")
                 # Highlight this slice
                 for s in all_slices:
                     if s == slice:
                         s.setExploded(True)
                         s.setExplodeDistanceFactor(0.1)
-                        obj.setStyleSheet("background-color: rgba(255, 255, 255, 0.1); border-radius: 4px;")
                     else:
                         s.setExploded(False)
                         gray_color = QColor(200, 200, 200, 100)
                         s.setColor(gray_color)
-                        # Gray out other legends
-                        legend_item = s.property("legend_item")
-                        if legend_item and legend_item != obj:
-                            legend_item.setStyleSheet("opacity: 0.3;")
         
         elif event.type() == event.Type.Leave:
             all_slices = obj.property("all_slices")
             if all_slices:
-                colors = ['#28a745', '#dc3545', '#17a2b8', '#ffc107', '#6f42c1', '#fd7e14', '#20c997', '#e83e8c']
                 # Reset all slices
                 for s in all_slices:
                     s.setExploded(False)
                     idx = s.property("index")
-                    s.setColor(QColor(colors[idx % len(colors)]))
-                    # Reset all legends
-                    legend_item = s.property("legend_item")
-                    if legend_item:
-                        legend_item.setStyleSheet("")
-                obj.setStyleSheet("")
+                    s.setColor(QColor(PIE_CHART_COLORS[idx % len(PIE_CHART_COLORS)]))
         
         return super().eventFilter(obj, event)
