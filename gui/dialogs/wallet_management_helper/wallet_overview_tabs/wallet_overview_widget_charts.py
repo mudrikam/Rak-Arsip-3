@@ -4,6 +4,7 @@ from PySide6.QtCore import Qt, QMargins, QPointF
 from PySide6.QtGui import QFont, QPainter, QColor
 from PySide6.QtCharts import (QChart, QChartView, QPieSeries, QPieSlice, 
                               QLineSeries, QValueAxis, QBarCategoryAxis)
+from .wallet_overview_widget_colors import PIE_CHART_COLORS
 
 
 class WalletOverviewCharts(QWidget):
@@ -405,15 +406,14 @@ class WalletOverviewCharts(QWidget):
         series = QPieSeries()
         series.setHoleSize(0.0)
         
-        colors = ['#28a745', '#dc3545', '#17a2b8', '#ffc107', '#6f42c1', '#fd7e14', '#20c997', '#e83e8c']
         slices = []
         
-        for idx, item in enumerate(data[:8]):
+        for idx, item in enumerate(data[:50]):
             name = item.get(name_key, 'Unknown') or 'Uncategorized'
             value = item.get('total', 0) or item.get('total_amount', 0) or item.get('balance', 0)
             
             slice = series.append(name, value)
-            slice.setColor(QColor(colors[idx % len(colors)]))
+            slice.setColor(QColor(PIE_CHART_COLORS[idx % len(PIE_CHART_COLORS)]))
             slice.setLabelVisible(False)
             slices.append(slice)
         
@@ -446,11 +446,11 @@ class WalletOverviewCharts(QWidget):
         legend_layout.setSpacing(6)
         legend_layout.setContentsMargins(12, 12, 12, 12)
         
-        total = sum(item.get('total', 0) or item.get('total_amount', 0) or item.get('balance', 0) for item in data[:8])
+        total = sum(item.get('total', 0) or item.get('total_amount', 0) or item.get('balance', 0) for item in data[:50])
         
         legend_items = []
         
-        for idx, item in enumerate(data[:8]):
+        for idx, item in enumerate(data[:50]):
             name = item.get(name_key, 'Unknown') or 'Uncategorized'
             value = item.get('total', 0) or item.get('total_amount', 0) or item.get('balance', 0)
             percentage = (value / total * 100) if total > 0 else 0
@@ -463,7 +463,7 @@ class WalletOverviewCharts(QWidget):
             
             color_box = QLabel()
             color_box.setFixedSize(16, 16)
-            color_box.setStyleSheet(f"background-color: {colors[idx % len(colors)]}; border-radius: 3px;")
+            color_box.setStyleSheet(f"background-color: {PIE_CHART_COLORS[idx % len(PIE_CHART_COLORS)]}; border-radius: 3px;")
             color_box.setObjectName(f"color_box_{idx}")
             item_layout.addWidget(color_box)
             
@@ -488,7 +488,7 @@ class WalletOverviewCharts(QWidget):
             item_widget.setProperty("slice", slices[idx])
             item_widget.setProperty("all_slices", slices)
             item_widget.setProperty("index", idx)
-            item_widget.setProperty("color", colors[idx % len(colors)])
+            item_widget.setProperty("color", PIE_CHART_COLORS[idx % len(PIE_CHART_COLORS)])
             item_widget.installEventFilter(self)
             
             legend_items.append(item_widget)
