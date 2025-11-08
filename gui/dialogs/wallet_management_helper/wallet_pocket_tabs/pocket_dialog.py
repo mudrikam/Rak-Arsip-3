@@ -64,12 +64,16 @@ class PocketDialog(QDialog):
 		
 		self.input_name = QLineEdit()
 		self.input_name.setPlaceholderText("e.g., Main Wallet, Savings")
-		self.input_name.setToolTip("Enter the pocket name")
+		self.input_name.setToolTip("Enter the pocket name (Required)")
 		name_widget = self.create_field_with_buttons_widget(self.input_name)
-		form_layout.addRow(icon_label_widget("Name:", 'name'), name_widget)
+		form_layout.addRow(icon_label_widget("Name: *", 'name'), name_widget)
 		
-		self.input_pocket_type = QLineEdit()
-		self.input_pocket_type.setPlaceholderText("e.g., Cash, Digital, Savings")
+		self.input_pocket_type = QComboBox()
+		self.input_pocket_type.setEditable(True)
+		self.input_pocket_type.setInsertPolicy(QComboBox.NoInsert)
+		self.input_pocket_type.addItems(["Cash", "Digital", "Savings", "Investment", "Bill", "Transaction", "Loan", "Insurance", "Subscription", "Emergency Fund", "Travel Fund"])
+		self.input_pocket_type.setCurrentText("")
+		self.input_pocket_type.lineEdit().setPlaceholderText("e.g., Cash, Digital, Savings")
 		self.input_pocket_type.setToolTip("Type of pocket (Cash, Digital, Savings, etc.)")
 		type_widget = self.create_field_with_buttons_widget(self.input_pocket_type)
 		form_layout.addRow(icon_label_widget("Pocket Type:", 'pocket_type'), type_widget)
@@ -220,6 +224,8 @@ class PocketDialog(QDialog):
 			clipboard.setText(widget.text())
 		elif isinstance(widget, QLineEdit):
 			clipboard.setText(widget.text())
+		elif isinstance(widget, QComboBox):
+			clipboard.setText(widget.currentText())
 		elif isinstance(widget, QTextEdit):
 			clipboard.setText(widget.toPlainText())
 	
@@ -233,6 +239,8 @@ class PocketDialog(QDialog):
 				self.btn_color.setStyleSheet(f"background-color: {text}; padding: 5px;")
 		elif isinstance(widget, QLineEdit):
 			widget.setText(text)
+		elif isinstance(widget, QComboBox):
+			widget.setCurrentText(text)
 		elif isinstance(widget, QTextEdit):
 			widget.setPlainText(text)
 	
@@ -285,7 +293,14 @@ class PocketDialog(QDialog):
 	
 	def load_pocket_data(self):
 		self.input_name.setText(self.pocket_data.get('name', ''))
-		self.input_pocket_type.setText(self.pocket_data.get('pocket_type', ''))
+		
+		pocket_type = self.pocket_data.get('pocket_type', '')
+		if pocket_type:
+			idx = self.input_pocket_type.findText(pocket_type)
+			if idx >= 0:
+				self.input_pocket_type.setCurrentIndex(idx)
+			else:
+				self.input_pocket_type.setCurrentText(pocket_type)
 		
 		icon_name = self.pocket_data.get('icon', '')
 		self.input_icon.setText(icon_name)
@@ -309,7 +324,7 @@ class PocketDialog(QDialog):
 	
 	def save_pocket(self):
 		name = self.input_name.text().strip()
-		pocket_type = self.input_pocket_type.text().strip()
+		pocket_type = self.input_pocket_type.currentText().strip()
 		icon = self.input_icon.text().strip()
 		color = self.selected_color
 		image = self.image_data if self.image_data else b''

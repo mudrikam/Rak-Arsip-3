@@ -115,6 +115,8 @@ class CardDialog(QDialog):
 			clipboard.setText(widget.text())
 		elif isinstance(widget, QLineEdit):
 			clipboard.setText(widget.text())
+		elif isinstance(widget, QComboBox):
+			clipboard.setText(widget.currentText())
 		elif isinstance(widget, QTextEdit):
 			clipboard.setText(widget.toPlainText())
 		elif isinstance(widget, QDoubleSpinBox):
@@ -132,6 +134,8 @@ class CardDialog(QDialog):
 				self.btn_color.setStyleSheet(f"background-color: {text}; padding: 5px;")
 		elif isinstance(widget, QLineEdit):
 			widget.setText(text)
+		elif isinstance(widget, QComboBox):
+			widget.setCurrentText(text)
 		elif isinstance(widget, QTextEdit):
 			widget.setPlainText(text)
 		elif isinstance(widget, QDoubleSpinBox):
@@ -186,18 +190,22 @@ class CardDialog(QDialog):
 		
 		self.input_card_name = QLineEdit()
 		self.input_card_name.setPlaceholderText("e.g., Visa Platinum, Mastercard")
-		form_layout.addRow(icon_label_widget("Card Name:", 'card_name'), self.create_field_with_buttons(
-			self.input_card_name, "Name of the card"))
+		form_layout.addRow(icon_label_widget("Card Name: *", 'card_name'), self.create_field_with_buttons(
+			self.input_card_name, "Name of the card (Required)"))
 		
 		self.input_card_number = QLineEdit()
 		self.input_card_number.setPlaceholderText("1234 5678 9012 3456")
-		form_layout.addRow(icon_label_widget("Card Number:", 'card_number'), self.create_field_with_buttons(
-			self.input_card_number, "16-digit card number"))
+		form_layout.addRow(icon_label_widget("Card Number: *", 'card_number'), self.create_field_with_buttons(
+			self.input_card_number, "16-digit card number (Required)"))
 		
-		self.input_card_type = QLineEdit()
-		self.input_card_type.setPlaceholderText("e.g., Credit, Debit, Prepaid")
-		form_layout.addRow(icon_label_widget("Card Type:", 'card_type'), self.create_field_with_buttons(
-			self.input_card_type, "Type: Credit, Debit, or Prepaid"))
+		self.input_card_type = QComboBox()
+		self.input_card_type.setEditable(True)
+		self.input_card_type.setInsertPolicy(QComboBox.NoInsert)
+		self.input_card_type.addItems(["Credit", "Debit", "Prepaid", "Charge", "ATM", "Gift", "Store", "Rewards"])
+		self.input_card_type.setCurrentText("")
+		self.input_card_type.lineEdit().setPlaceholderText("e.g., Credit, Debit, Prepaid")
+		self.input_card_type.setToolTip("Type: Credit, Debit, or Prepaid")
+		form_layout.addRow(icon_label_widget("Card Type:", 'card_type'), self.input_card_type)
 		
 		self.input_vendor = QLineEdit()
 		self.input_vendor.setPlaceholderText("e.g., Visa, Mastercard, AmEx")
@@ -244,8 +252,8 @@ class CardDialog(QDialog):
 		
 		self.input_card_holder = QLineEdit()
 		self.input_card_holder.setPlaceholderText("Card Holder Name")
-		form_layout.addRow(icon_label_widget("Holder Name:", 'holder_name'), self.create_field_with_buttons(
-			self.input_card_holder, "Name on the card"))
+		form_layout.addRow(icon_label_widget("Holder Name: *", 'holder_name'), self.create_field_with_buttons(
+			self.input_card_holder, "Name on the card (Required)"))
 		
 		self.input_cvv = QLineEdit()
 		self.input_cvv.setPlaceholderText("123")
@@ -374,7 +382,14 @@ class CardDialog(QDialog):
 	def load_card_data(self):
 		self.input_card_name.setText(self.card_data.get('card_name', ''))
 		self.input_card_number.setText(self.card_data.get('card_number', ''))
-		self.input_card_type.setText(self.card_data.get('card_type', ''))
+		
+		card_type = self.card_data.get('card_type', '')
+		if card_type:
+			idx = self.input_card_type.findText(card_type)
+			if idx >= 0:
+				self.input_card_type.setCurrentIndex(idx)
+			else:
+				self.input_card_type.setCurrentText(card_type)
 		self.input_vendor.setText(self.card_data.get('vendor', ''))
 		self.input_issuer.setText(self.card_data.get('issuer', ''))
 		status_val = self.card_data.get('status', '')
@@ -437,7 +452,7 @@ class CardDialog(QDialog):
 	def save_card(self):
 		card_name = self.input_card_name.text().strip()
 		card_number = self.input_card_number.text().strip()
-		card_type = self.input_card_type.text().strip()
+		card_type = self.input_card_type.currentText().strip()
 		vendor = self.input_vendor.text().strip()
 		issuer = self.input_issuer.text().strip()
 		status = self.input_status.currentText().strip()
