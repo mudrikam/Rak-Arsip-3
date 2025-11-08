@@ -101,8 +101,8 @@ class ClientDataFilesHelper:
         
         # Pagination controls
         pagination_row = QHBoxLayout()
-        self.files_prev_btn = QPushButton("Prev")
-        self.files_next_btn = QPushButton("Next")
+        self.files_prev_btn = QPushButton(qta.icon("fa6s.chevron-left"), " Prev")
+        self.files_next_btn = QPushButton(qta.icon("fa6s.chevron-right"), " Next")
         self.files_page_label = QLabel()
         self.files_page_input = QSpinBox()
         self.files_page_input.setMinimum(1)

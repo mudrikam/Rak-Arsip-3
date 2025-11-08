@@ -177,8 +177,8 @@ class BatchManagementDialog(QDialog):
         layout.addWidget(self.batch_table)
 
         pagination_layout = QHBoxLayout()
-        self.batch_prev_btn = QPushButton("Previous")
-        self.batch_next_btn = QPushButton("Next")
+        self.batch_prev_btn = QPushButton(qta.icon("fa6s.chevron-left"), " Previous")
+        self.batch_next_btn = QPushButton(qta.icon("fa6s.chevron-right"), " Next")
         self.batch_page_label = QLabel("Page 1/1")
         self.batch_page_spinner = QSpinBox()
         self.batch_page_spinner.setMinimum(1)

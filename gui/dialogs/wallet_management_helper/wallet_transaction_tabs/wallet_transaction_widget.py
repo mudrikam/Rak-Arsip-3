@@ -146,7 +146,7 @@ class WalletTransactionWidget(QWidget):
         self.image_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         img_layout.addWidget(self.image_label, alignment=Qt.AlignTop)
 
-        self.btn_open_image = QPushButton("Open Image")
+        self.btn_open_image = QPushButton(qta.icon("fa6s.expand"), " Open Image")
         self.btn_open_image.clicked.connect(self.open_image_dialog)
         img_layout.addWidget(self.btn_open_image, alignment=Qt.AlignTop)
 
@@ -1728,7 +1728,7 @@ class WalletTransactionWidget(QWidget):
         
         button_layout = QHBoxLayout()
         button_layout.addStretch()
-        btn_close = QPushButton("Close")
+        btn_close = QPushButton(qta.icon("fa6s.xmark"), " Close")
         btn_close.clicked.connect(dialog.accept)
         button_layout.addWidget(btn_close)
         layout.addLayout(button_layout)
@@ -1755,7 +1755,7 @@ class WalletTransactionWidget(QWidget):
         
         button_layout = QHBoxLayout()
         button_layout.addStretch()
-        btn_close = QPushButton("Close")
+        btn_close = QPushButton(qta.icon("fa6s.xmark"), " Close")
         btn_close.clicked.connect(dialog.accept)
         button_layout.addWidget(btn_close)
         layout.addLayout(button_layout)
@@ -1782,7 +1782,7 @@ class WalletTransactionWidget(QWidget):
         
         button_layout = QHBoxLayout()
         button_layout.addStretch()
-        btn_close = QPushButton("Close")
+        btn_close = QPushButton(qta.icon("fa6s.xmark"), " Close")
         btn_close.clicked.connect(dialog.accept)
         button_layout.addWidget(btn_close)
         layout.addLayout(button_layout)

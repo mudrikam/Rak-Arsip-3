@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QApplication
 from PySide6.QtCore import Qt
+import qtawesome as qta
 
 class WalletTransactionDeletionDialog(QDialog):
     """Reusable deletion confirmation dialog for wallet transactions."""
@@ -52,8 +53,8 @@ class WalletTransactionDeletionDialog(QDialog):
 
         # OK / Cancel buttons
         action_row = QHBoxLayout()
-        self.btn_ok = QPushButton("Confirm Delete")
-        self.btn_cancel = QPushButton("Cancel")
+        self.btn_ok = QPushButton(qta.icon("fa6s.trash-can"), " Confirm Delete")
+        self.btn_cancel = QPushButton(qta.icon("fa6s.xmark"), " Cancel")
         action_row.addStretch()
         action_row.addWidget(self.btn_ok)
         action_row.addWidget(self.btn_cancel)

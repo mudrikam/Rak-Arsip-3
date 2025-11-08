@@ -284,9 +284,9 @@ class TeamsHelper:
                 self.dialog.details_copy_buttons[key] = copy_btn
             self.dialog.details_layout.addRow(label, row_widget)
         button_layout = QHBoxLayout()
-        self.dialog.save_button = QPushButton("Save")
+        self.dialog.save_button = QPushButton(qta.icon("fa6s.floppy-disk"), " Save")
         self.dialog.save_button.clicked.connect(self.save_team_details)
-        self.dialog.add_button = QPushButton("Add Member")
+        self.dialog.add_button = QPushButton(qta.icon("fa6s.user-plus"), " Add Member")
         self.dialog.add_button.clicked.connect(self.add_member_mode)
         button_layout.addWidget(self.dialog.save_button)
         button_layout.addWidget(self.dialog.add_button)

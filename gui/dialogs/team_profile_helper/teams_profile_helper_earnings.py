@@ -117,8 +117,8 @@ class EarningsHelper:
 
         # Pagination row + Export CSV button (kanan bawah)
         pagination_row = QHBoxLayout()
-        self.dialog.earnings_prev_btn = QPushButton("Prev")
-        self.dialog.earnings_next_btn = QPushButton("Next")
+        self.dialog.earnings_prev_btn = QPushButton(qta.icon("fa6s.chevron-left"), " Prev")
+        self.dialog.earnings_next_btn = QPushButton(qta.icon("fa6s.chevron-right"), " Next")
         self.dialog.earnings_page_label = QLabel()
         self.dialog.earnings_page_input = QSpinBox()
         self.dialog.earnings_page_input.setMinimum(1)

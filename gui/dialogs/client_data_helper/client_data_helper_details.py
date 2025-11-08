@@ -85,9 +85,9 @@ class ClientDataDetailsHelper:
         
         # Buttons
         button_layout = QHBoxLayout()
-        self.save_button = QPushButton("Save")
+        self.save_button = QPushButton(qta.icon("fa6s.floppy-disk"), " Save")
         self.save_button.clicked.connect(self.save_client_details)
-        self.add_button = QPushButton("Add Client")
+        self.add_button = QPushButton(qta.icon("fa6s.user-plus"), " Add Client")
         self.add_button.clicked.connect(self.add_client_mode)
         button_layout.addWidget(self.save_button)
         button_layout.addWidget(self.add_button)
@@ -109,7 +109,7 @@ class ClientDataDetailsHelper:
         entry_row = QHBoxLayout()
         self.link_entry = QLineEdit("")
         self.link_entry.setPlaceholderText("Enter link and press Add")
-        self.add_link_btn = QPushButton("Add Link")
+        self.add_link_btn = QPushButton(qta.icon("fa6s.plus"), " Add Link")
         self.add_link_btn.clicked.connect(self.add_link)
         entry_row.addWidget(self.link_entry)
         entry_row.addWidget(self.add_link_btn)

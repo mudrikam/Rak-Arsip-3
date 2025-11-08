@@ -172,7 +172,7 @@ class PocketViewDialog(QDialog):
 			value_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
 			value_layout.addWidget(value_label)
 			value_layout.addStretch()
-			btn_copy = QPushButton("Copy")
+			btn_copy = QPushButton(qta.icon("fa6s.copy"), "")
 			btn_copy.setMaximumWidth(60)
 			btn_copy.clicked.connect(lambda: self.copy_to_clipboard(value_text))
 			value_layout.addWidget(btn_copy)
@@ -197,7 +197,7 @@ class PocketViewDialog(QDialog):
 				icon_row_layout.addWidget(icon_label)
 			except:
 				icon_row_layout.addWidget(QLabel(icon_name))
-			btn_copy_icon = QPushButton("Copy")
+			btn_copy_icon = QPushButton(qta.icon("fa6s.copy"), "")
 			btn_copy_icon.setMaximumWidth(60)
 			btn_copy_icon.clicked.connect(lambda: self.copy_to_clipboard(icon_name))
 			icon_row_layout.addWidget(btn_copy_icon)
@@ -218,7 +218,7 @@ class PocketViewDialog(QDialog):
 			note_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
 			note_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 			note_layout.addWidget(note_label)
-			btn_copy_note = QPushButton("Copy")
+			btn_copy_note = QPushButton(qta.icon("fa6s.copy"), "")
 			btn_copy_note.setMaximumWidth(60)
 			btn_copy_note.clicked.connect(lambda: self.copy_to_clipboard(note_text))
 			note_layout.addWidget(btn_copy_note)
@@ -227,7 +227,7 @@ class PocketViewDialog(QDialog):
 		
 		layout.addLayout(details_layout)
 		
-		btn_close = QPushButton("Close")
+		btn_close = QPushButton(qta.icon("fa6s.xmark"), " Close")
 		btn_close.clicked.connect(self.accept)
 		layout.addWidget(btn_close)
 		
@@ -406,7 +406,7 @@ class CardViewDialog(QDialog):
 			value_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
 			value_layout.addWidget(value_label)
 			value_layout.addStretch()
-			btn_copy = QPushButton("Copy")
+			btn_copy = QPushButton(qta.icon("fa6s.copy"), "")
 			btn_copy.setMaximumWidth(60)
 			btn_copy.clicked.connect(lambda: self.copy_to_clipboard(str(value_text)))
 			value_layout.addWidget(btn_copy)
@@ -452,7 +452,7 @@ class CardViewDialog(QDialog):
 			note_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
 			note_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 			note_layout.addWidget(note_label)
-			btn_copy_note = QPushButton("Copy")
+			btn_copy_note = QPushButton(qta.icon("fa6s.copy"), "")
 			btn_copy_note.setMaximumWidth(60)
 			btn_copy_note.clicked.connect(lambda: self.copy_to_clipboard(note_text))
 			note_layout.addWidget(btn_copy_note)
@@ -463,7 +463,7 @@ class CardViewDialog(QDialog):
 		scroll.setWidget(scroll_widget)
 		layout.addWidget(scroll)
 		
-		btn_close = QPushButton("Close")
+		btn_close = QPushButton(qta.icon("fa6s.xmark"), " Close")
 		btn_close.clicked.connect(self.accept)
 		layout.addWidget(btn_close)
 		

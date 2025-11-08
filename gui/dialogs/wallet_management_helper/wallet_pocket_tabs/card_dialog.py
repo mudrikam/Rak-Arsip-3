@@ -357,7 +357,7 @@ class CardDialog(QDialog):
 		
 		buttons_layout.addStretch()
 		
-		self.btn_cancel = QPushButton("Cancel")
+		self.btn_cancel = QPushButton(qta.icon("fa6s.xmark"), " Cancel")
 		self.btn_cancel.clicked.connect(self.reject)
 		buttons_layout.addWidget(self.btn_cancel)
 		

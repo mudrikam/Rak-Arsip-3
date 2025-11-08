@@ -71,11 +71,11 @@ class BatchFilesDetailDialog(QDialog):
         button_layout = QHBoxLayout()
         button_layout.addStretch()
         
-        cancel_btn = QPushButton("Cancel")
+        cancel_btn = QPushButton(qta.icon("fa6s.xmark"), " Cancel")
         cancel_btn.clicked.connect(self.reject)
         button_layout.addWidget(cancel_btn)
         
-        confirm_btn = QPushButton(f"Confirm {self.operation_title}")
+        confirm_btn = QPushButton(qta.icon("fa6s.check"), f" Confirm {self.operation_title}")
         confirm_btn.clicked.connect(self.accept)
         confirm_btn.setDefault(True)
         button_layout.addWidget(confirm_btn)
@@ -185,8 +185,8 @@ class ClientDataBatchHelper:
         
         # Pagination controls
         pagination_layout = QHBoxLayout()
-        self.batch_prev_btn = QPushButton("Previous")
-        self.batch_next_btn = QPushButton("Next")
+        self.batch_prev_btn = QPushButton(qta.icon("fa6s.chevron-left"), " Previous")
+        self.batch_next_btn = QPushButton(qta.icon("fa6s.chevron-right"), " Next")
         self.batch_page_label = QLabel("Page 1/1")
         self.batch_page_spinner = QSpinBox()
         self.batch_page_spinner.setMinimum(1)

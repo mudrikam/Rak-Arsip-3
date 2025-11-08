@@ -96,11 +96,11 @@ class DeleteRecordConfirmDialog(QDialog):
         button_layout = QHBoxLayout()
         button_layout.addStretch()
         
-        cancel_btn = QPushButton("Cancel")
+        cancel_btn = QPushButton(qta.icon("fa6s.xmark"), " Cancel")
         cancel_btn.clicked.connect(self.reject)
         button_layout.addWidget(cancel_btn)
         
-        delete_btn = QPushButton("Delete Record")
+        delete_btn = QPushButton(qta.icon("fa6s.trash"), " Delete Record")
         delete_btn.clicked.connect(self.accept)
         delete_btn.setDefault(True)
         delete_btn.setStyleSheet("QPushButton { background-color: #d32f2f; color: white; }")

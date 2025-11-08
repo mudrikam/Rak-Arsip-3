@@ -64,11 +64,11 @@ class BatchStatusUpdateDialog(QDialog):
         button_layout = QHBoxLayout()
         button_layout.addStretch()
         
-        cancel_btn = QPushButton("Cancel")
+        cancel_btn = QPushButton(qta.icon("fa6s.xmark"), " Cancel")
         cancel_btn.clicked.connect(self.reject)
         button_layout.addWidget(cancel_btn)
         
-        confirm_btn = QPushButton(f"Update to '{self.new_status}'")
+        confirm_btn = QPushButton(qta.icon("fa6s.check"), f" Update to '{self.new_status}'")
         confirm_btn.clicked.connect(self.accept)
         confirm_btn.setDefault(True)
         button_layout.addWidget(confirm_btn)
