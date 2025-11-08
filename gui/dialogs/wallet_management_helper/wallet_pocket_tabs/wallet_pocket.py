@@ -297,11 +297,13 @@ class WalletPocketTab(QWidget):
 			
 			row, col = 0, 0
 			for pocket in pockets:
-				card = PocketCard(pocket, self.db_manager)
+				card = PocketCard(pocket, self.db_manager, self)
+				card.setVisible(False)
 				card.pocket_clicked.connect(self.on_pocket_selected)
 				card.view_clicked.connect(self.view_pocket)
 				card.edit_clicked.connect(self.edit_pocket)
 				self.pockets_layout.addWidget(card, row, col)
+				card.setVisible(True)
 				col += 1
 				if col >= 2:
 					col = 0
@@ -400,11 +402,13 @@ class WalletPocketTab(QWidget):
 			
 			row, col = 0, 0
 			for card in cards:
-				card_widget = CardWidget(card)
+				card_widget = CardWidget(card, self)
+				card_widget.setVisible(False)
 				card_widget.card_clicked.connect(self.on_card_selected)
 				card_widget.view_clicked.connect(self.view_card)
 				card_widget.edit_clicked.connect(self.edit_card)
 				self.cards_layout.addWidget(card_widget, row, col)
+				card_widget.setVisible(True)
 				col += 1
 				if col >= 2:
 					col = 0
