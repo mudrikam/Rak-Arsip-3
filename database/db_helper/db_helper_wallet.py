@@ -9,24 +9,70 @@ class DatabaseWalletHelper:
     def __init__(self, db_manager):
         self.db_manager = db_manager
     
-    def get_all_pockets(self):
-        """Get all wallet pockets."""
+    def get_all_pockets(self, search_text="", pocket_type="", icon="", color=""):
+        """Get all wallet pockets with optional filters."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT * FROM wallet_pockets ORDER BY name")
+        
+        query = "SELECT * FROM wallet_pockets WHERE 1=1"
+        params = []
+        
+        if search_text:
+            query += " AND name LIKE ?"
+            params.append(f"%{search_text}%")
+        
+        if pocket_type:
+            query += " AND pocket_type = ?"
+            params.append(pocket_type)
+        
+        if icon:
+            query += " AND icon = ?"
+            params.append(icon)
+        
+        if color:
+            query += " AND color = ?"
+            params.append(color)
+        
+        query += " ORDER BY name"
+        
+        cursor.execute(query, params)
         rows = cursor.fetchall()
         pockets = [dict(row) for row in rows]
+        
         self.db_manager.close()
         return pockets
     
-    def get_all_cards(self, pocket_id=None):
-        """Get all wallet cards, optionally filtered by pocket."""
+    def get_all_cards(self, pocket_id=None, search_text="", card_type="", vendor="", status=""):
+        """Get all wallet cards with optional filters."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
+        
+        query = "SELECT * FROM wallet_cards WHERE 1=1"
+        params = []
+        
         if pocket_id:
-            cursor.execute("SELECT * FROM wallet_cards WHERE pocket_id = ? ORDER BY card_name", (pocket_id,))
-        else:
-            cursor.execute("SELECT * FROM wallet_cards ORDER BY card_name")
+            query += " AND pocket_id = ?"
+            params.append(pocket_id)
+        
+        if search_text:
+            query += " AND card_name LIKE ?"
+            params.append(f"%{search_text}%")
+        
+        if card_type:
+            query += " AND card_type = ?"
+            params.append(card_type)
+        
+        if vendor:
+            query += " AND vendor = ?"
+            params.append(vendor)
+        
+        if status:
+            query += " AND status = ?"
+            params.append(status)
+        
+        query += " ORDER BY card_name"
+        
+        cursor.execute(query, params)
         rows = cursor.fetchall()
         cards = [dict(row) for row in rows]
         self.db_manager.close()
@@ -35,6 +81,48 @@ class DatabaseWalletHelper:
     def get_cards_by_pocket(self, pocket_id):
         """Get all cards for a specific pocket."""
         return self.get_all_cards(pocket_id=pocket_id)
+    
+    def get_pocket_filter_options(self):
+        """Get unique values for pocket filters."""
+        self.db_manager.connect(write=False)
+        cursor = self.db_manager.connection.cursor()
+        
+        cursor.execute("SELECT DISTINCT pocket_type FROM wallet_pockets WHERE pocket_type IS NOT NULL AND pocket_type != '' ORDER BY pocket_type")
+        types = [row[0] for row in cursor.fetchall()]
+        
+        cursor.execute("SELECT DISTINCT icon FROM wallet_pockets WHERE icon IS NOT NULL AND icon != '' ORDER BY icon")
+        icons = [row[0] for row in cursor.fetchall()]
+        
+        cursor.execute("SELECT DISTINCT color FROM wallet_pockets WHERE color IS NOT NULL AND color != '' ORDER BY color")
+        colors = [row[0] for row in cursor.fetchall()]
+        
+        self.db_manager.close()
+        return {'types': types, 'icons': icons, 'colors': colors}
+    
+    def get_card_filter_options(self, pocket_id=None):
+        """Get unique values for card filters."""
+        self.db_manager.connect(write=False)
+        cursor = self.db_manager.connection.cursor()
+        
+        where_clause = ""
+        params = []
+        if pocket_id:
+            where_clause = "WHERE pocket_id = ? AND"
+            params = [pocket_id]
+        else:
+            where_clause = "WHERE"
+        
+        cursor.execute(f"SELECT DISTINCT card_type FROM wallet_cards {where_clause} card_type IS NOT NULL AND card_type != '' ORDER BY card_type", params)
+        types = [row[0] for row in cursor.fetchall()]
+        
+        cursor.execute(f"SELECT DISTINCT vendor FROM wallet_cards {where_clause} vendor IS NOT NULL AND vendor != '' ORDER BY vendor", params)
+        vendors = [row[0] for row in cursor.fetchall()]
+        
+        cursor.execute(f"SELECT DISTINCT status FROM wallet_cards {where_clause} status IS NOT NULL AND status != '' ORDER BY status", params)
+        statuses = [row[0] for row in cursor.fetchall()]
+        
+        self.db_manager.close()
+        return {'types': types, 'vendors': vendors, 'statuses': statuses}
     
     def get_all_categories(self):
         """Get all wallet transaction categories."""

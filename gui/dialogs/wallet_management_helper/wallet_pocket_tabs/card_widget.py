@@ -13,16 +13,16 @@ class CardWidget(QFrame):
 		super().__init__(parent)
 		self.card_data = card_data
 		self.setFrameShape(QFrame.StyledPanel)
-		self.setMinimumSize(340, 200)
-		self.setMaximumSize(400, 240)
+		self.setMinimumSize(280, 180)
+		self.setMaximumSize(350, 220)
 		
 		color = card_data.get('color', '#1E3A8A')
 		self.setStyleSheet(f"""
 			CardWidget {{
 				background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
 					stop:0 {color}, stop:1 {self.adjust_color(color, -40)});
-				border-radius: 15px;
-				border: 2px solid {self.adjust_color(color, -50)};
+				border-radius: 10px;
+				border: 1px solid {self.adjust_color(color, -50)};
 			}}
 			QLabel {{
 				color: white;
@@ -54,14 +54,14 @@ class CardWidget(QFrame):
 	
 	def init_ui(self):
 		layout = QVBoxLayout()
-		layout.setContentsMargins(25, 20, 25, 20)
-		layout.setSpacing(12)
+		layout.setContentsMargins(20, 20, 20, 20)
+		layout.setSpacing(10)
 		
 		header_layout = QHBoxLayout()
 		
 		card_type = self.card_data.get('card_type', 'Card')
 		type_label = QLabel(card_type.upper())
-		type_label.setStyleSheet("font-size: 11px; font-weight: bold; letter-spacing: 1px;")
+		type_label.setStyleSheet("font-size: 10px; font-weight: bold; letter-spacing: 1px;")
 		header_layout.addWidget(type_label)
 		
 		header_layout.addStretch()
@@ -81,12 +81,12 @@ class CardWidget(QFrame):
 		vendor = self.card_data.get('vendor', '')
 		if vendor:
 			vendor_label = QLabel(vendor.upper())
-			vendor_label.setStyleSheet("font-size: 14px; font-weight: bold; letter-spacing: 2px;")
+			vendor_label.setStyleSheet("font-size: 11px; font-weight: bold; letter-spacing: 1px;")
 			header_layout.addWidget(vendor_label)
 		
 		layout.addLayout(header_layout)
 		
-		layout.addSpacing(10)
+		layout.addSpacing(5)
 		
 		card_number = self.card_data.get('card_number', '')
 		if len(card_number) >= 4:
@@ -94,10 +94,10 @@ class CardWidget(QFrame):
 		else:
 			masked_number = card_number
 		number_label = QLabel(masked_number)
-		number_label.setStyleSheet("font-size: 20px; font-weight: bold; letter-spacing: 3px;")
+		number_label.setStyleSheet("font-size: 16px; font-weight: bold; letter-spacing: 2px;")
 		layout.addWidget(number_label)
 		
-		layout.addSpacing(10)
+		layout.addSpacing(5)
 		
 		bottom_layout = QHBoxLayout()
 		
@@ -105,11 +105,11 @@ class CardWidget(QFrame):
 		left_layout.setSpacing(2)
 		
 		holder_title = QLabel("CARD HOLDER")
-		holder_title.setStyleSheet("font-size: 8px; color: rgba(255,255,255,0.7);")
+		holder_title.setStyleSheet("font-size: 7px; color: rgba(255,255,255,0.7);")
 		left_layout.addWidget(holder_title)
 		
 		holder_label = QLabel(self.card_data.get('holder_name', 'N/A').upper())
-		holder_label.setStyleSheet("font-size: 13px; font-weight: bold;")
+		holder_label.setStyleSheet("font-size: 11px; font-weight: bold;")
 		left_layout.addWidget(holder_label)
 		
 		bottom_layout.addLayout(left_layout)
@@ -119,13 +119,13 @@ class CardWidget(QFrame):
 		right_layout.setSpacing(2)
 		
 		expiry_title = QLabel("VALID THRU")
-		expiry_title.setStyleSheet("font-size: 8px; color: rgba(255,255,255,0.7);")
+		expiry_title.setStyleSheet("font-size: 7px; color: rgba(255,255,255,0.7);")
 		right_layout.addWidget(expiry_title)
 		
 		expiry_date = self.card_data.get('expiry_date', '')
 		formatted_expiry = self.format_expiry(expiry_date)
 		expiry_label = QLabel(formatted_expiry)
-		expiry_label.setStyleSheet("font-size: 13px; font-weight: bold;")
+		expiry_label.setStyleSheet("font-size: 11px; font-weight: bold;")
 		right_layout.addWidget(expiry_label)
 		
 		bottom_layout.addLayout(right_layout)
@@ -136,7 +136,7 @@ class CardWidget(QFrame):
 		if issuer:
 			info_layout = QHBoxLayout()
 			issuer_label = QLabel(issuer)
-			issuer_label.setStyleSheet("font-size: 10px; color: rgba(255,255,255,0.8);")
+			issuer_label.setStyleSheet("font-size: 9px; color: rgba(255,255,255,0.8);")
 			info_layout.addWidget(issuer_label)
 			info_layout.addStretch()
 			layout.addLayout(info_layout)
