@@ -1395,7 +1395,25 @@ class BatchManagementDialog(QDialog):
                     },
                     "fields": "pixelSize"
                 }
-            }
+            },
+            # Border abu-abu pada tabel data utama (B18:J69)
+            {
+                "updateBorders": {
+                    "range": {
+                        "sheetId": 0,
+                        "startRowIndex": 17,
+                        "endRowIndex": 69,
+                        "startColumnIndex": 1,
+                        "endColumnIndex": 10
+                    },
+                    "top": {"style": "SOLID", "width": 1, "color": {"red": 0.7, "green": 0.7, "blue": 0.7}},
+                    "bottom": {"style": "SOLID", "width": 1, "color": {"red": 0.7, "green": 0.7, "blue": 0.7}},
+                    "left": {"style": "SOLID", "width": 1, "color": {"red": 0.7, "green": 0.7, "blue": 0.7}},
+                    "right": {"style": "SOLID", "width": 1, "color": {"red": 0.7, "green": 0.7, "blue": 0.7}},
+                    "innerHorizontal": {"style": "SOLID", "width": 1, "color": {"red": 0.7, "green": 0.7, "blue": 0.7}},
+                    "innerVertical": {"style": "SOLID", "width": 1, "color": {"red": 0.7, "green": 0.7, "blue": 0.7}}
+                }
+            },
         ]
         
         # Apply age-based colors to Created At column
