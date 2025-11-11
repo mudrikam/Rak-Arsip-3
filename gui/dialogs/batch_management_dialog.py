@@ -847,7 +847,7 @@ class BatchManagementDialog(QDialog):
         # Row 1: Title
         sheets_service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
-            range="A1",
+            range="B1",
             valueInputOption="USER_ENTERED",
             body={"values": [["DESAINIA STUDIO BATCH QUEUE"]]
         }).execute()
@@ -855,20 +855,46 @@ class BatchManagementDialog(QDialog):
         # Row 2: Date
         sheets_service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
-            range="A2",
+            range="B2",
             valueInputOption="USER_ENTERED",
             body={"values": [[today_str]]}
         ).execute()
         
-        # Row 4-5: Legend (pindah ke sini)
+        # Row 4-5: Legend
         self.add_color_legend(sheets_service, spreadsheet_id)
         
         # Row 7: Empty row for spacing
-        # Row 8: Header
-        # Row 9+: Data
+        
+        # Row 8: Alur Pemesanan title
         sheets_service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
-            range="A8",
+            range="B8",
+            valueInputOption="USER_ENTERED",
+            body={"values": [["Alur Pemesanan"]]}
+        ).execute()
+        
+        # Row 9-14: Alur Pemesanan list items
+        alur_pemesanan = [
+            ["🟡 Mengirimkan brief bisa berupa gambar + note, google doc, notion, figjam, dll yang dapat akses"],
+            ["🟡 Konfirmasi pemesanan dan konfirmasi harga jika ada"],
+            ["🟡 Pengiriman render preview dan revisi (setelah menjadi PSD, revisi hanya perbaikan error jika ada, perbaikan lain selain error dikenakan charge)"],
+            ["🟢 Payment sesuai invoice yang diterima, metode pembayaran dan detail lain ada dalam invoice"],
+            ["🟡 Finishing PSD dan QC sebelum pengiriman PSD hasil via link"],
+            ["🟡 Pengiriman file hasil melalui link Google Drive yang ada pada invoice"]
+        ]
+        sheets_service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range="B9",
+            valueInputOption="USER_ENTERED",
+            body={"values": alur_pemesanan}
+        ).execute()
+        
+        # Row 16: Empty row for spacing
+        # Row 17: Header
+        # Row 18+: Data
+        sheets_service.spreadsheets().values().update(
+            spreadsheetId=spreadsheet_id,
+            range="B17",
             valueInputOption="USER_ENTERED",
             body={"values": [header] + data}
         ).execute()
@@ -878,10 +904,10 @@ class BatchManagementDialog(QDialog):
         total_queue, total_file_queue = self._get_total_queue_and_files()
         total_draft_count = self._get_total_draft_count()
         
-        # Stats di row 4-6 (vertical layout) - label di kolom A, value di kolom B
+        # Stats di row 4-6 (vertical layout) - label di kolom B, value di kolom C
         sheets_service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
-            range="A4",
+            range="B4",
             valueInputOption="USER_ENTERED",
             body={"values": [
                 ["📊 Total Queue", total_queue],
@@ -890,14 +916,14 @@ class BatchManagementDialog(QDialog):
             ]}
         ).execute()
         
-        # Color priority legend di row 4 - kolom D onwards (horizontal)
+        # Color priority legend di row 4 - kolom E onwards (horizontal)
         color_legend_data = [
             ["🔴 Oldest", "🟡 Old", "🟢 Medium", "🔵 Recent", "🟣 New", "☑️ Newest"]
         ]
         
         sheets_service.spreadsheets().values().update(
             spreadsheetId=spreadsheet_id,
-            range="D4",
+            range="E4",
             valueInputOption="USER_ENTERED",
             body={"values": color_legend_data}
         ).execute()
@@ -914,43 +940,43 @@ class BatchManagementDialog(QDialog):
         
         requests = []
         
-        # Merge A1:I1 for title
+        # Merge B1:J1 for title
         requests.append({
             "mergeCells": {
                 "range": {
                     "sheetId": 0,
                     "startRowIndex": 0,
                     "endRowIndex": 1,
-                    "startColumnIndex": 0,
-                    "endColumnIndex": 9
+                    "startColumnIndex": 1,
+                    "endColumnIndex": 10
                 },
                 "mergeType": "MERGE_ALL"
             }
         })
         
-        # Merge A2:I2 for date
+        # Merge B2:J2 for date
         requests.append({
             "mergeCells": {
                 "range": {
                     "sheetId": 0,
                     "startRowIndex": 1,
                     "endRowIndex": 2,
-                    "startColumnIndex": 0,
-                    "endColumnIndex": 9
+                    "startColumnIndex": 1,
+                    "endColumnIndex": 10
                 },
                 "mergeType": "MERGE_ALL"
             }
         })
         
-        # Style stats labels (A4:A6) - light gray background, bold, left-aligned
+        # Style stats labels (B4:B6) - light gray background, bold, left-aligned
         requests.append({
             "repeatCell": {
                 "range": {
                     "sheetId": 0,
                     "startRowIndex": 3,
                     "endRowIndex": 6,
-                    "startColumnIndex": 0,
-                    "endColumnIndex": 1
+                    "startColumnIndex": 1,
+                    "endColumnIndex": 2
                 },
                 "cell": {
                     "userEnteredFormat": {
@@ -967,15 +993,15 @@ class BatchManagementDialog(QDialog):
             }
         })
         
-        # Style stats values (B4:B6) - light gray background, right-aligned
+        # Style stats values (C4:C6) - light gray background, right-aligned
         requests.append({
             "repeatCell": {
                 "range": {
                     "sheetId": 0,
                     "startRowIndex": 3,
                     "endRowIndex": 6,
-                    "startColumnIndex": 1,
-                    "endColumnIndex": 2
+                    "startColumnIndex": 2,
+                    "endColumnIndex": 3
                 },
                 "cell": {
                     "userEnteredFormat": {
@@ -992,7 +1018,7 @@ class BatchManagementDialog(QDialog):
             }
         })
         
-        # Apply colors to legend (D4:I4)
+        # Apply colors to legend (E4:J4)
         for i, color in enumerate(color_steps):
             requests.append({
                 "repeatCell": {
@@ -1000,8 +1026,8 @@ class BatchManagementDialog(QDialog):
                         "sheetId": 0,
                         "startRowIndex": 3,
                         "endRowIndex": 4,
-                        "startColumnIndex": 3 + i,
-                        "endColumnIndex": 4 + i
+                        "startColumnIndex": 4 + i,
+                        "endColumnIndex": 5 + i
                     },
                     "cell": {
                         "userEnteredFormat": {
@@ -1067,8 +1093,8 @@ class BatchManagementDialog(QDialog):
                         "sheetId": 0,
                         "startRowIndex": 0,
                         "endRowIndex": 1,
-                        "startColumnIndex": 0,
-                        "endColumnIndex": 9
+                        "startColumnIndex": 1,
+                        "endColumnIndex": 10
                     },
                     "cell": {
                         "userEnteredFormat": {
@@ -1092,8 +1118,8 @@ class BatchManagementDialog(QDialog):
                         "sheetId": 0,
                         "startRowIndex": 1,
                         "endRowIndex": 2,
-                        "startColumnIndex": 0,
-                        "endColumnIndex": 9
+                        "startColumnIndex": 1,
+                        "endColumnIndex": 10
                     },
                     "cell": {
                         "userEnteredFormat": {
@@ -1110,15 +1136,61 @@ class BatchManagementDialog(QDialog):
                     "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)"
                 }
             },
-            # Header (Row 8) - Dark background, white text
+            # Alur Pemesanan title (Row 8) - Bold, left-aligned
             {
                 "repeatCell": {
                     "range": {
                         "sheetId": 0,
                         "startRowIndex": 7,
                         "endRowIndex": 8,
-                        "startColumnIndex": 0,
-                        "endColumnIndex": 9
+                        "startColumnIndex": 1,
+                        "endColumnIndex": 10
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "textFormat": {
+                                "bold": True,
+                                "fontSize": 11
+                            },
+                            "horizontalAlignment": "LEFT",
+                            "verticalAlignment": "MIDDLE"
+                        }
+                    },
+                    "fields": "userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment)"
+                }
+            },
+            # Alur Pemesanan list items (Row 9-14) - Left-aligned, wrapped text
+            {
+                "repeatCell": {
+                    "range": {
+                        "sheetId": 0,
+                        "startRowIndex": 8,
+                        "endRowIndex": 14,
+                        "startColumnIndex": 1,
+                        "endColumnIndex": 10
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "textFormat": {
+                                "fontSize": 9
+                            },
+                            "horizontalAlignment": "LEFT",
+                            "verticalAlignment": "MIDDLE",
+                            "wrapStrategy": "WRAP"
+                        }
+                    },
+                    "fields": "userEnteredFormat(textFormat,horizontalAlignment,verticalAlignment,wrapStrategy)"
+                }
+            },
+            # Header (Row 17) - Dark background, white text
+            {
+                "repeatCell": {
+                    "range": {
+                        "sheetId": 0,
+                        "startRowIndex": 16,
+                        "endRowIndex": 17,
+                        "startColumnIndex": 1,
+                        "endColumnIndex": 10
                     },
                     "cell": {
                         "userEnteredFormat": {
@@ -1135,15 +1207,15 @@ class BatchManagementDialog(QDialog):
                     "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)"
                 }
             },
-            # Data rows (Row 9+) - Center aligned
+            # Data rows (Row 18+) - Center aligned
             {
                 "repeatCell": {
                     "range": {
                         "sheetId": 0,
-                        "startRowIndex": 8,
+                        "startRowIndex": 17,
                         "endRowIndex": 1000,
-                        "startColumnIndex": 0,
-                        "endColumnIndex": 9
+                        "startColumnIndex": 1,
+                        "endColumnIndex": 10
                     },
                     "cell": {
                         "userEnteredFormat": {
@@ -1157,15 +1229,15 @@ class BatchManagementDialog(QDialog):
                     "fields": "userEnteredFormat(horizontalAlignment,verticalAlignment,textFormat)"
                 }
             },
-            # Batch Number column - Bold
+            # Batch Number column - Bold (starting from data row 18) - column B
             {
                 "repeatCell": {
                     "range": {
                         "sheetId": 0,
-                        "startRowIndex": 8,
+                        "startRowIndex": 17,
                         "endRowIndex": 1000,
-                        "startColumnIndex": 0,
-                        "endColumnIndex": 1
+                        "startColumnIndex": 1,
+                        "endColumnIndex": 2
                     },
                     "cell": {
                         "userEnteredFormat": {
@@ -1176,6 +1248,92 @@ class BatchManagementDialog(QDialog):
                         }
                     },
                     "fields": "userEnteredFormat.textFormat"
+                }
+            },
+            # Merge cells for Alur Pemesanan title (B8:J8)
+            {
+                "mergeCells": {
+                    "range": {
+                        "sheetId": 0,
+                        "startRowIndex": 7,
+                        "endRowIndex": 8,
+                        "startColumnIndex": 1,
+                        "endColumnIndex": 10
+                    },
+                    "mergeType": "MERGE_ALL"
+                }
+            },
+            # Merge cells for each Alur Pemesanan list item (B9:J9, B10:J10, etc.)
+            {
+                "mergeCells": {
+                    "range": {
+                        "sheetId": 0,
+                        "startRowIndex": 8,
+                        "endRowIndex": 9,
+                        "startColumnIndex": 1,
+                        "endColumnIndex": 10
+                    },
+                    "mergeType": "MERGE_ALL"
+                }
+            },
+            {
+                "mergeCells": {
+                    "range": {
+                        "sheetId": 0,
+                        "startRowIndex": 9,
+                        "endRowIndex": 10,
+                        "startColumnIndex": 1,
+                        "endColumnIndex": 10
+                    },
+                    "mergeType": "MERGE_ALL"
+                }
+            },
+            {
+                "mergeCells": {
+                    "range": {
+                        "sheetId": 0,
+                        "startRowIndex": 10,
+                        "endRowIndex": 11,
+                        "startColumnIndex": 1,
+                        "endColumnIndex": 10
+                    },
+                    "mergeType": "MERGE_ALL"
+                }
+            },
+            {
+                "mergeCells": {
+                    "range": {
+                        "sheetId": 0,
+                        "startRowIndex": 11,
+                        "endRowIndex": 12,
+                        "startColumnIndex": 1,
+                        "endColumnIndex": 10
+                    },
+                    "mergeType": "MERGE_ALL"
+                }
+            },
+            {
+                "mergeCells": {
+                    "range": {
+                        "sheetId": 0,
+                        "startRowIndex": 12,
+                        "endRowIndex": 13,
+                        "startColumnIndex": 1,
+                        "endColumnIndex": 10
+                    },
+                    "mergeType": "MERGE_ALL"
+                }
+            },
+            {
+                "mergeCells": {
+                    "range": {
+                        "sheetId": 0,
+                        "startRowIndex": 13,
+                        "endRowIndex": 14,
+                        "startColumnIndex": 1,
+                        "endColumnIndex": 10
+                    },
+                    "mergeType": "MERGE_ALL"
                 }
             },
             # Set row heights
@@ -1207,14 +1365,30 @@ class BatchManagementDialog(QDialog):
                     "fields": "pixelSize"
                 }
             },
-            # Set column widths - all columns 120px
+
+            # Set column width for margin column A (same as others for consistency)
             {
                 "updateDimensionProperties": {
                     "range": {
                         "sheetId": 0,
                         "dimension": "COLUMNS",
                         "startIndex": 0,
-                        "endIndex": 9
+                        "endIndex": 1
+                    },
+                    "properties": {
+                        "pixelSize": 120
+                    },
+                    "fields": "pixelSize"
+                }
+            },
+            # Set column widths for data columns B-J (120px each)
+            {
+                "updateDimensionProperties": {
+                    "range": {
+                        "sheetId": 0,
+                        "dimension": "COLUMNS",
+                        "startIndex": 1,
+                        "endIndex": 10
                     },
                     "properties": {
                         "pixelSize": 120
@@ -1271,15 +1445,16 @@ class BatchManagementDialog(QDialog):
                     color = color_steps[color_idx]
                     
             if color:
-                # Apply color only to Created At column (index 8), starting from row 9 (index 8)
+                # Apply color only to Created At column (index 8), starting from row 18 (index 17)
+                # Column I (index 8 in 0-based, but with margin column A, actual display is column I = index 8)
                 requests.append({
                     "repeatCell": {
                         "range": {
                             "sheetId": 0,
-                            "startRowIndex": 8 + idx,
-                            "endRowIndex": 9 + idx,
-                            "startColumnIndex": 8,
-                            "endColumnIndex": 9
+                            "startRowIndex": 17 + idx,
+                            "endRowIndex": 18 + idx,
+                            "startColumnIndex": 9,
+                            "endColumnIndex": 10
                         },
                         "cell": {
                             "userEnteredFormat": {
@@ -1294,23 +1469,27 @@ class BatchManagementDialog(QDialog):
                     }
                 })
             
-            # Apply light green color to non-zero status columns (Draft, Modelling, Rendering, Photoshop, Need Upload, Pending)
-            # Columns: Draft=2, Modelling=3, Rendering=4, Photoshop=5, Need Upload=6, Pending=7
+            # Apply light green color to non-zero status columns
+            # With margin column A, data starts at column B (index 1)
+            # Draft=C (index 2), Modelling=D (index 3), Rendering=E (index 4), 
+            # Photoshop=F (index 5), Need Upload=G (index 6), Pending=H (index 7)
             status_columns = [2, 3, 4, 5, 6, 7]
             light_green = {"red": 0.85, "green": 0.95, "blue": 0.85}
             
             for col_idx in status_columns:
                 try:
-                    value = row[col_idx]
+                    # Adjust column index for data array (which doesn't include margin column)
+                    data_col_idx = col_idx - 1
+                    value = row[data_col_idx]
                     if value and int(value) != 0:
                         requests.append({
                             "repeatCell": {
                                 "range": {
                                     "sheetId": 0,
-                                    "startRowIndex": 8 + idx,
-                                    "endRowIndex": 9 + idx,
-                                    "startColumnIndex": col_idx,
-                                    "endColumnIndex": col_idx + 1
+                                    "startRowIndex": 17 + idx,
+                                    "endRowIndex": 18 + idx,
+                                    "startColumnIndex": col_idx + 1,
+                                    "endColumnIndex": col_idx + 2
                                 },
                                 "cell": {
                                     "userEnteredFormat": {
@@ -1379,13 +1558,27 @@ class BatchManagementDialog(QDialog):
             return None
 
     def clean_batch_queue_spreadsheet(self, sheets_service, spreadsheet_id):
+        # Clear all data
         sheets_service.spreadsheets().values().clear(
             spreadsheetId=spreadsheet_id,
             range="A1:Z1000"
         ).execute()
+        
+        # Unmerge all cells and clear all formatting
         sheets_service.spreadsheets().batchUpdate(
             spreadsheetId=spreadsheet_id,
             body={"requests": [
+                {
+                    "unmergeCells": {
+                        "range": {
+                            "sheetId": 0,
+                            "startRowIndex": 0,
+                            "endRowIndex": 1000,
+                            "startColumnIndex": 0,
+                            "endColumnIndex": 26
+                        }
+                    }
+                },
                 {
                     "updateCells": {
                         "range": {
