@@ -1488,26 +1488,24 @@ class BatchManagementDialog(QDialog):
                 })
             
             # Apply light green color to non-zero status columns
-            # With margin column A, data starts at column B (index 1)
-            # Draft=C (index 2), Modelling=D (index 3), Rendering=E (index 4), 
-            # Photoshop=F (index 5), Need Upload=G (index 6), Pending=H (index 7)
-            status_columns = [2, 3, 4, 5, 6, 7]
+            # Data array indices: Draft=2, Modelling=3, Rendering=4, Photoshop=5, Need Upload=6, Pending=7
+            status_data_indices = [2, 3, 4, 5, 6, 7]
             light_green = {"red": 0.85, "green": 0.95, "blue": 0.85}
-            
-            for col_idx in status_columns:
+
+            for data_idx in status_data_indices:
                 try:
-                    # Adjust column index for data array (which doesn't include margin column)
-                    data_col_idx = col_idx - 1
-                    value = row[data_col_idx]
+                    value = row[data_idx]
                     if value and int(value) != 0:
+                        # sheet column index = data_idx + 1 (because column A is margin, data starts at B)
+                        start_col = data_idx + 1
                         requests.append({
                             "repeatCell": {
                                 "range": {
                                     "sheetId": 0,
                                     "startRowIndex": 17 + idx,
                                     "endRowIndex": 18 + idx,
-                                    "startColumnIndex": col_idx + 1,
-                                    "endColumnIndex": col_idx + 2
+                                    "startColumnIndex": start_col,
+                                    "endColumnIndex": start_col + 1
                                 },
                                 "cell": {
                                     "userEnteredFormat": {
