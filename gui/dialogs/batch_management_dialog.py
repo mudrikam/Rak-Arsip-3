@@ -1010,7 +1010,7 @@ class BatchManagementDialog(QDialog):
                             "bold": False,
                             "fontSize": 10
                         },
-                        "horizontalAlignment": "RIGHT",
+                        "horizontalAlignment": "CENTER",
                         "verticalAlignment": "MIDDLE"
                     }
                 },
