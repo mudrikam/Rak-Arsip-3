@@ -387,19 +387,20 @@ class PropertiesWidget(QDockWidget):
                     usernames = [e.get('username', '') for e in earnings if e.get('username')]
                     if usernames:
                         shares_names = ", ".join(usernames)
-                    # compute equal per-person amount based on project price
                     try:
-                        price, currency, note = db_manager.get_item_price_detail(row_data["id"])
-                        if price is not None and currency:
-                            price_float = float(price)
-                            n = len(usernames) if usernames else len(earnings)
-                            if n > 0:
-                                per_person = price_float / n
-                                if per_person.is_integer():
-                                    per_str = f"{int(per_person):,}".replace(",", ".")
-                                else:
-                                    per_str = f"{per_person:,.2f}".replace(",", ".")
-                                shares_amount = f"{per_str} {currency} each"
+                        if earnings and 'amount' in earnings[0]:
+                            share_amount = earnings[0]['amount']
+                            price, currency, note = db_manager.get_item_price_detail(row_data["id"])
+                            if currency:
+                                try:
+                                    share_float = float(share_amount)
+                                    if share_float.is_integer():
+                                        share_str = f"{int(share_float):,}".replace(",", ".")
+                                    else:
+                                        share_str = f"{share_float:,.2f}".replace(",", ".")
+                                    shares_amount = f"{share_str} {currency} each"
+                                except Exception:
+                                    shares_amount = f"{share_amount} {currency} each"
                     except Exception:
                         shares_amount = "-"
             except Exception:
