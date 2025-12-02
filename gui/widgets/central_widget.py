@@ -217,7 +217,7 @@ class CentralWidget(QWidget):
         header.setSectionResizeMode(2, QHeaderView.Fixed)
         header.setSectionResizeMode(3, QHeaderView.Stretch)
         header.setSectionResizeMode(4, QHeaderView.Fixed)
-        header.resizeSection(0, 100)
+        header.resizeSection(0, 140)
         header.resizeSection(1, 200)
         header.resizeSection(2, 100)
         header.resizeSection(4, 120)
@@ -308,6 +308,11 @@ class CentralWidget(QWidget):
         self._empty_table_timer.setSingleShot(True)
         self._empty_table_timer.setInterval(2000)
         self._empty_table_timer.timeout.connect(self._on_empty_table_timeout)
+
+        self._path_update_timer = QTimer(self)
+        self._path_update_timer.setSingleShot(True)
+        self._path_update_timer.setInterval(100)
+        self._path_update_timer.timeout.connect(self._update_path_truncation)
 
         self.load_data_from_database()
 
@@ -644,22 +649,17 @@ class CentralWidget(QWidget):
         font_metrics = QFontMetrics(self.table.font())
         ellipsis = "..."
         ellipsis_width = font_metrics.horizontalAdvance(ellipsis)
-        available_width = column_width - 10
+        available_width = column_width - 20
         if font_metrics.horizontalAdvance(path) <= available_width:
             return path
         if available_width <= ellipsis_width:
             return ellipsis
         available_for_text = available_width - ellipsis_width
-        for i in range(1, len(path)):
+        for i in range(len(path), 0, -1):
             truncated = path[:i]
             if font_metrics.horizontalAdvance(truncated) <= available_for_text:
-                continue
-            else:
-                if i > 1:
-                    return path[:i-1] + ellipsis
-                else:
-                    return ellipsis
-        return path
+                return truncated + ellipsis
+        return ellipsis
 
     def update_table(self):
         total_rows = self.found_records
@@ -749,6 +749,7 @@ class CentralWidget(QWidget):
             self.table.setItem(row_idx, 2, root_item)
             truncated_path = self._truncate_path_by_width(row_data['path'], path_column_width)
             path_item = QTableWidgetItem(truncated_path)
+            path_item.setData(Qt.UserRole, row_data['path'])
             path_item.setToolTip(tooltip)
             self.table.setItem(row_idx, 3, path_item)
             combo = NoWheelComboBox(self.table)
@@ -772,10 +773,25 @@ class CentralWidget(QWidget):
         else:
             if self._empty_table_timer.isActive():
                 self._empty_table_timer.stop()
+        
+        # Trigger path update timer to fix truncation after render
+        if self.table.rowCount() > 0:
+            self._path_update_timer.start()
 
     def _on_empty_table_timeout(self):
         if self.table.rowCount() == 0:
             self.refresh_table()
+
+    def _update_path_truncation(self):
+        """Update path truncation after table is fully rendered"""
+        path_column_width = self.table.columnWidth(3)
+        for row_idx in range(self.table.rowCount()):
+            path_item = self.table.item(row_idx, 3)
+            if path_item:
+                full_path = path_item.data(Qt.UserRole)
+                if full_path:
+                    truncated_path = self._truncate_path_by_width(full_path, path_column_width)
+                    path_item.setText(truncated_path)
 
     def goto_page(self, value):
         total_rows = self.found_records

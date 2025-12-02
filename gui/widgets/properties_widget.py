@@ -25,14 +25,6 @@ class PropertiesWidget(QDockWidget):
         main_layout.setContentsMargins(8, 8, 8, 8)
         main_layout.setSpacing(0)
 
-        self.image_frame = QFrame(container)
-        self.image_frame.setFixedSize(180, 180)
-        self.image_label = QLabel(self.image_frame)
-        self.image_label.setAlignment(Qt.AlignCenter)
-        self.image_label.setGeometry(0, 0, 180, 180)
-        self.image_label.setText("No Preview")
-        main_layout.addWidget(self.image_frame)
-
         self.scroll_area = QScrollArea(container)
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -45,6 +37,19 @@ class PropertiesWidget(QDockWidget):
         layout = QVBoxLayout(self.scroll_content)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
+
+        self.image_frame = QFrame(self.scroll_content)
+        self.image_frame.setFixedWidth(224)
+        self.image_frame.setMinimumHeight(100)
+        frame_layout = QVBoxLayout(self.image_frame)
+        frame_layout.setContentsMargins(0, 0, 0, 0)
+        self.image_label = QLabel(self.image_frame)
+        self.image_label.setAlignment(Qt.AlignCenter)
+        self.image_label.setMinimumSize(224, 100)
+        self.image_label.setScaledContents(False)
+        self.image_label.setText("No Preview")
+        frame_layout.addWidget(self.image_label)
+        layout.addWidget(self.image_frame)
 
         # Spinner for image navigation
         self.image_nav_widget = QWidget(self.scroll_content)
@@ -184,7 +189,7 @@ class PropertiesWidget(QDockWidget):
         layout.addStretch()
         container.setLayout(main_layout)
         self.setWidget(container)
-        self.setFixedWidth(200)
+        self.setFixedWidth(240)
 
         self.supported_formats = ['.png', '.jpg', '.jpeg', '.bmp', '.gif', '.tiff', '.webp', '.tif']
 
@@ -683,8 +688,10 @@ class PropertiesWidget(QDockWidget):
         try:
             pixmap = QPixmap(image_path)
             if not pixmap.isNull():
-                scaled_pixmap = pixmap.scaled(178, 178, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                scaled_pixmap = pixmap.scaledToWidth(224, Qt.SmoothTransformation)
                 self.image_label.setPixmap(scaled_pixmap)
+                self.image_label.setFixedSize(scaled_pixmap.size())
+                self.image_frame.setFixedHeight(scaled_pixmap.height())
                 self.image_label.setText("")
                 tooltip_pixmap = pixmap.scaled(400, 400, Qt.KeepAspectRatio, Qt.SmoothTransformation)
                 self._tooltip_pixmap = tooltip_pixmap
@@ -697,6 +704,8 @@ class PropertiesWidget(QDockWidget):
     def set_no_preview(self):
         self.image_label.clear()
         self.image_label.setText("No Preview")
+        self.image_label.setFixedSize(224, 100)
+        self.image_frame.setFixedHeight(100)
         self._tooltip_pixmap = None
         self._tooltip_image_label.hide()
         self._hide_image_nav_widget()
