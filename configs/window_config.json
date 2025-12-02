@@ -65,5 +65,9 @@
         "author": "Desainia Studio",
         "license": "MIT",
         "year": "2025"
+    },
+    "batch_management": {
+        "hide_finished": true,
+        "hide_hold": true
     }
 }

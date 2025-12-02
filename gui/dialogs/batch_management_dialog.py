@@ -8,6 +8,8 @@ from PySide6.QtCore import Qt, QDateTime, QTimer, QThread, Signal, QObject, QUrl
 import qtawesome as qta
 from datetime import datetime, timedelta
 import logging
+import os
+import json
 
 class SyncDriveWorker(QObject):
     finished = Signal()
@@ -215,6 +217,11 @@ class BatchManagementDialog(QDialog):
         pagination_layout.addWidget(self.batch_globe_btn)
 
         layout.addLayout(pagination_layout)
+        # Load persisted checkbox states (hide finished / hide hold)
+        try:
+            self.load_checkbox_states()
+        except Exception:
+            pass
 
         stats_layout = QHBoxLayout()
         self.stats_total_files_label = QLabel("Total Files: 0")
@@ -275,6 +282,53 @@ class BatchManagementDialog(QDialog):
         self.hide_finished_checkbox.stateChanged.connect(self.on_hide_finished_changed)
         self.hide_hold_checkbox.stateChanged.connect(self.on_hide_hold_changed)
         self.batch_sync_drive_btn.clicked.connect(self.on_sync_drive_clicked)
+
+    def _get_window_config_path(self):
+        # Resolve path to configs/window_config.json relative to project root
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+        return os.path.join(base_dir, 'configs', 'window_config.json')
+
+    def load_checkbox_states(self):
+        path = self._get_window_config_path()
+        if not os.path.exists(path):
+            return
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                cfg = json.load(f)
+        except Exception as e:
+            print(f"Failed to read config: {e}")
+            return
+
+        bm = cfg.get('batch_management', {})
+        hide_finished = bm.get('hide_finished')
+        hide_hold = bm.get('hide_hold')
+
+        if isinstance(hide_finished, bool):
+            self.hide_finished_checkbox.setChecked(hide_finished)
+        if isinstance(hide_hold, bool):
+            self.hide_hold_checkbox.setChecked(hide_hold)
+
+    def save_checkbox_states(self):
+        path = self._get_window_config_path()
+        cfg = {}
+        try:
+            if os.path.exists(path):
+                with open(path, 'r', encoding='utf-8') as f:
+                    cfg = json.load(f)
+        except Exception as e:
+            print(f"Failed to read existing config before saving: {e}")
+
+        if 'batch_management' not in cfg:
+            cfg['batch_management'] = {}
+
+        cfg['batch_management']['hide_finished'] = bool(self.hide_finished_checkbox.isChecked())
+        cfg['batch_management']['hide_hold'] = bool(self.hide_hold_checkbox.isChecked())
+
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(cfg, f, indent=4, ensure_ascii=False)
+        except Exception as e:
+            print(f"Failed to write config: {e}")
 
     def on_open_batch_queue_sheet(self):
         spreadsheet_id = getattr(self, "_batch_queue_spreadsheet_id", None)
@@ -518,9 +572,17 @@ class BatchManagementDialog(QDialog):
 
     def on_hide_finished_changed(self, state):
         self.update_batch_table()
+        try:
+            self.save_checkbox_states()
+        except Exception:
+            pass
 
     def on_hide_hold_changed(self, state):
         self.update_batch_table()
+        try:
+            self.save_checkbox_states()
+        except Exception:
+            pass
 
     def get_selected_row_data(self):
         row = self.batch_table.currentRow()
