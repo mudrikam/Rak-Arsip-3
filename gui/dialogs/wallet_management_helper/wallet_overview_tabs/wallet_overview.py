@@ -46,7 +46,6 @@ class WalletOverviewTab(QWidget):
         
         scroll_widget = QWidget()
         scroll_layout = QVBoxLayout(scroll_widget)
-        scroll_layout.setSpacing(8)
         scroll_layout.setContentsMargins(0, 0, 0, 0)
         
         self.cards_widget = WalletOverviewCards()

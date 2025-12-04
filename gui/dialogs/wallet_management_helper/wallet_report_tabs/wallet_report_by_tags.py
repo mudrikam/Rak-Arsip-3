@@ -408,7 +408,7 @@ class WalletReportByTagsTab(QWidget):
             amount_item.setData(Qt.UserRole, total_amount)
             self.table.setItem(row_idx, 5, amount_item)
             
-            self.table.setItem(row_idx, 6, QTableWidgetItem(transaction.get('currency_code', '')))
+            self.table.setItem(row_idx, 6, QTableWidgetItem(transaction.get('currency_symbol', 'Rp')))
         
         self.table.setSortingEnabled(True)
         
@@ -513,15 +513,17 @@ class WalletReportByTagsTab(QWidget):
                     transaction.get('pocket_name', ''),
                     transaction.get('category_name', ''),
                     f"{total_amount:,.2f}",
-                    transaction.get('currency_code', '')
+                    transaction.get('currency_symbol', 'Rp')
                 ])
             
             WalletReportExporter.export_to_pdf(
+                data, headers,
                 f"Transactions by Tag: {self.selected_tag}",
-                headers, data,
-                f"transactions_by_tag_{self.selected_tag}",
+                None,
+                None,
                 self
             )
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to export PDF: {str(e)}")
+
 

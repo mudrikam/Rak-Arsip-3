@@ -389,7 +389,7 @@ class PDFPreviewDialog(QDialog):
         self.pdf_path = pdf_path
         self.title = title
         self.should_save = False
-        self.zoom_level = 1.0  # Default zoom level
+        self.zoom_level = 1.2  # Default zoom level 120%
         self.page_labels = []  # Store page labels for re-rendering
         self.init_ui()
     
@@ -461,7 +461,14 @@ class PDFPreviewDialog(QDialog):
         
         self.preview_layout.addStretch()
         self.scroll_area.setWidget(self.preview_widget)
+        
+        # Install event filter for Ctrl+Scroll zoom
+        self.scroll_area.viewport().installEventFilter(self)
+        
         layout.addWidget(self.scroll_area, 1)
+        
+        # Install event filter for Ctrl+Scroll zoom
+        self.scroll_area.viewport().installEventFilter(self)
         
         # Buttons
         button_box = QHBoxLayout()
@@ -555,12 +562,71 @@ class PDFPreviewDialog(QDialog):
         self.zoom_label_value.setText(f"{int(self.zoom_level * 100)}%")
         self.load_pdf_preview()
     
+    def eventFilter(self, obj, event):
+        """Handle Ctrl+Scroll for zoom in/out"""
+        if obj == self.scroll_area.viewport():
+            from PySide6.QtCore import QEvent
+            if event.type() == QEvent.Wheel:
+                if event.modifiers() & Qt.ControlModifier:
+                    # Ctrl is pressed, handle zoom
+                    delta = event.angleDelta().y()
+                    if delta > 0:
+                        self.zoom_in()
+                    else:
+                        self.zoom_out()
+                    return True  # Event handled
+        return super().eventFilter(obj, event)
+    
     def accept_and_save(self):
         self.should_save = True
         self.accept()
 
 
 class WalletReportExporter:
+    
+    @staticmethod
+    def merge_currency_amount(data, headers):
+        """Merge Currency and Amount columns into one.
+        
+        Returns tuple of (merged_data, merged_headers)
+        """
+        # Find indices of Amount and Currency columns
+        amount_idx = -1
+        currency_idx = -1
+        for idx, header in enumerate(headers):
+            if 'amount' in header.lower():
+                amount_idx = idx
+            elif 'currency' in header.lower():
+                currency_idx = idx
+        
+        # If both columns exist, merge them
+        merged_headers = list(headers)
+        merged_data = []
+        
+        if amount_idx >= 0 and currency_idx >= 0:
+            # Create new headers without Currency column
+            merged_headers.pop(max(amount_idx, currency_idx))
+            merged_headers.pop(min(amount_idx, currency_idx))
+            merged_headers.insert(min(amount_idx, currency_idx), 'Amount')
+            
+            # Merge data rows
+            for row in data:
+                new_row = list(row)
+                amount_val = row[amount_idx] if amount_idx < len(row) else ''
+                currency_val = row[currency_idx] if currency_idx < len(row) else ''
+                
+                # Combine currency and amount
+                merged_value = f"{currency_val} {amount_val}".strip()
+                
+                # Remove both columns and insert merged value
+                new_row.pop(max(amount_idx, currency_idx))
+                new_row.pop(min(amount_idx, currency_idx))
+                new_row.insert(min(amount_idx, currency_idx), merged_value)
+                merged_data.append(new_row)
+        else:
+            merged_data = data
+        
+        return merged_data, merged_headers
     
     @staticmethod
     def export_to_csv(data, headers, filters=None, filename=None, parent=None):
@@ -610,6 +676,9 @@ class WalletReportExporter:
         """Export data to PDF file in user's home directory with detailed header and preview"""
         from pathlib import Path
         
+        # Merge currency and amount columns before generating PDF
+        merged_data, merged_headers = WalletReportExporter.merge_currency_amount(data, headers)
+        
         # Generate PDF to temporary file first for preview
         temp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
         temp_pdf_path = temp_pdf.name
@@ -617,7 +686,7 @@ class WalletReportExporter:
         # Generate temporary PDF for preview
         try:
             WalletReportExporter._generate_pdf_content(
-                temp_pdf_path, data, headers, title, filters
+                temp_pdf_path, merged_data, merged_headers, title, filters
             )
         except Exception as e:
             print(f"Error generating preview PDF: {e}")
@@ -846,17 +915,28 @@ class WalletReportExporter:
             
             # Set column widths based on number of columns
             num_cols = len(headers)
-            if num_cols == 9:  # Date, Name, Type, Pocket, Category, Card, Location, Tags, Amount
+            if num_cols == 9:  # Date, Name, Type, Pocket, Category, Card, Location, Amount, Status
                 col_widths = [
                     0.7*inch,   # Date
-                    2.0*inch,   # Name (wider for long transaction names)
+                    2.2*inch,   # Name (wider for long transaction names)
                     0.6*inch,   # Type
                     0.9*inch,   # Pocket
                     0.9*inch,   # Category
-                    0.6*inch,   # Card
+                    0.7*inch,   # Card
                     0.9*inch,   # Location
-                    0.7*inch,   # Tags
-                    0.8*inch    # Amount (ensure visible)
+                    1.0*inch,   # Amount (with currency, needs more space)
+                    0.7*inch    # Status
+                ]
+            elif num_cols == 8:  # Without one column
+                col_widths = [
+                    0.7*inch,   # Date
+                    2.3*inch,   # Name
+                    0.6*inch,   # Type
+                    0.9*inch,   # Pocket
+                    0.9*inch,   # Category
+                    0.7*inch,   # Card
+                    0.9*inch,   # Location
+                    1.0*inch    # Amount (with currency)
                 ]
             else:
                 # Auto-distribute widths for other column counts
