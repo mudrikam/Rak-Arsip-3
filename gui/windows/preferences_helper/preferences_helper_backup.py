@@ -19,51 +19,66 @@ class PreferencesBackupHelper:
         self.db_manager = db_manager
         
     def create_backup_tab(self):
-        """Create and return the Backup/Restore tab widget"""
         tab = QWidget()
         layout = QVBoxLayout(tab)
         
-        backup_group = QGroupBox("Database Backup")
-        backup_layout = QVBoxLayout(backup_group)
+        csv_group = QGroupBox("CSV Backup and Restore")
+        csv_layout = QHBoxLayout(csv_group)
         
-        backup_info = QLabel("Export all database data to CSV files for backup purposes.")
-        backup_info.setWordWrap(True)
-        backup_layout.addWidget(backup_info)
-        
+        export_section = QVBoxLayout()
+        export_label = QLabel("Export to CSV")
+        export_label.setStyleSheet("font-weight: bold;")
+        export_section.addWidget(export_label)
+        export_info = QLabel("Export all database data to CSV file for backup purposes.")
+        export_info.setWordWrap(True)
+        export_info.setMinimumHeight(40)
+        export_section.addWidget(export_info)
         self.parent.backup_btn = QPushButton("Export Database to CSV")
-        self.parent.backup_btn.setIcon(qta.icon("fa6s.download"))
-        backup_layout.addWidget(self.parent.backup_btn)
+        self.parent.backup_btn.setIcon(qta.icon("fa6s.file-export"))
+        export_section.addWidget(self.parent.backup_btn)
+        export_section.addStretch()
+        
+        import_section = QVBoxLayout()
+        import_label = QLabel("Import from CSV")
+        import_label.setStyleSheet("font-weight: bold;")
+        import_section.addWidget(import_label)
+        import_info = QLabel("Import CSV files exported by this application to restore database data.")
+        import_info.setWordWrap(True)
+        import_info.setMinimumHeight(40)
+        import_section.addWidget(import_info)
+        self.parent.restore_btn = QPushButton("Import Database from CSV")
+        self.parent.restore_btn.setIcon(qta.icon("fa6s.file-import"))
+        import_section.addWidget(self.parent.restore_btn)
+        import_section.addStretch()
+        
+        csv_layout.addLayout(export_section, 1)
+        csv_layout.addLayout(import_section, 1)
+        
+        db_backup_group = QGroupBox("Database File Backup")
+        db_backup_layout = QVBoxLayout(db_backup_group)
+        
+        db_backup_info = QLabel("Create a complete database file backup (.db file).")
+        db_backup_info.setWordWrap(True)
+        db_backup_layout.addWidget(db_backup_info)
 
         self.parent.backup_db_btn = QPushButton("Backup Database Now")
         self.parent.backup_db_btn.setIcon(qta.icon("fa6s.database"))
         self.parent.backup_db_btn.clicked.connect(self.backup_database_now)
-        backup_layout.addWidget(self.parent.backup_db_btn)
+        db_backup_layout.addWidget(self.parent.backup_db_btn)
 
         self.parent.db_backup_list_label = QLabel("Database Backups (last 7 days):")
-        backup_layout.addWidget(self.parent.db_backup_list_label)
+        db_backup_layout.addWidget(self.parent.db_backup_list_label)
         self.parent.db_backup_list_widget = QListWidget()
         self.parent.db_backup_list_widget.setSelectionMode(QAbstractItemView.NoSelection)
-        backup_layout.addWidget(self.parent.db_backup_list_widget)
+        db_backup_layout.addWidget(self.parent.db_backup_list_widget)
         self.parent.db_backup_list_widget.setMinimumHeight(180)
         self.parent.db_backup_list_widget.setMaximumHeight(220)
         self.parent.db_backup_list_widget.setAlternatingRowColors(True)
-
-        restore_group = QGroupBox("Database Restore")
-        restore_layout = QVBoxLayout(restore_group)
         
-        restore_info = QLabel("Import CSV files exported by this application to restore database data.")
-        restore_info.setWordWrap(True)
-        restore_layout.addWidget(restore_info)
-        
-        self.parent.restore_btn = QPushButton("Import Database from CSV")
-        self.parent.restore_btn.setIcon(qta.icon("fa6s.upload"))
-        restore_layout.addWidget(self.parent.restore_btn)
-        
-        layout.addWidget(backup_group)
-        layout.addWidget(restore_group)
+        layout.addWidget(csv_group)
+        layout.addWidget(db_backup_group)
         layout.addStretch()
         
-        # Connect signals
         self.parent.backup_btn.clicked.connect(self.backup_database)
         self.parent.restore_btn.clicked.connect(self.restore_database)
         
@@ -150,7 +165,6 @@ class PreferencesBackupHelper:
             QMessageBox.critical(self.parent, "Error", "Failed to create database backup.")
 
     def backup_database(self):
-        """Export database to CSV file"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         default_filename = f"Rak_Arsip_Database_Backup_{timestamp}.csv"
         filename, _ = QFileDialog.getSaveFileName(
@@ -168,28 +182,17 @@ class PreferencesBackupHelper:
             progress_dialog.setLayout(vbox)
             self.parent.progress_bar = progress_bar
 
-            # Count total rows for progress
             total_rows = 0
             self.db_manager.connect()
             cursor = self.db_manager.connection.cursor()
-            table_queries = [
-                "SELECT COUNT(*) FROM categories",
-                "SELECT COUNT(*) FROM subcategories",
-                "SELECT COUNT(*) FROM statuses",
-                "SELECT COUNT(*) FROM templates",
-                "SELECT COUNT(*) FROM files",
-                "SELECT COUNT(*) FROM teams",
-                "SELECT COUNT(*) FROM attendance",
-                "SELECT COUNT(*) FROM item_price",
-                "SELECT COUNT(*) FROM earnings",
-                "SELECT COUNT(*) FROM client",
-                "SELECT COUNT(*) FROM file_client_price",
-                "SELECT COUNT(*) FROM batch_list",
-                "SELECT COUNT(*) FROM file_client_batch"
-            ]
-            for query in table_queries:
-                cursor.execute(query)
+            
+            backup_helper = self.db_manager.backup_helper
+            tables = backup_helper.get_all_user_tables()
+            
+            for table_name in tables:
+                cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
                 total_rows += cursor.fetchone()[0]
+            
             self.db_manager.close()
 
             progress_bar.setMinimum(0)

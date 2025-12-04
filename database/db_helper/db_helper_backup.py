@@ -145,6 +145,39 @@ class DatabaseBackupHelper:
             except:
                 pass
 
+    def create_migration_backup(self, migration_name):
+        backup_dir = os.path.join(os.path.dirname(self.db_manager.db_path), "db_backups")
+        os.makedirs(backup_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_filename = f"migration_backup_{timestamp}_{migration_name.replace('.sql', '')}.db"
+        backup_path = os.path.join(backup_dir, backup_filename)
+        
+        try:
+            self.db_manager.close()
+            src = self.db_manager.db_path
+            if os.path.exists(src):
+                shutil.copyfile(src, backup_path)
+                print(f"[BACKUP] Migration backup created: {backup_filename}")
+            return backup_path
+        except Exception as e:
+            print(f"[BACKUP] Error creating migration backup: {e}")
+            return None
+
+    def restore_backup(self, backup_path):
+        try:
+            self.db_manager.close()
+            if os.path.exists(backup_path):
+                shutil.copyfile(backup_path, self.db_manager.db_path)
+                print(f"[BACKUP] Database restored from: {backup_path}")
+                return True
+            else:
+                print(f"[BACKUP] Backup file not found: {backup_path}")
+                return False
+        except Exception as e:
+            print(f"[BACKUP] Error restoring backup: {e}")
+            return False
+
+
     def cleanup_old_backups(self, backup_dir):
         """Clean up old backup files, keeping only the latest 6."""
         backups = []
@@ -161,8 +194,25 @@ class DatabaseBackupHelper:
             except Exception as e:
                 print(f"Error removing old backup: {e}")
 
+    def get_all_user_tables(self):
+        cursor = self.db_manager.connection.cursor()
+        cursor.execute("""
+            SELECT name FROM sqlite_master 
+            WHERE type='table' 
+            AND name NOT LIKE 'sqlite_%' 
+            AND name != 'schema_migrations'
+            ORDER BY name
+        """)
+        tables = [row[0] for row in cursor.fetchall()]
+        return tables
+    
+    def get_table_columns(self, table_name):
+        cursor = self.db_manager.connection.cursor()
+        cursor.execute(f"PRAGMA table_info({table_name})")
+        columns = [row[1] for row in cursor.fetchall()]
+        return columns
+
     def import_from_csv(self, csv_path, progress_callback=None):
-        """Import data from CSV file."""
         conn = sqlite3.connect(self.db_manager.db_path, isolation_level=None)
         conn.row_factory = sqlite3.Row
         try:
@@ -187,73 +237,16 @@ class DatabaseBackupHelper:
                         headers = row
                         continue
                     
-                    cursor = conn.cursor()
-                    # Process different table types
-                    if current_table == "categories" and len(row) >= 2:
+                    if current_table and headers:
+                        cursor = conn.cursor()
                         try:
-                            cursor.execute("REPLACE INTO categories (id, name) VALUES (?, ?)", (row[0], row[1]))
+                            placeholders = ', '.join(['?'] * len(headers))
+                            columns_str = ', '.join(headers)
+                            sql = f"REPLACE INTO {current_table} ({columns_str}) VALUES ({placeholders})"
+                            values = [val if val != '' else None for val in row[:len(headers)]]
+                            cursor.execute(sql, values)
                         except Exception as e:
-                            print(f"Error importing category: {e}")
-                    elif current_table == "subcategories" and len(row) >= 3:
-                        try:
-                            cursor.execute("REPLACE INTO subcategories (id, category_id, name) VALUES (?, ?, ?)", (row[0], row[1], row[2]))
-                        except Exception as e:
-                            print(f"Error importing subcategory: {e}")
-                    elif current_table == "statuses" and len(row) >= 4:
-                        try:
-                            cursor.execute("REPLACE INTO statuses (id, name, color, font_weight) VALUES (?, ?, ?, ?)", (row[0], row[1], row[2], row[3]))
-                        except Exception as e:
-                            print(f"Error importing status: {e}")
-                    elif current_table == "templates" and len(row) >= 5:
-                        try:
-                            cursor.execute("REPLACE INTO templates (id, name, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)", (row[0], row[1], row[2], row[3], row[4]))
-                        except Exception as e:
-                            print(f"Error importing template: {e}")
-                    elif current_table == "files" and len(row) >= 11:
-                        try:
-                            cursor.execute("REPLACE INTO files (id, date, name, root, path, status_id, category_id, subcategory_id, template_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10]))
-                        except Exception as e:
-                            print(f"Error importing file: {e}")
-                    elif current_table == "teams" and len(row) >= 15:
-                        try:
-                            cursor.execute("REPLACE INTO teams (id, username, full_name, contact, address, email, phone, attendance_pin, profile_image, bank, account_number, account_holder, started_at, added_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11], row[12], row[13], row[14]))
-                        except Exception as e:
-                            print(f"Error importing team: {e}")
-                    elif current_table == "attendance" and len(row) >= 6:
-                        try:
-                            cursor.execute("REPLACE INTO attendance (id, team_id, date, check_in, check_out, note) VALUES (?, ?, ?, ?, ?, ?)", (row[0], row[1], row[2], row[3], row[4], row[5]))
-                        except Exception as e:
-                            print(f"Error importing attendance: {e}")
-                    elif current_table == "item_price" and len(row) >= 7:
-                        try:
-                            cursor.execute("REPLACE INTO item_price (id, file_id, price, currency, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)", (row[0], row[1], row[2], row[3], row[4], row[5], row[6]))
-                        except Exception as e:
-                            print(f"Error importing item_price: {e}")
-                    elif current_table == "earnings" and len(row) >= 7:
-                        try:
-                            cursor.execute("REPLACE INTO earnings (id, team_id, item_price_id, amount, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)", (row[0], row[1], row[2], row[3], row[4], row[5], row[6]))
-                        except Exception as e:
-                            print(f"Error importing earnings: {e}")
-                    elif current_table == "client" and len(row) >= 8:
-                        try:
-                            cursor.execute("REPLACE INTO client (id, client_name, contact, links, status, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7]))
-                        except Exception as e:
-                            print(f"Error importing client: {e}")
-                    elif current_table == "file_client_price" and len(row) >= 6:
-                        try:
-                            cursor.execute("REPLACE INTO file_client_price (id, file_id, item_price_id, client_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)", (row[0], row[1], row[2], row[3], row[4], row[5]))
-                        except Exception as e:
-                            print(f"Error importing file_client_price: {e}")
-                    elif current_table == "batch_list" and len(row) >= 6:
-                        try:
-                            cursor.execute("REPLACE INTO batch_list (id, batch_number, client_id, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)", (row[0], row[1], row[2], row[3], row[4], row[5]))
-                        except Exception as e:
-                            print(f"Error importing batch_list: {e}")
-                    elif current_table == "file_client_batch" and len(row) >= 7:
-                        try:
-                            cursor.execute("REPLACE INTO file_client_batch (id, batch_number, client_id, file_id, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)", (row[0], row[1], row[2], row[3], row[4], row[5], row[6]))
-                        except Exception as e:
-                            print(f"Error importing file_client_batch: {e}")
+                            print(f"[CSV IMPORT] Error importing row in table {current_table}: {e}")
                     
                     processed += 1
                     if progress_callback and (processed % 10 == 0 or processed == total_rows):
@@ -275,41 +268,29 @@ class DatabaseBackupHelper:
                     print(f"Error removing {f}: {e}")
 
     def export_to_csv(self, csv_path, progress_callback=None):
-        """Export data to CSV file."""
         self.db_manager.connect()
         try:
             with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
                 writer = csv.writer(csvfile)
                 cursor = self.db_manager.connection.cursor()
                 
-                tables = [
-                    ("categories", "SELECT id, name FROM categories"),
-                    ("subcategories", "SELECT id, category_id, name FROM subcategories"),
-                    ("statuses", "SELECT id, name, color, font_weight FROM statuses"),
-                    ("templates", "SELECT id, name, content, created_at, updated_at FROM templates"),
-                    ("files", "SELECT id, date, name, root, path, status_id, category_id, subcategory_id, template_id, created_at, updated_at FROM files"),
-                    ("teams", "SELECT id, username, full_name, contact, address, email, phone, attendance_pin, profile_image, bank, account_number, account_holder, started_at, added_at, updated_at FROM teams"),
-                    ("attendance", "SELECT id, team_id, date, check_in, check_out, note FROM attendance"),
-                    ("item_price", "SELECT id, file_id, price, currency, note, created_at, updated_at FROM item_price"),
-                    ("earnings", "SELECT id, team_id, item_price_id, amount, note, created_at, updated_at FROM earnings"),
-                    ("client", "SELECT id, client_name, contact, links, status, note, created_at, updated_at FROM client"),
-                    ("file_client_price", "SELECT id, file_id, item_price_id, client_id, created_at, updated_at FROM file_client_price"),
-                    ("batch_list", "SELECT id, batch_number, client_id, note, created_at, updated_at FROM batch_list"),
-                    ("file_client_batch", "SELECT id, batch_number, client_id, file_id, note, created_at, updated_at FROM file_client_batch")
-                ]
+                tables = self.get_all_user_tables()
                 
                 processed = 0
                 total_rows = 0
-                for table_name, query in tables:
-                    cursor.execute(query)
-                    total_rows += len(cursor.fetchall())
+                for table_name in tables:
+                    cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+                    total_rows += cursor.fetchone()[0]
                 
-                cursor = self.db_manager.connection.cursor()
-                for table_name, query in tables:
+                for table_name in tables:
                     writer.writerow(["TABLE", table_name])
-                    cursor.execute(query)
-                    columns = [desc[0] for desc in cursor.description]
+                    
+                    columns = self.get_table_columns(table_name)
+                    columns_str = ', '.join(columns)
+                    
+                    cursor.execute(f"SELECT {columns_str} FROM {table_name}")
                     writer.writerow(columns)
+                    
                     rows = cursor.fetchall()
                     for row in rows:
                         writer.writerow([row[col] for col in columns])

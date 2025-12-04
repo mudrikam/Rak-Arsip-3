@@ -12,7 +12,6 @@ class DatabaseConnectionHelper(QObject):
         self.db_manager = db_manager
 
     def ensure_database_exists(self):
-        """Ensure database and required directories exist."""
         db_dir = os.path.dirname(self.db_manager.db_path)
         if db_dir and not os.path.exists(db_dir):
             os.makedirs(db_dir)
@@ -20,11 +19,9 @@ class DatabaseConnectionHelper(QObject):
         if not os.path.exists(self.db_manager.temp_dir):
             os.makedirs(self.db_manager.temp_dir)
         if self.db_manager.db_config.get("create_if_not_exists"):
-            db_exists = os.path.exists(self.db_manager.db_path)
-            if not db_exists:
-                print(f"[DB] Creating new database: {self.db_manager.db_path}")
+            migration_helper = self.db_manager.migration_helper
+            migration_helper.initialize_database()
             self.db_manager.connect()
-            self.create_tables()
             self.initialize_statuses()
             self.db_manager.close()
 
@@ -123,72 +120,12 @@ class DatabaseConnectionHelper(QObject):
                     raise
 
     def close(self):
-        """Close database connection and cleanup."""
         if self.db_manager.connection:
             self.db_manager.connection.close()
             self.db_manager.connection = None
             self.cleanup_wal_shm_files()
 
-    def create_tables(self):
-        """Create all database tables based on configuration."""
-        try:
-            self.db_manager.connect()
-            cursor = self.db_manager.connection.cursor()
-            table_count = len(self.db_manager.tables_config)
-            tables_created = []
-            
-            for idx, (table_name, columns) in enumerate(self.db_manager.tables_config.items(), 1):
-                column_defs = []
-                foreign_keys = []
-                for column_name, column_def in columns.items():
-                    if column_name.startswith("FOREIGN KEY"):
-                        foreign_keys.append(f"{column_name} {column_def}")
-                    else:
-                        column_defs.append(f"{column_name} {column_def}")
-                
-                all_defs = column_defs + foreign_keys
-                create_sql = f"CREATE TABLE IF NOT EXISTS {table_name} ({', '.join(all_defs)})"
-                
-                try:
-                    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'")
-                    table_exists = cursor.fetchone() is not None
-                    cursor.execute(create_sql)
-                    if not table_exists:
-                        tables_created.append({
-                            'name': table_name,
-                            'columns': [col for col in column_defs],
-                            'foreign_keys': [fk for fk in foreign_keys]
-                        })
-                except Exception as e:
-                    print(f"[DB] Error creating table {table_name}: {e}")
-                    print(f"[DB] SQL: {create_sql}")
-                    raise
-            
-            self.db_manager.connection.commit()
-            if tables_created:
-                print(f"\n[DB] Database initialized: {len(tables_created)} new tables created")
-                print(f"[DB] Database path: {self.db_manager.db_path}")
-                print(f"[DB] Database type: {self.db_manager.db_config.get('type', 'sqlite')}")
-                print(f"\n[DB] Tables created:")
-                for table_info in tables_created:
-                    print(f"  • {table_info['name']}")
-                    print(f"    Fields: {len(table_info['columns'])}")
-                    for col in table_info['columns']:
-                        col_name = col.split()[0]
-                        print(f"      - {col_name}")
-                    if table_info['foreign_keys']:
-                        print(f"    Foreign Keys: {len(table_info['foreign_keys'])}")
-                        for fk in table_info['foreign_keys']:
-                            print(f"      - {fk}")
-                print()
-        except Exception as e:
-            print(f"[DB] CRITICAL ERROR in create_tables: {e}")
-            raise
-        finally:
-            self.db_manager.close()
-
     def initialize_statuses(self):
-        """Initialize default status values from configuration."""
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute("SELECT COUNT(*) FROM statuses")
