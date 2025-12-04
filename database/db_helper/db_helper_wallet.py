@@ -1737,8 +1737,8 @@ class DatabaseWalletHelper:
             summary['total_transfer'] = float(transfer_row[0] or 0)
             summary['total_transfer_out'] = float(transfer_row[0] or 0)
         
-        # Adjusted income = income - transfer OUT (showing remaining income after transfers)
-        summary['adjusted_income'] = summary['total_income'] - summary['total_transfer_out']
+        # Available income = income - transfer - expense (showing actual remaining money)
+        summary['adjusted_income'] = summary['total_income'] - summary['total_transfer_out'] - summary['total_expense']
         summary['net_balance'] = summary['total_income'] - summary['total_expense']
         
         # Get pocket balances

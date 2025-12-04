@@ -241,7 +241,7 @@ class WalletReportExportTab(QWidget):
                 self.table.setItem(row, 8, QTableWidgetItem(str(symbol)))
                 self.table.setItem(row, 9, QTableWidgetItem(str(status_name)))
             
-            adjusted_income = total_income - total_transfer
+            adjusted_income = total_income - total_transfer - total_expense
             self.update_card_amount(self.income_card, f"{currency_symbol} {adjusted_income:,.2f}")
             self.update_card_amount(self.expense_card, f"{currency_symbol} {total_expense:,.2f}")
             self.update_card_amount(self.transfer_card, f"{currency_symbol} {total_transfer:,.2f}")
