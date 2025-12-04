@@ -18,7 +18,7 @@ class WalletOverviewCards(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         
         self.income_card = self.create_summary_card(
-            "Total Income", "Rp 0", "#28a745", "fa6s.arrow-trend-up", "report"
+            "Available Income", "Rp 0", "#28a745", "fa6s.arrow-trend-up", "report"
         )
         layout.addWidget(self.income_card, 0, 0)
         
@@ -27,15 +27,15 @@ class WalletOverviewCards(QWidget):
         )
         layout.addWidget(self.expense_card, 0, 1)
         
-        self.transfer_card = self.create_summary_card(
-            "Total Transfer", "Rp 0", "#17a2b8", "fa6s.right-left", "report"
-        )
-        layout.addWidget(self.transfer_card, 0, 2)
-        
         self.balance_card = self.create_summary_card(
             "Net Balance", "Rp 0", "#6c757d", "fa6s.scale-balanced", "report"
         )
-        layout.addWidget(self.balance_card, 0, 3)
+        layout.addWidget(self.balance_card, 0, 2)
+        
+        self.transfer_card = self.create_summary_card(
+            "Transfer Activity", "Rp 0", "#17a2b8", "fa6s.right-left", "report"
+        )
+        layout.addWidget(self.transfer_card, 0, 3)
     
     def create_summary_card(self, title, amount, bg_color, icon_name, card_type):
         """Create a summary card with icon and amount"""
@@ -95,12 +95,12 @@ class WalletOverviewCards(QWidget):
             }}
         """)
     
-    def update_data(self, income, expense, transfer, balance, currency="Rp"):
+    def update_data(self, income, expense, balance, transfer, currency="Rp"):
         """Update all card amounts"""
         self.update_card_amount(self.income_card, f"{currency} {income:,.2f}")
         self.update_card_amount(self.expense_card, f"{currency} {expense:,.2f}")
-        self.update_card_amount(self.transfer_card, f"{currency} {transfer:,.2f}")
         self.update_card_amount(self.balance_card, f"{currency} {balance:,.2f}")
+        self.update_card_amount(self.transfer_card, f"{currency} {transfer:,.2f}")
     
     def update_card_amount(self, card, amount):
         """Update amount in a card"""

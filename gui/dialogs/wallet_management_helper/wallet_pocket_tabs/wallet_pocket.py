@@ -69,7 +69,6 @@ class WalletPocketTab(QWidget):
 		main_layout = QVBoxLayout()
 		main_layout.setContentsMargins(0, 0, 0, 0)
 
-		# consistent page header (actions belong inside individual tabs)
 		header = WalletHeader("Pockets & Cards", "Manage pockets and associated cards")
 		main_layout.addWidget(header)
 		

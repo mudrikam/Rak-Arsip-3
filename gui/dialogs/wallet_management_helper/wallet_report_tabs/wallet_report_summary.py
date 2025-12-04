@@ -5,6 +5,7 @@ from PySide6.QtGui import QColor
 import qtawesome as qta
 from .wallet_report_actions import (WalletReportFilter, WalletReportActions, 
                                    WalletReportExporter, WalletReportPagination)
+from ..wallet_signal_manager import WalletSignalManager
 
 
 class WalletReportSummaryTab(QWidget):
@@ -16,7 +17,20 @@ class WalletReportSummaryTab(QWidget):
         self.current_page = 1
         self.items_per_page = 50
         self.total_items = 0
+        self.signal_manager = WalletSignalManager.get_instance()
+        self.signal_manager.transaction_changed.connect(self.on_transaction_changed)
+        self.signal_manager.pocket_changed.connect(self.on_data_changed)
+        self.signal_manager.category_changed.connect(self.on_data_changed)
         self.init_ui()
+        self.load_data()
+    
+    def on_transaction_changed(self):
+        """Auto-refresh when transaction data changes."""
+        self.load_data()
+    
+    def on_data_changed(self):
+        """Auto-refresh filter data and report when pocket/category changes."""
+        self.load_filter_data()
         self.load_data()
 
     def init_ui(self):
@@ -38,13 +52,13 @@ class WalletReportSummaryTab(QWidget):
         summary_container.setSpacing(8)
         summary_container.setContentsMargins(0, 0, 0, 0)
         
-        self.income_card = self.create_summary_card("Total Income", "Rp 0", "#28a745", "#ffffff", "fa6s.arrow-trend-up")
+        self.income_card = self.create_summary_card("Available Income", "Rp 0", "#28a745", "#ffffff", "fa6s.arrow-trend-up")
         summary_container.addWidget(self.income_card, 0, 0)
         
         self.expense_card = self.create_summary_card("Total Expense", "Rp 0", "#dc3545", "#ffffff", "fa6s.arrow-trend-down")
         summary_container.addWidget(self.expense_card, 0, 1)
         
-        self.transfer_card = self.create_summary_card("Total Transfer", "Rp 0", "#17a2b8", "#ffffff", "fa6s.right-left")
+        self.transfer_card = self.create_summary_card("Transfer Activity", "Rp 0", "#17a2b8", "#ffffff", "fa6s.right-left")
         summary_container.addWidget(self.transfer_card, 0, 2)
         
         self.balance_card = self.create_summary_card("Net Balance", "Rp 0", "#6c757d", "#ffffff", "fa6s.scale-balanced")
@@ -211,7 +225,8 @@ class WalletReportSummaryTab(QWidget):
                 
                 self.table.setItem(row, 3, QTableWidgetItem(symbol))
             
-            self.update_card_amount(self.income_card, f"{currency_symbol} {total_income:,.2f}")
+            adjusted_income = total_income - total_transfer
+            self.update_card_amount(self.income_card, f"{currency_symbol} {adjusted_income:,.2f}")
             self.update_card_amount(self.expense_card, f"{currency_symbol} {total_expense:,.2f}")
             self.update_card_amount(self.transfer_card, f"{currency_symbol} {total_transfer:,.2f}")
             self.update_card_amount(self.balance_card, f"{currency_symbol} {total_income - total_expense:,.2f}")

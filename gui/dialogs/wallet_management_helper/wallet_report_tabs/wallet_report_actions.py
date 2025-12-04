@@ -514,7 +514,9 @@ class PDFPreviewDialog(QDialog):
                 page_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
                 page_label.setStyleSheet("background-color: white; border: 1px solid #ccc; padding: 10px;")
                 
-                self.preview_layout.insertWidget(self.preview_layout.count() - 1, page_label)
+                # Append pages in correct order (page 1, then page 2, etc.)
+                insert_position = len(self.page_labels)
+                self.preview_layout.insertWidget(insert_position, page_label)
                 self.page_labels.append(page_label)
             
             pdf_doc.close()
@@ -524,7 +526,7 @@ class PDFPreviewDialog(QDialog):
             fallback_label = QLabel("PDF Preview requires PyMuPDF library.\nInstall with: pip install pymupdf")
             fallback_label.setAlignment(Qt.AlignCenter)
             fallback_label.setStyleSheet("color: #666; font-size: 14px; padding: 40px;")
-            self.preview_layout.insertWidget(self.preview_layout.count() - 1, fallback_label)
+            self.preview_layout.insertWidget(0, fallback_label)
             self.page_labels.append(fallback_label)
         except Exception as e:
             error_label = QLabel(f"Error loading PDF preview:\n{str(e)}")
@@ -818,10 +820,49 @@ class WalletReportExporter:
             
             elements.append(Spacer(1, 0.3*inch))
             
-            # Table
-            table_data = [headers] + data
+            # Table with text wrapping
+            # Create paragraph style for table cells
+            cell_style = ParagraphStyle(
+                'CellStyle',
+                parent=styles['Normal'],
+                fontSize=8,
+                leading=10,
+                alignment=TA_LEFT
+            )
             
-            table = Table(table_data, hAlign='LEFT')
+            # Wrap text in Paragraph for automatic line breaks
+            table_data = [headers]
+            for row in data:
+                wrapped_row = []
+                for cell in row:
+                    cell_text = str(cell) if cell is not None else ''
+                    wrapped_row.append(Paragraph(cell_text, cell_style))
+                table_data.append(wrapped_row)
+            
+            # Calculate available width (landscape A4 = 11.69 inches - margins)
+            page_width = landscape(A4)[0]
+            margin = 0.75 * inch
+            available_width = page_width - (2 * margin)
+            
+            # Set column widths based on number of columns
+            num_cols = len(headers)
+            if num_cols == 9:  # Date, Name, Type, Pocket, Category, Card, Location, Tags, Amount
+                col_widths = [
+                    0.7*inch,   # Date
+                    2.0*inch,   # Name (wider for long transaction names)
+                    0.6*inch,   # Type
+                    0.9*inch,   # Pocket
+                    0.9*inch,   # Category
+                    0.6*inch,   # Card
+                    0.9*inch,   # Location
+                    0.7*inch,   # Tags
+                    0.8*inch    # Amount (ensure visible)
+                ]
+            else:
+                # Auto-distribute widths for other column counts
+                col_widths = [available_width / num_cols] * num_cols
+            
+            table = Table(table_data, colWidths=col_widths, hAlign='LEFT')
             table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), orange_color),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -830,12 +871,12 @@ class WalletReportExporter:
                 ('FONTSIZE', (0, 0), (-1, 0), 10),
                 ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
                 ('TOPPADDING', (0, 0), (-1, 0), 12),
+                ('LEFTPADDING', (0, 0), (-1, -1), 6),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 6),
                 ('BACKGROUND', (0, 1), (-1, -1), colors.white),
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-                ('FONTSIZE', (0, 1), (-1, -1), 8),
                 ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#fff5f0')]),
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ]))
             
             elements.append(table)

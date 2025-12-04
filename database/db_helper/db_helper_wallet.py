@@ -1665,6 +1665,8 @@ class DatabaseWalletHelper:
             'total_income': 0.0,
             'total_expense': 0.0,
             'total_transfer': 0.0,
+            'total_transfer_out': 0.0,
+            'adjusted_income': 0.0,
             'net_balance': 0.0,
             'pocket_balances': [],
             'recent_transactions': [],
@@ -1686,34 +1688,57 @@ class DatabaseWalletHelper:
         cursor.execute("SELECT COUNT(*) as count FROM wallet_transactions")
         summary['total_transactions'] = cursor.fetchone()['count']
         
-        # Get income, expense, transfer totals
+        # Get income total (excluding transfers)
         cursor.execute("""
             SELECT 
-                wt.transaction_type,
                 COALESCE(SUM(wti.amount * wti.quantity), 0) as total,
                 curr.symbol
             FROM wallet_transactions wt
             LEFT JOIN wallet_transaction_items wti ON wt.id = wti.wallet_transaction_id
             LEFT JOIN wallet_currency curr ON wt.currency_id = curr.id
-            GROUP BY wt.transaction_type
+            WHERE wt.transaction_type = 'income'
+            GROUP BY curr.symbol
         """)
+        income_row = cursor.fetchone()
+        if income_row:
+            income_dict = dict(income_row)
+            if income_dict.get('symbol'):
+                summary['currency_symbol'] = income_dict['symbol']
+            summary['total_income'] = float(income_dict.get('total', 0) or 0)
         
-        for row in cursor.fetchall():
-            row_dict = dict(row)
-            if row_dict.get('symbol'):
-                summary['currency_symbol'] = row_dict['symbol']
-            
-            total_value = row_dict.get('total', 0)
-            if total_value is None:
-                total_value = 0.0
-            
-            if row_dict['transaction_type'] == 'income':
-                summary['total_income'] = float(total_value)
-            elif row_dict['transaction_type'] == 'expense':
-                summary['total_expense'] = float(total_value)
-            elif row_dict['transaction_type'] == 'transfer':
-                summary['total_transfer'] = float(total_value)
+        # Get expense total (excluding transfers)
+        cursor.execute("""
+            SELECT 
+                COALESCE(SUM(wti.amount * wti.quantity), 0) as total,
+                curr.symbol
+            FROM wallet_transactions wt
+            LEFT JOIN wallet_transaction_items wti ON wt.id = wti.wallet_transaction_id
+            LEFT JOIN wallet_currency curr ON wt.currency_id = curr.id
+            WHERE wt.transaction_type = 'expense'
+            GROUP BY curr.symbol
+        """)
+        expense_row = cursor.fetchone()
+        if expense_row:
+            expense_dict = dict(expense_row)
+            if expense_dict.get('symbol'):
+                summary['currency_symbol'] = expense_dict['symbol']
+            summary['total_expense'] = float(expense_dict.get('total', 0) or 0)
         
+        # Get transfer OUT total (money leaving pockets)
+        cursor.execute("""
+            SELECT 
+                COALESCE(SUM(wti.amount * wti.quantity), 0) as total
+            FROM wallet_transactions wt
+            LEFT JOIN wallet_transaction_items wti ON wt.id = wti.wallet_transaction_id
+            WHERE wt.transaction_type = 'transfer'
+        """)
+        transfer_row = cursor.fetchone()
+        if transfer_row:
+            summary['total_transfer'] = float(transfer_row[0] or 0)
+            summary['total_transfer_out'] = float(transfer_row[0] or 0)
+        
+        # Adjusted income = income - transfer OUT (showing remaining income after transfers)
+        summary['adjusted_income'] = summary['total_income'] - summary['total_transfer_out']
         summary['net_balance'] = summary['total_income'] - summary['total_expense']
         
         # Get pocket balances

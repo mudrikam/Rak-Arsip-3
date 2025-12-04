@@ -5,20 +5,36 @@ from .wallet_overview_widget_cards import WalletOverviewCards
 from .wallet_overview_widget_stats import WalletOverviewStats
 from .wallet_overview_widget_charts import WalletOverviewCharts
 from .wallet_overview_widget_table import WalletOverviewTable
+from ..wallet_signal_manager import WalletSignalManager
 
 
 class WalletOverviewTab(QWidget):
     def __init__(self, db_manager, parent=None):
         super().__init__(parent)
         self.db_manager = db_manager
-        self.db_manager.data_changed.connect(self.on_data_changed)
+        self.signal_manager = WalletSignalManager.get_instance()
+        self.signal_manager.transaction_changed.connect(self.on_transaction_changed)
+        self.signal_manager.pocket_changed.connect(self.on_pocket_changed)
+        self.signal_manager.card_changed.connect(self.on_card_changed)
+        self.signal_manager.category_changed.connect(self.load_data)
         self.init_ui()
+        self.load_data()
+    
+    def on_transaction_changed(self):
+        """Auto-refresh when transaction data changes."""
+        self.load_data()
+    
+    def on_pocket_changed(self):
+        """Auto-refresh when pocket data changes."""
+        self.load_data()
+    
+    def on_card_changed(self):
+        """Auto-refresh when card data changes."""
         self.load_data()
     
     def init_ui(self):
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(8, 8, 8, 8)
-        main_layout.setSpacing(8)
+        main_layout.setContentsMargins(0, 0, 0, 0)
 
         header = WalletHeader("Overview", "Quick summary of balances and recent activity")
         main_layout.addWidget(header)
@@ -62,10 +78,10 @@ class WalletOverviewTab(QWidget):
             currency = summary_data.get('currency_symbol', 'Rp')
             
             self.cards_widget.update_data(
-                income=summary_data.get('total_income', 0),
+                income=summary_data.get('adjusted_income', 0),
                 expense=summary_data.get('total_expense', 0),
-                transfer=summary_data.get('total_transfer', 0),
                 balance=summary_data.get('net_balance', 0),
+                transfer=summary_data.get('total_transfer', 0),
                 currency=currency
             )
             
@@ -107,7 +123,6 @@ class WalletOverviewTab(QWidget):
     
     def on_navigate_request(self, target):
         """Handle navigation request from card/stat click"""
-        # Find the parent tab widget and switch to the requested tab
         parent = self.parent()
         while parent:
             if hasattr(parent, 'switch_to_tab'):
@@ -124,10 +139,6 @@ class WalletOverviewTab(QWidget):
                 parent.open_transaction_details(transaction_id)
                 break
             parent = parent.parent()
-    
-    def on_data_changed(self):
-        """Handle database changes by refreshing all data"""
-        self.load_data()
     
     def showEvent(self, event):
         """Override showEvent to reload data when page is displayed"""
