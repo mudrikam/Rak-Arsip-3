@@ -17,6 +17,7 @@ from .db_helper.db_helper_backup import DatabaseBackupHelper
 from .db_helper.db_helper_urls import DatabaseUrlsHelper
 from .db_helper.db_helper_batch_manager import DatabaseBatchManagerHelper
 from .db_helper.db_helper_wallet import DatabaseWalletHelper
+from .db_helper.db_helper_migration import DatabaseMigrationHelper
 
 
 class DatabaseManager(QObject):
@@ -32,7 +33,6 @@ class DatabaseManager(QObject):
         self.window_config_manager = window_config_manager
         
         self.db_config = config_manager.get("database")
-        self.tables_config = config_manager.get("tables")
         
         self.db_path = self.db_config.get("path") if isinstance(self.db_config, dict) else "database/archieve_database.db"
         
@@ -45,13 +45,14 @@ class DatabaseManager(QObject):
         self._wal_shm_handled = False
 
         self.connection_helper = DatabaseConnectionHelper(self)
+        self.migration_helper = DatabaseMigrationHelper(self)
+        self.backup_helper = DatabaseBackupHelper(self)
         self.categories_helper = DatabaseCategoriesHelper(self)
         self.templates_helper = DatabaseTemplatesHelper(self)
         self.files_helper = DatabaseFilesHelper(self)
         self.clients_helper = DatabaseClientsHelper(self)
         self.teams_helper = DatabaseTeamsHelper(self)
         self.price_helper = DatabasePriceHelper(self)
-        self.backup_helper = DatabaseBackupHelper(self)
         self.urls_helper = DatabaseUrlsHelper(self)
         self.batch_manager_helper = DatabaseBatchManagerHelper(self)
         self.wallet_helper = DatabaseWalletHelper(self)
