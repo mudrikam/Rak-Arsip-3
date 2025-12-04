@@ -57,6 +57,8 @@ class MainWindow(QMainWindow):
 
         self.status_bar = QStatusBar(self)
         self.setStatusBar(self.status_bar)
+        
+        self._setup_development_mode()
 
         self.datetime_label = QLabel(self)
         self.datetime_label.setStyleSheet("color: #888; font-size: 13px; margin-left: 10px;")
@@ -66,6 +68,25 @@ class MainWindow(QMainWindow):
         self._datetime_timer.timeout.connect(self._update_datetime_label)
         self._datetime_timer.start(10000)
 
+    
+    def _setup_development_mode(self):
+        env_path = Path(self.basedir) / ".env"
+        if env_path.exists():
+            try:
+                with open(env_path, 'r') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith('DEVELOPMENT='):
+                            value = line.split('=', 1)[1].strip().lower()
+                            if value == 'true':
+                                self.status_bar.setStyleSheet("background-color: #FF0000;")
+                                dev_label = QLabel(" DEVELOPMENT STAGE ")
+                                dev_label.setStyleSheet("font-weight: bold; color: white; font-size: 13px;")
+                                self.status_bar.addWidget(dev_label)
+                            break
+            except Exception as e:
+                print(f"Error reading .env file: {e}")
+    
     def _update_datetime_label(self):
         self.datetime_label.setText(get_datetime_string())
 
