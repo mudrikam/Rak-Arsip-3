@@ -286,6 +286,76 @@ class WalletTransactionListWidget(QWidget):
         
         main_layout.addLayout(pagination_layout)
         
+        # Statistics section
+        stats_group = QGroupBox("Statistics")
+        stats_layout = QHBoxLayout()
+        stats_layout.setSpacing(20)
+        stats_layout.setContentsMargins(10, 10, 10, 10)
+        
+        # Total records
+        records_layout = QHBoxLayout()
+        records_layout.setSpacing(5)
+        records_icon = QLabel()
+        records_icon.setPixmap(qta.icon("fa6s.list", color="#797979").pixmap(16, 16))
+        self.stat_total_records = QLabel("Total Records: 0")
+        records_layout.addWidget(records_icon)
+        records_layout.addWidget(self.stat_total_records)
+        records_layout.addStretch()
+        stats_layout.addLayout(records_layout)
+        
+        # Total amount
+        amount_layout = QHBoxLayout()
+        amount_layout.setSpacing(5)
+        amount_icon = QLabel()
+        amount_icon.setPixmap(qta.icon("fa6s.coins", color="#ff7125").pixmap(16, 16))
+        self.stat_total_amount = QLabel("Total Amount: Rp 0")
+        self.stat_total_amount.setStyleSheet("color: #ff7125;")
+        amount_layout.addWidget(amount_icon)
+        amount_layout.addWidget(self.stat_total_amount)
+        amount_layout.addStretch()
+        stats_layout.addLayout(amount_layout)
+        
+        # Income
+        income_layout = QHBoxLayout()
+        income_layout.setSpacing(5)
+        income_icon = QLabel()
+        income_icon.setPixmap(qta.icon("fa6s.arrow-trend-up", color="#28a745").pixmap(16, 16))
+        self.stat_income = QLabel("Income: Rp 0")
+        self.stat_income.setStyleSheet("color: #28a745;")
+        income_layout.addWidget(income_icon)
+        income_layout.addWidget(self.stat_income)
+        income_layout.addStretch()
+        stats_layout.addLayout(income_layout)
+        
+        # Expense
+        expense_layout = QHBoxLayout()
+        expense_layout.setSpacing(5)
+        expense_icon = QLabel()
+        expense_icon.setPixmap(qta.icon("fa6s.arrow-trend-down", color="#dc3545").pixmap(16, 16))
+        self.stat_expense = QLabel("Expense: Rp 0")
+        self.stat_expense.setStyleSheet("color: #dc3545;")
+        expense_layout.addWidget(expense_icon)
+        expense_layout.addWidget(self.stat_expense)
+        expense_layout.addStretch()
+        stats_layout.addLayout(expense_layout)
+        
+        # Transfer
+        transfer_layout = QHBoxLayout()
+        transfer_layout.setSpacing(5)
+        transfer_icon = QLabel()
+        transfer_icon.setPixmap(qta.icon("fa6s.right-left", color="#007bff").pixmap(16, 16))
+        self.stat_transfer = QLabel("Transfer: Rp 0")
+        self.stat_transfer.setStyleSheet("color: #007bff;")
+        transfer_layout.addWidget(transfer_icon)
+        transfer_layout.addWidget(self.stat_transfer)
+        transfer_layout.addStretch()
+        stats_layout.addLayout(transfer_layout)
+        
+        stats_layout.addStretch()
+        
+        stats_group.setLayout(stats_layout)
+        main_layout.addWidget(stats_group)
+        
         self.setLayout(main_layout)
     
     def set_db_manager(self, db_manager):
@@ -511,6 +581,41 @@ class WalletTransactionListWidget(QWidget):
         else:
             self.label_total.setText("No transactions found")
     
+    def update_statistics(self, transactions):
+        """Update statistics labels based on filtered transactions."""
+        if not transactions:
+            self.stat_total_records.setText("Total Records: 0")
+            self.stat_total_amount.setText("Total Amount: Rp 0")
+            self.stat_income.setText("Income: Rp 0")
+            self.stat_expense.setText("Expense: Rp 0")
+            self.stat_transfer.setText("Transfer: Rp 0")
+            return
+        
+        total_records = len(transactions)
+        total_amount = 0.0
+        income_total = 0.0
+        expense_total = 0.0
+        transfer_total = 0.0
+        
+        for transaction in transactions:
+            amount = float(transaction.get('total_amount') or 0.0)
+            trans_type = transaction.get('transaction_type', '').lower()
+            
+            total_amount += amount
+            
+            if trans_type == 'income':
+                income_total += amount
+            elif trans_type == 'expense':
+                expense_total += amount
+            elif trans_type == 'transfer':
+                transfer_total += amount
+        
+        self.stat_total_records.setText(f"Total Records: {total_records:,}")
+        self.stat_total_amount.setText(f"Total Amount: Rp {total_amount:,.2f}")
+        self.stat_income.setText(f"Income: Rp {income_total:,.2f}")
+        self.stat_expense.setText(f"Expense: Rp {expense_total:,.2f}")
+        self.stat_transfer.setText(f"Transfer: Rp {transfer_total:,.2f}")
+    
     def load_transactions(self):
         """Load transactions from database with pagination."""
         if not self.db_manager:
@@ -676,6 +781,9 @@ class WalletTransactionListWidget(QWidget):
 
             # Update pagination controls
             self.update_pagination_controls()
+            
+            # Update statistics
+            self.update_statistics(filtered)
 
             # No additional table-level sorting needed because we sorted the data before pagination
         
