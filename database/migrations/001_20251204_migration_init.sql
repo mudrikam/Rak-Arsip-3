@@ -1,3 +1,89 @@
+-- Migration: 001_20251204_migration_init.sql
+-- Date: 2025-12-04
+-- Purpose: Move hardcoded database creation into a migration-driven
+--          initialization process. This migration creates the initial
+--          schema that was previously implemented directly in code
+--          (table creation moved from db helper/connection logic to
+--          SQL migration files). Keeping DDL in migrations ensures a
+--          reproducible, versioned database schema and enables future
+--          schema evolution using additional migration files.
+-- Notes:
+--  - This file must be applied first on a fresh installation.
+--  - Do NOT remove this file after applying; it serves as a historical
+--    record of the initial schema. If removed, the system will still
+--    consider it applied when present in `schema_migrations` table.
+--  - For changes, add new migration files (e.g. 002_..., 003_..., etc.)
+--  - Migration process will create backups before applying each file
+--    and restore on failure.
+--
+-- Critical files touched / changed when migrating to migration-driven init:
+--  - `configs/db_config.json`
+--      * Now contains only runtime settings (type/path/create_if_not_exists)
+--      * New key: `migration_backup_retention_days` (integer, days)
+--      * Table definitions were removed from this config and moved to migrations.
+--  - `database/db_manager.py`
+--      * Initializes `DatabaseMigrationHelper` and delegates schema creation to migrations.
+--      * Holds references to helper classes and coordinates backup/migration flow.
+--  - `database/db_helper/db_helper_connection.py`
+--      * `ensure_database_exists()` updated: calls migration initializer instead of creating tables.
+--      * `create_tables()` logic removed (moved to SQL migrations).
+--  - `database/db_helper/db_helper_migration.py`
+--      * New helper responsible for: finding migration files, applying them,
+--        recording applied migrations (`schema_migrations`), backup before apply,
+--        restoring on failure, and cleaning old migration backups.
+--  - `database/db_helper/db_helper_backup.py`
+--      * Added `create_migration_backup()` and `restore_backup()` used by migration helper.
+--      * Export/import CSV logic refactored to be dynamic (reads actual DB schema via PRAGMA).
+--      * Existing `.db` backup cleanup logic retained and adjusted to coexist with migration backups.
+--  - `gui/windows/preferences_helper/preferences_helper_backup.py`
+--      * UI relayout so CSV Export and Import are side-by-side.
+--      * Uses the dynamic export/import (no hardcoded table lists).
+--  - Other `database/db_helper/*.py` helpers
+--      * May need to be reviewed if they assumed table existence at import time.
+--      * Helper functions that access tables should acquire a DB connection at runtime
+--        (the migration system ensures schema is present before normal operations).
+--
+-- Guidance / Risk notes:
+--  - Keep migration files as the single source of truth for DDL; do not duplicate DDL in code.
+--  - Do not delete migration files after applying; they are the audit/history of schema evolution.
+--  - When adding migrations that alter existing tables, consider data migration steps and
+--    include backups/verification in the SQL or as separate steps.
+--  - Review any startup code that assumed a table existed at import time; move such checks
+--    to runtime after migrations have run.
+
+-- Suggested SQL Migration Header Documentation (fill when creating a new migration)
+--  - Migration ID:       <numeric_prefix>_<YYYYMMDDHHMMSS>_<short_name>.sql
+--  - Date:               YYYY-MM-DD
+--  - Author:             Full Name <email@example.com>
+--  - Purpose:            One-line summary of the change
+--  - Description:        Short paragraph describing schema and/or data changes
+--  - Affected Files:     Code/config files that need updates or attention
+--  - DDL Summary:        List of tables/columns/indexes created, altered, or dropped
+--  - Data Migration:     Any data transform/cleanup steps (if applicable)
+--  - Rollback Steps:     How to undo this migration (if reversible) or notes about restore
+--  - Backups:            Which backup(s) are created before applying (migration backup file name)
+--  - Prerequisites:      Other migrations or environment conditions required
+--  - Testing:            Minimal verification steps to confirm success after apply
+--  - Notes:              Performance, locking, or compatibility considerations
+--
+-- Example (fill and keep with migration file):
+-- Migration ID: 002_20251205_add_index_to_files.sql
+-- Date: 2025-12-05
+-- Author: Jane Developer <jane@example.com>
+-- Purpose: Add index to speed up recent-file queries.
+-- Description: Adds an index on `files(date)` to improve query performance for
+--              recent-file lookups used by the UI list view. No schema changes
+--              to columns; safe to apply online.
+-- Affected Files: gui/widgets/main_list.py, database/db_helper/db_helper_connection.py
+-- DDL Summary: CREATE INDEX IF NOT EXISTS idx_files_date ON files(date);
+-- Data Migration: None.
+-- Rollback Steps: DROP INDEX IF EXISTS idx_files_date;
+-- Backups: migration_backup_<timestamp>_002_20251205_add_index_to_files.db created automatically.
+-- Prerequisites: Migration 001_* must be applied first.
+-- Testing: 1) Run `SELECT name FROM sqlite_master WHERE type='index' AND name='idx_files_date';`
+--          2) Measure query time for recent-file query before/after on a test dataset.
+-- Notes: Index creation can take time on large tables; consider creating during low-traffic window.
+
 CREATE TABLE IF NOT EXISTS categories (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE
