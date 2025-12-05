@@ -249,21 +249,25 @@ class DatabaseClientsHelper:
 
     def assign_file_client_price(self, file_id, item_price_id, client_id):
         """Assign file to client with price."""
-        self.db_manager.connect()
+        self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
             "SELECT id FROM file_client_price WHERE file_id = ? AND item_price_id = ? AND client_id = ?",
             (file_id, item_price_id, client_id)
         )
         exists = cursor.fetchone()
+        self.db_manager.close()
+        
         if not exists:
+            self.db_manager.connect()
+            cursor = self.db_manager.connection.cursor()
             cursor.execute(
                 "INSERT INTO file_client_price (file_id, item_price_id, client_id, created_at, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
                 (file_id, item_price_id, client_id)
             )
             self.db_manager.connection.commit()
             self.db_manager.create_temp_file()
-        self.db_manager.close()
+            self.db_manager.close()
 
     def update_file_client_relation(self, file_id, item_price_id, client_id):
         """Update file-client relationship."""
@@ -271,13 +275,15 @@ class DatabaseClientsHelper:
         cursor = self.db_manager.connection.cursor()
         cursor.execute("DELETE FROM file_client_price WHERE file_id = ?", (file_id,))
         self.db_manager.connection.commit()
+        
         if client_id and item_price_id:
             cursor.execute(
                 "INSERT INTO file_client_price (file_id, item_price_id, client_id, created_at, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
                 (file_id, item_price_id, client_id)
             )
             self.db_manager.connection.commit()
-            self.db_manager.create_temp_file()
+        
+        self.db_manager.create_temp_file()
         self.db_manager.close()
 
     def update_file_client_batch_client(self, file_id, old_client_id, new_client_id):
@@ -289,8 +295,8 @@ class DatabaseClientsHelper:
             (new_client_id, file_id, old_client_id)
         )
         self.db_manager.connection.commit()
-        self.db_manager.close()
         self.db_manager.create_temp_file()
+        self.db_manager.close()
 
     # Batch management methods
     def add_batch_number(self, batch_number, note="", client_id=None):

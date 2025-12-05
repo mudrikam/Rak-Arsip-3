@@ -18,6 +18,7 @@ from .db_helper.db_helper_urls import DatabaseUrlsHelper
 from .db_helper.db_helper_batch_manager import DatabaseBatchManagerHelper
 from .db_helper.db_helper_wallet import DatabaseWalletHelper
 from .db_helper.db_helper_migration import DatabaseMigrationHelper
+from .db_helper.db_helper_data_caching import DatabaseCachingHelper
 
 
 class DatabaseManager(QObject):
@@ -47,6 +48,7 @@ class DatabaseManager(QObject):
         self.connection_helper = DatabaseConnectionHelper(self)
         self.migration_helper = DatabaseMigrationHelper(self)
         self.backup_helper = DatabaseBackupHelper(self)
+        self.caching_helper = DatabaseCachingHelper(self)
         self.categories_helper = DatabaseCategoriesHelper(self)
         self.templates_helper = DatabaseTemplatesHelper(self)
         self.files_helper = DatabaseFilesHelper(self)
@@ -78,15 +80,15 @@ class DatabaseManager(QObject):
 
     def get_status_id(self, status_name):
         """Get status ID by name."""
-        return self.connection_helper.get_status_id(status_name)
+        return self.files_helper.get_status_id(status_name)
 
     def get_status_id_by_name(self, status_name):
         """Get status ID by name (alias for compatibility)."""
-        return self.connection_helper.get_status_id(status_name)
+        return self.files_helper.get_status_id(status_name)
 
     def get_status_name_by_id(self, status_id):
         """Get status name by ID."""
-        return self.connection_helper.get_status_name_by_id(status_id)
+        return self.files_helper.get_status_name_by_id(status_id)
 
     # Categories methods - delegate to categories helper
     def get_all_categories(self):

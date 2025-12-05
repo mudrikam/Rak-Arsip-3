@@ -7,6 +7,50 @@ class DatabaseFilesHelper:
     def __init__(self, db_manager):
         self.db_manager = db_manager
 
+    def initialize_statuses(self):
+        """Initialize default status values."""
+        self.db_manager.connect()
+        cursor = self.db_manager.connection.cursor()
+        cursor.execute("SELECT COUNT(*) FROM statuses")
+        count = cursor.fetchone()[0]
+        if count > 0:
+            self.db_manager.close()
+            return
+        
+        status_config = self.db_manager.window_config_manager.get("status_options")
+        status_list = []
+        for status_name, config in status_config.items():
+            cursor.execute(
+                "INSERT INTO statuses (name, color, font_weight) VALUES (?, ?, ?)",
+                (status_name, config["color"], config["font_weight"])
+            )
+            status_list.append(f"{status_name} ({config['color']})")
+        self.db_manager.connection.commit()
+        print(f"[DB] Initialized {len(status_config)} default statuses: {', '.join(status_list)}")
+        self.db_manager.close()
+
+    def get_status_id(self, status_name):
+        """Get status ID by name."""
+        self.db_manager.connect(write=False)
+        cursor = self.db_manager.connection.cursor()
+        cursor.execute("SELECT id FROM statuses WHERE name = ?", (status_name,))
+        result = cursor.fetchone()
+        self.db_manager.close()
+        if result is not None:
+            return result[0]
+        return None
+
+    def get_status_name_by_id(self, status_id):
+        """Get status name by ID."""
+        self.db_manager.connect(write=False)
+        cursor = self.db_manager.connection.cursor()
+        cursor.execute("SELECT name FROM statuses WHERE id = ?", (status_id,))
+        result = cursor.fetchone()
+        self.db_manager.close()
+        if result is not None:
+            return result[0]
+        return None
+
     def insert_file(self, date, name, root, path, status_id, category_id=None, subcategory_id=None, template_id=None):
         """Insert new file record."""
         self.db_manager.connect()

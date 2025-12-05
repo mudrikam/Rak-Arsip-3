@@ -47,8 +47,8 @@ class DatabaseTeamsHelper:
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         """, (username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder, profile_image))
         self.db_manager.connection.commit()
-        self.db_manager.close()
         self.db_manager.create_temp_file()
+        self.db_manager.close()
 
     def update_team(self, old_username, new_username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder, profile_image=None):
         """Update existing team member."""
@@ -74,8 +74,8 @@ class DatabaseTeamsHelper:
             WHERE username = ?
         """, (new_username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder, profile_image, old_username))
         self.db_manager.connection.commit()
-        self.db_manager.close()
         self.db_manager.create_temp_file()
+        self.db_manager.close()
 
     def get_team_profile_data(self, username=None):
         """Get detailed team profile data including attendance and earnings."""

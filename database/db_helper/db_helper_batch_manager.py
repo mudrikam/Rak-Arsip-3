@@ -147,7 +147,6 @@ class DatabaseBatchManagerHelper:
             })
         self.db_manager.close()
         return batches
-        self.db_manager.close()
 
     def update_batch_with_date(self, old_batch_number, new_batch_number, note, client_id, created_at):
         self.db_manager.connect()
@@ -165,7 +164,6 @@ class DatabaseBatchManagerHelper:
         self.db_manager.close()
 
     def get_batch_status_breakdown(self, batch_number):
-        """Get specific status counts for a batch"""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
         cursor.execute("""
@@ -177,16 +175,13 @@ class DatabaseBatchManagerHelper:
             AND s.name IN ('Draft', 'Modelling', 'Rendering', 'Photoshop', 'Need Upload', 'Pending')
             GROUP BY s.name
         """, (batch_number,))
-        
         status_counts = {}
         for row in cursor.fetchall():
             status_counts[row["name"]] = row["count"]
-        
         self.db_manager.close()
         return status_counts
 
     def get_all_batches_with_status_counts(self):
-        """Get all batches with status breakdown for selected statuses"""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
         cursor.execute("""
@@ -211,7 +206,6 @@ class DatabaseBatchManagerHelper:
             GROUP BY b.batch_number, b.client_id, c.client_name, b.note, b.created_at
             ORDER BY b.created_at DESC
         """)
-        
         batches = []
         for row in cursor.fetchall():
             batches.append({
@@ -228,6 +222,5 @@ class DatabaseBatchManagerHelper:
                 "need_upload_count": row["need_upload_count"] or 0,
                 "pending_count": row["pending_count"] or 0
             })
-        
         self.db_manager.close()
         return batches

@@ -1,13 +1,14 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QGroupBox, QLabel, QPushButton, QListWidget, 
     QAbstractItemView, QHBoxLayout, QMessageBox, QDialog, QProgressBar,
-    QFileDialog, QListWidgetItem
+    QFileDialog, QListWidgetItem, QComboBox
 )
 from PySide6.QtCore import QCoreApplication
 import qtawesome as qta
 import os
 import shutil
 import csv
+import sys
 from datetime import datetime, date
 
 
@@ -113,9 +114,7 @@ class PreferencesBackupHelper:
             item_layout.addStretch()
             restore_btn = QPushButton("Restore")
             restore_btn.setIcon(qta.icon("fa6s.rotate-left"))
-            restore_btn.setProperty("backup_path", fpath)
-            restore_btn.setProperty("backup_days_old", days_old)
-            restore_btn.clicked.connect(self.restore_db_backup_clicked)
+            restore_btn.clicked.connect(lambda checked, path=fpath, days=days_old: self.restore_db_backup_clicked(path, days))
             item_layout.addWidget(restore_btn)
             item_widget.setLayout(item_layout)
             list_item = QListWidgetItem()
@@ -134,11 +133,8 @@ class PreferencesBackupHelper:
         except Exception:
             return 0
 
-    def restore_db_backup_clicked(self):
+    def restore_db_backup_clicked(self, backup_path, backup_days_old):
         """Handle restore backup button click"""
-        sender = self.parent.sender()
-        backup_path = sender.property("backup_path")
-        backup_days_old = sender.property("backup_days_old")
         db_path = self.db_manager.db_path
         db_dir = os.path.dirname(db_path)
         old_db_path = os.path.join(db_dir, "archive_database_old.db")
@@ -183,7 +179,7 @@ class PreferencesBackupHelper:
             self.parent.progress_bar = progress_bar
 
             total_rows = 0
-            self.db_manager.connect()
+            self.db_manager.connect(write=False)
             cursor = self.db_manager.connection.cursor()
             
             backup_helper = self.db_manager.backup_helper
@@ -218,50 +214,217 @@ class PreferencesBackupHelper:
         filename, _ = QFileDialog.getOpenFileName(
             self.parent, "Select Database Backup", "", "CSV Files (*.csv)"
         )
-        if filename:
-            reply = QMessageBox.question(
-                self.parent, "Restore Database", 
-                "This will add data from the backup file to the current database.\nContinue?"
+        if not filename:
+            return
+        
+        import_summary = self._analyze_csv_import(filename)
+        if not import_summary:
+            QMessageBox.critical(self.parent, "Error", "Failed to analyze CSV file.")
+            return
+        
+        resolution_mode = self._show_import_summary_dialog(import_summary)
+        if resolution_mode is None:
+            return
+        
+        progress_dialog = QDialog(self.parent)
+        progress_dialog.setWindowTitle("Importing Data")
+        progress_dialog.setModal(True)
+        vbox = QVBoxLayout(progress_dialog)
+        label = QLabel("Importing data, please wait...")
+        vbox.addWidget(label)
+        progress_bar = QProgressBar(progress_dialog)
+        vbox.addWidget(progress_bar)
+        progress_dialog.setLayout(vbox)
+        self.parent.progress_bar = progress_bar
+
+        progress_bar.setMinimum(0)
+        progress_bar.setMaximum(import_summary['total_records'])
+        progress_bar.setValue(0)
+        progress_dialog.show()
+        QCoreApplication.processEvents()
+
+        try:
+            self.db_manager.backup_helper.import_from_csv(
+                filename, 
+                progress_callback=lambda processed, total: progress_bar.setValue(processed),
+                resolution_mode=resolution_mode
             )
-            if reply == QMessageBox.Yes:
-                progress_dialog = QDialog(self.parent)
-                progress_dialog.setWindowTitle("Importing Data")
-                progress_dialog.setModal(True)
-                vbox = QVBoxLayout(progress_dialog)
-                label = QLabel("Importing data, please wait...")
-                vbox.addWidget(label)
-                progress_bar = QProgressBar(progress_dialog)
-                vbox.addWidget(progress_bar)
-                progress_dialog.setLayout(vbox)
-                self.parent.progress_bar = progress_bar
-
-                total_rows = 0
-                with open(filename, 'r', encoding='utf-8') as csvfile:
-                    for row in csv.reader(csvfile):
-                        if row and row[0] != "TABLE":
-                            total_rows += 1
-
-                progress_bar.setMinimum(0)
-                progress_bar.setMaximum(total_rows)
-                progress_bar.setValue(0)
-                progress_dialog.show()
-                QCoreApplication.processEvents()
-
+            progress_bar.setValue(import_summary['total_records'])
+            QCoreApplication.processEvents()
+            progress_dialog.accept()
+            self.parent.progress_bar = None
+            
+            self._show_relaunch_dialog()
+            
+        except Exception as e:
+            if hasattr(self.parent, "progress_bar") and self.parent.progress_bar:
+                self.parent.progress_bar.setValue(0)
+            QMessageBox.critical(self.parent, "Error", f"Failed to restore database: {e}")
+            progress_dialog.accept()
+            self.parent.progress_bar = None
+    
+    def _show_import_summary_dialog(self, import_summary):
+        """Show import summary dialog with conflict resolution options"""
+        dialog = QDialog(self.parent)
+        dialog.setWindowTitle("Confirm CSV Import")
+        dialog.setModal(True)
+        dialog.setMinimumWidth(500)
+        
+        layout = QVBoxLayout(dialog)
+        
+        icon_label = QLabel()
+        icon_label.setPixmap(qta.icon("fa6s.circle-question", color="#1976d2").pixmap(48, 48))
+        
+        summary_msg = f"<b>Import Summary:</b><br><br>"
+        summary_msg += f"Total records to import: <b>{import_summary['total_records']}</b><br>"
+        summary_msg += f"Tables affected: <b>{len(import_summary['tables'])}</b><br><br>"
+        
+        if import_summary['tables']:
+            summary_msg += "<b>Records per table:</b><br>"
+            for table_name, count in import_summary['tables'].items():
+                summary_msg += f"&nbsp;&nbsp;• {table_name}: {count} records<br>"
+        
+        summary_msg += f"<br>⚠ <b>Potential conflicts: {import_summary['potential_conflicts']}</b><br>"
+        
+        summary_label = QLabel(summary_msg)
+        summary_label.setWordWrap(True)
+        
+        resolution_label = QLabel("<b>Conflict Resolution:</b>")
+        resolution_combo = QComboBox()
+        resolution_combo.addItem(qta.icon("fa6s.arrows-rotate"), "Replace - Overwrite existing records", "replace")
+        resolution_combo.addItem(qta.icon("fa6s.copy"), "Keep Both - Duplicate with new ID", "keep_both")
+        resolution_combo.addItem(qta.icon("fa6s.ban"), "Skip Existing - Only add new records", "skip")
+        resolution_combo.setCurrentIndex(2)
+        
+        header_layout = QHBoxLayout()
+        header_layout.addWidget(icon_label)
+        header_layout.addWidget(summary_label, 1)
+        
+        layout.addLayout(header_layout)
+        layout.addSpacing(10)
+        layout.addWidget(resolution_label)
+        layout.addWidget(resolution_combo)
+        layout.addSpacing(10)
+        
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        
+        ok_button = QPushButton("Continue")
+        ok_button.setIcon(qta.icon("fa6s.circle-check"))
+        ok_button.clicked.connect(dialog.accept)
+        
+        cancel_button = QPushButton("Cancel")
+        cancel_button.setIcon(qta.icon("fa6s.circle-xmark"))
+        cancel_button.clicked.connect(dialog.reject)
+        
+        button_layout.addWidget(ok_button)
+        button_layout.addWidget(cancel_button)
+        
+        layout.addLayout(button_layout)
+        
+        if dialog.exec() == QDialog.Accepted:
+            return resolution_combo.currentData()
+        return None
+    
+    def _analyze_csv_import(self, filename):
+        """Analyze CSV file and return import summary"""
+        try:
+            tables = {}
+            total_rows = 0
+            current_table = None
+            
+            with open(filename, 'r', encoding='utf-8') as csvfile:
+                for row in csv.reader(csvfile):
+                    if not row:
+                        continue
+                    
+                    if row[0] == "TABLE":
+                        current_table = row[1] if len(row) > 1 else None
+                        if current_table and current_table not in tables:
+                            tables[current_table] = 0
+                    elif current_table:
+                        tables[current_table] += 1
+                        total_rows += 1
+            
+            existing_records = self._count_existing_records(list(tables.keys()))
+            potential_conflicts = sum(min(tables.get(t, 0), existing_records.get(t, 0)) for t in tables.keys())
+            
+            return {
+                'total_records': total_rows,
+                'tables': tables,
+                'potential_conflicts': potential_conflicts
+            }
+        except Exception as e:
+            print(f"[CSV Import] Error analyzing file: {e}")
+            return None
+    
+    def _count_existing_records(self, table_names):
+        """Count existing records in specified tables"""
+        counts = {}
+        try:
+            self.db_manager.connect(write=False)
+            cursor = self.db_manager.connection.cursor()
+            
+            for table_name in table_names:
                 try:
-                    self.db_manager.import_from_csv(filename, progress_callback=lambda processed, total: progress_bar.setValue(processed))
-                except Exception as e:
-                    if hasattr(self.parent, "progress_bar") and self.parent.progress_bar:
-                        self.parent.progress_bar.setValue(0)
-                    QMessageBox.critical(self.parent, "Error", f"Failed to restore database: {e}")
-                    progress_dialog.accept()
-                    self.parent.progress_bar = None
-                    return
-                progress_bar.setValue(total_rows)
-                QCoreApplication.processEvents()
-                progress_dialog.accept()
-                self.parent.progress_bar = None
-                QMessageBox.information(self.parent, "Success", "Database restored successfully.")
-                self.db_manager.close()
-                # Refresh data after restore
-                if hasattr(self.parent, 'load_data'):
-                    self.parent.load_data()
+                    cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+                    counts[table_name] = cursor.fetchone()[0]
+                except Exception:
+                    counts[table_name] = 0
+            
+            self.db_manager.close()
+        except Exception as e:
+            print(f"[CSV Import] Error counting records: {e}")
+        
+        return counts
+    
+    def _show_relaunch_dialog(self):
+        """Show relaunch dialog after successful import"""
+        dialog = QDialog(self.parent)
+        dialog.setWindowTitle("Import Successful")
+        dialog.setModal(True)
+        dialog.setMinimumWidth(400)
+        
+        layout = QVBoxLayout(dialog)
+        
+        icon_label = QLabel()
+        icon_label.setPixmap(qta.icon("fa6s.circle-check", color="#4caf50").pixmap(48, 48))
+        
+        message_label = QLabel("<b>Database imported successfully.</b><br><br>Please relaunch the application for changes to take effect.")
+        message_label.setWordWrap(True)
+        
+        header_layout = QHBoxLayout()
+        header_layout.addWidget(icon_label)
+        header_layout.addWidget(message_label, 1)
+        
+        layout.addLayout(header_layout)
+        layout.addSpacing(10)
+        
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        
+        relaunch_btn = QPushButton("Relaunch Now")
+        relaunch_btn.setIcon(qta.icon("fa6s.rotate"))
+        relaunch_btn.clicked.connect(lambda: self._relaunch_app(dialog))
+        
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.setIcon(qta.icon("fa6s.circle-xmark"))
+        cancel_btn.clicked.connect(dialog.reject)
+        
+        button_layout.addWidget(relaunch_btn)
+        button_layout.addWidget(cancel_btn)
+        
+        layout.addLayout(button_layout)
+        
+        dialog.exec()
+    
+    def _relaunch_app(self, dialog):
+        """Save data and relaunch application"""
+        try:
+            self.db_manager.close()
+            dialog.accept()
+            from PySide6.QtWidgets import QApplication
+            QApplication.quit()
+            os.execl(sys.executable, sys.executable, *sys.argv)
+        except Exception as e:
+            QMessageBox.critical(self.parent, "Error", f"Failed to relaunch: {e}")

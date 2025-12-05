@@ -59,6 +59,10 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.status_bar)
         
         self._setup_development_mode()
+        
+        self.query_time_label = QLabel(self)
+        self.query_time_label.setStyleSheet("color: #888; font-size: 13px; margin-right: 10px;")
+        self.status_bar.addPermanentWidget(self.query_time_label)
 
         self.datetime_label = QLabel(self)
         self.datetime_label.setStyleSheet("color: #888; font-size: 13px; margin-left: 10px;")
@@ -67,6 +71,8 @@ class MainWindow(QMainWindow):
         self._datetime_timer = QTimer(self)
         self._datetime_timer.timeout.connect(self._update_datetime_label)
         self._datetime_timer.start(10000)
+        
+        self.db_manager.status_message.connect(self._update_query_time)
 
     
     def _setup_development_mode(self):
@@ -89,6 +95,9 @@ class MainWindow(QMainWindow):
     
     def _update_datetime_label(self):
         self.datetime_label.setText(get_datetime_string())
+    
+    def _update_query_time(self, message, timeout):
+        self.query_time_label.setText(message)
 
     def center_on_screen(self):
         screen = QApplication.primaryScreen()

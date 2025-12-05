@@ -231,7 +231,7 @@ class DatabaseWalletHelper:
         items = [dict(row) for row in rows]
         self.db_manager.close()
         return items
-    
+
     def count_transactions_by_pocket(self, pocket_id):
         """Count transactions for a specific pocket."""
         self.db_manager.connect(write=False)
@@ -280,7 +280,7 @@ class DatabaseWalletHelper:
     
     def delete_transactions_by_pocket(self, pocket_id):
         """Delete all transactions for a specific pocket."""
-        self.db_manager.connect(write=True)
+        self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute("DELETE FROM wallet_transactions WHERE pocket_id = ?", (pocket_id,))
         self.db_manager.connection.commit()
@@ -289,7 +289,7 @@ class DatabaseWalletHelper:
     
     def delete_transactions_by_card(self, card_id):
         """Delete all transactions for a specific card."""
-        self.db_manager.connect(write=True)
+        self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute("DELETE FROM wallet_transactions WHERE card_id = ?", (card_id,))
         self.db_manager.connection.commit()
@@ -298,7 +298,7 @@ class DatabaseWalletHelper:
     
     def delete_transaction_items_by_pocket(self, pocket_id):
         """Delete all transaction items for a specific pocket (via transactions)."""
-        self.db_manager.connect(write=True)
+        self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute("""
             DELETE FROM wallet_transaction_items 
@@ -312,7 +312,7 @@ class DatabaseWalletHelper:
     
     def delete_transaction_items_by_card(self, card_id):
         """Delete all transaction items for a specific card (via transactions)."""
-        self.db_manager.connect(write=True)
+        self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute("""
             DELETE FROM wallet_transaction_items 
@@ -326,7 +326,7 @@ class DatabaseWalletHelper:
     
     def add_category(self, name, note=""):
         """Add a new wallet category."""
-        self.db_manager.connect(write=True)
+        self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
             "INSERT INTO wallet_categories (name, note) VALUES (?, ?)",
@@ -340,7 +340,7 @@ class DatabaseWalletHelper:
     
     def update_category(self, category_id, name, note=""):
         """Update an existing wallet category."""
-        self.db_manager.connect(write=True)
+        self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
             "UPDATE wallet_categories SET name = ?, note = ? WHERE id = ?",
@@ -352,7 +352,7 @@ class DatabaseWalletHelper:
     
     def delete_category(self, category_id):
         """Delete a wallet category."""
-        self.db_manager.connect(write=True)
+        self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute("DELETE FROM wallet_categories WHERE id = ?", (category_id,))
         self.db_manager.connection.commit()
@@ -361,7 +361,7 @@ class DatabaseWalletHelper:
     
     def add_currency(self, code, name, symbol, note=""):
         """Add a new wallet currency."""
-        self.db_manager.connect(write=True)
+        self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
             "INSERT INTO wallet_currency (code, name, symbol, note) VALUES (?, ?, ?, ?)",
@@ -375,7 +375,7 @@ class DatabaseWalletHelper:
     
     def update_currency(self, currency_id, code, name, symbol, note=""):
         """Update an existing wallet currency."""
-        self.db_manager.connect(write=True)
+        self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
             "UPDATE wallet_currency SET code = ?, name = ?, symbol = ?, note = ? WHERE id = ?",
@@ -387,7 +387,7 @@ class DatabaseWalletHelper:
     
     def delete_currency(self, currency_id):
         """Delete a wallet currency."""
-        self.db_manager.connect(write=True)
+        self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute("DELETE FROM wallet_currency WHERE id = ?", (currency_id,))
         self.db_manager.connection.commit()
@@ -396,7 +396,7 @@ class DatabaseWalletHelper:
     
     def add_transaction_status(self, name, note=""):
         """Add a new wallet transaction status."""
-        self.db_manager.connect(write=True)
+        self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
             "INSERT INTO wallet_transaction_statuses (name, note) VALUES (?, ?)",
@@ -410,7 +410,7 @@ class DatabaseWalletHelper:
     
     def update_transaction_status(self, status_id, name, note=""):
         """Update an existing wallet transaction status."""
-        self.db_manager.connect(write=True)
+        self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
             "UPDATE wallet_transaction_statuses SET name = ?, note = ? WHERE id = ?",
@@ -422,7 +422,7 @@ class DatabaseWalletHelper:
     
     def delete_transaction_status(self, status_id):
         """Delete a wallet transaction status."""
-        self.db_manager.connect(write=True)
+        self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute("DELETE FROM wallet_transaction_statuses WHERE id = ?", (status_id,))
         self.db_manager.connection.commit()
@@ -431,7 +431,7 @@ class DatabaseWalletHelper:
     
     def add_pocket(self, name, pocket_type="", icon="", color="", image="", settings="", note=""):
         """Add a new wallet pocket."""
-        self.db_manager.connect(write=True)
+        self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
             "INSERT INTO wallet_pockets (name, pocket_type, icon, color, image, settings, note) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -451,7 +451,7 @@ class DatabaseWalletHelper:
         basedir: base project directory used to build managed image paths
         """
         try:
-            self.db_manager.connect(write=True)
+            self.db_manager.connect()
             cursor = self.db_manager.connection.cursor()
             cursor.execute("""
                 INSERT INTO wallet_transaction_locations
@@ -471,7 +471,7 @@ class DatabaseWalletHelper:
                     saved = ImageHelper.save_image_to_file(image_src_path, output_path)
                     if saved:
                         rel = os.path.relpath(output_path, basedir).replace("\\", "/")
-                        self.db_manager.connect(write=True)
+                        self.db_manager.connect()
                         cursor = self.db_manager.connection.cursor()
                         cursor.execute("UPDATE wallet_transaction_locations SET image = ? WHERE id = ?", (rel, location_id))
                         self.db_manager.connection.commit()
@@ -522,7 +522,7 @@ class DatabaseWalletHelper:
                     new_rel = os.path.relpath(output_path, basedir).replace("\\", "/")
 
             # Update record (image will be updated if new_rel set)
-            self.db_manager.connect(write=True)
+            self.db_manager.connect()
             cursor = self.db_manager.connection.cursor()
             cursor.execute("""
                 UPDATE wallet_transaction_locations
@@ -571,7 +571,7 @@ class DatabaseWalletHelper:
         Note: db_manager may expose `basedir` attribute so we can delete the physical file.
         """
         try:
-            self.db_manager.connect(write=True)
+            self.db_manager.connect()
             cursor = self.db_manager.connection.cursor()
             
             cursor.execute("SELECT image FROM wallet_transaction_locations WHERE id = ?", (location_id,))
@@ -601,7 +601,7 @@ class DatabaseWalletHelper:
     
     def update_pocket(self, pocket_id, name, pocket_type="", icon="", color="", image="", settings="", note=""):
         """Update an existing wallet pocket."""
-        self.db_manager.connect(write=True)
+        self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
             "UPDATE wallet_pockets SET name = ?, pocket_type = ?, icon = ?, color = ?, image = ?, settings = ?, note = ? WHERE id = ?",
@@ -613,7 +613,7 @@ class DatabaseWalletHelper:
     
     def delete_pocket(self, pocket_id):
         """Delete a wallet pocket."""
-        self.db_manager.connect(write=True)
+        self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute("DELETE FROM wallet_pockets WHERE id = ?", (pocket_id,))
         self.db_manager.connection.commit()
@@ -625,7 +625,7 @@ class DatabaseWalletHelper:
                  cvv="", billing_address="", phone="", email="", country="", 
                  card_limit=0.0, image="", color="", note=""):
         """Add a new wallet card."""
-        self.db_manager.connect(write=True)
+        self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
             """INSERT INTO wallet_cards 
@@ -648,7 +648,7 @@ class DatabaseWalletHelper:
                     holder_name="", cvv="", billing_address="", phone="", email="", 
                     country="", card_limit=0.0, image="", color="", note=""):
         """Update an existing wallet card."""
-        self.db_manager.connect(write=True)
+        self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
             """UPDATE wallet_cards SET 
@@ -667,7 +667,7 @@ class DatabaseWalletHelper:
     
     def delete_card(self, card_id):
         """Delete a wallet card."""
-        self.db_manager.connect(write=True)
+        self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute("DELETE FROM wallet_cards WHERE id = ?", (card_id,))
         self.db_manager.connection.commit()
@@ -792,7 +792,7 @@ class DatabaseWalletHelper:
     def add_transaction(self, pocket_id, card_id=None, category_id=None, status_id=None, currency_id=None, location_id=None,
                        transaction_name=None, transaction_date=None, transaction_type=None, tags="", note="", destination_pocket_id=None):
         """Add a new transaction."""
-        self.db_manager.connect(write=True)
+        self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute("""
             INSERT INTO wallet_transactions 
@@ -813,7 +813,7 @@ class DatabaseWalletHelper:
                            depth=None, weight=None, material="", color="", file_url="",
                            license_key="", expiry_date=None, digital_type="", note=""):
         """Add a transaction item."""
-        self.db_manager.connect(write=True)
+        self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute("""
             INSERT INTO wallet_transaction_items
@@ -837,7 +837,7 @@ class DatabaseWalletHelper:
                                license_key="", expiry_date=None, digital_type="", note=""):
         """Update a transaction item."""
         try:
-            self.db_manager.connect(write=True)
+            self.db_manager.connect()
             cursor = self.db_manager.connection.cursor()
             cursor.execute("""
                 UPDATE wallet_transaction_items
@@ -862,7 +862,7 @@ class DatabaseWalletHelper:
     def delete_transaction(self, transaction_id):
         """Delete a transaction and its items and invoice images."""
         try:
-            self.db_manager.connect(write=True)
+            self.db_manager.connect()
             cursor = self.db_manager.connection.cursor()
             
             cursor.execute("SELECT image_path FROM wallet_transactions_invoice_prove WHERE wallet_transaction_id = ?", 
@@ -927,33 +927,12 @@ class DatabaseWalletHelper:
         finally:
             self.db_manager.close()
     
-    def get_transaction_items(self, transaction_id):
-        """Get all items for a transaction."""
-        try:
-            self.db_manager.connect(write=False)
-            cursor = self.db_manager.connection.cursor()
-            
-            cursor.execute("""
-                SELECT * FROM wallet_transaction_items 
-                WHERE wallet_transaction_id = ?
-                ORDER BY id
-            """, (transaction_id,))
-            
-            items = cursor.fetchall()
-            return [dict(item) for item in items]
-            
-        except Exception as e:
-            print(f"Error getting transaction items: {e}")
-            raise
-        finally:
-            self.db_manager.close()
-    
     def update_transaction(self, transaction_id, pocket_id, card_id=None, category_id=None, status_id=None, 
                           currency_id=None, location_id=None, transaction_name=None, transaction_date=None, 
                           transaction_type=None, tags="", note="", destination_pocket_id=None):
         """Update an existing transaction."""
         try:
-            self.db_manager.connect(write=True)
+            self.db_manager.connect()
             cursor = self.db_manager.connection.cursor()
             
             cursor.execute("""
@@ -977,7 +956,7 @@ class DatabaseWalletHelper:
     def delete_transaction_items(self, transaction_id):
         """Delete all items for a transaction."""
         try:
-            self.db_manager.connect(write=True)
+            self.db_manager.connect()
             cursor = self.db_manager.connection.cursor()
             
             cursor.execute("DELETE FROM wallet_transaction_items WHERE wallet_transaction_id = ?", 
@@ -995,7 +974,7 @@ class DatabaseWalletHelper:
     def delete_transaction_item(self, item_id):
         """Delete a single transaction item by its ID."""
         try:
-            self.db_manager.connect(write=True)
+            self.db_manager.connect()
             cursor = self.db_manager.connection.cursor()
             
             cursor.execute("DELETE FROM wallet_transaction_items WHERE id = ?", 
@@ -1065,7 +1044,7 @@ class DatabaseWalletHelper:
                                     image_size=None, image_type=None, description=None):
         """Add invoice image for transaction."""
         try:
-            self.db_manager.connect(write=True)
+            self.db_manager.connect()
             cursor = self.db_manager.connection.cursor()
             
             cursor.execute("""
@@ -1116,7 +1095,7 @@ class DatabaseWalletHelper:
             
             if existing:
                 # Update existing
-                self.db_manager.connect(write=True)
+                self.db_manager.connect()
                 cursor = self.db_manager.connection.cursor()
                 
                 cursor.execute("""
@@ -1143,7 +1122,7 @@ class DatabaseWalletHelper:
     def delete_transaction_invoice_image(self, transaction_id):
         """Delete invoice image for transaction."""
         try:
-            self.db_manager.connect(write=True)
+            self.db_manager.connect()
             cursor = self.db_manager.connection.cursor()
             
             cursor.execute("DELETE FROM wallet_transactions_invoice_prove WHERE wallet_transaction_id = ?", 
