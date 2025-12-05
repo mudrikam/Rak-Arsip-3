@@ -252,7 +252,7 @@ class DatabaseBackupHelper:
                     if current_table and headers:
                         cursor = conn.cursor()
                         try:
-                            values = [val if val != '' else None for val in row[:len(headers)]]
+                            values = [val for val in row[:len(headers)]]
                             columns_str = ', '.join(headers)
                             
                             if resolution_mode == 'replace':
