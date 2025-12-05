@@ -216,7 +216,15 @@ class DatabaseBackupHelper:
         self.db_manager.close()
         return columns
 
-    def import_from_csv(self, csv_path, progress_callback=None):
+    def import_from_csv(self, csv_path, progress_callback=None, resolution_mode='skip'):
+        """
+        Import CSV data with conflict resolution strategy.
+        
+        Args:
+            csv_path: Path to CSV file
+            progress_callback: Callback function for progress updates
+            resolution_mode: 'replace', 'keep_both', or 'skip'
+        """
         conn = sqlite3.connect(self.db_manager.db_path, isolation_level=None)
         conn.row_factory = sqlite3.Row
         try:
@@ -244,11 +252,34 @@ class DatabaseBackupHelper:
                     if current_table and headers:
                         cursor = conn.cursor()
                         try:
-                            placeholders = ', '.join(['?'] * len(headers))
-                            columns_str = ', '.join(headers)
-                            sql = f"REPLACE INTO {current_table} ({columns_str}) VALUES ({placeholders})"
                             values = [val if val != '' else None for val in row[:len(headers)]]
-                            cursor.execute(sql, values)
+                            columns_str = ', '.join(headers)
+                            
+                            if resolution_mode == 'replace':
+                                placeholders = ', '.join(['?'] * len(headers))
+                                sql = f"REPLACE INTO {current_table} ({columns_str}) VALUES ({placeholders})"
+                                cursor.execute(sql, values)
+                                
+                            elif resolution_mode == 'keep_both':
+                                id_column = headers[0] if headers else 'id'
+                                placeholders = ', '.join(['?'] * len(headers))
+                                sql = f"INSERT INTO {current_table} ({columns_str}) VALUES ({placeholders})"
+                                try:
+                                    cursor.execute(sql, values)
+                                except sqlite3.IntegrityError:
+                                    cursor.execute(f"SELECT MAX({id_column}) FROM {current_table}")
+                                    max_id = cursor.fetchone()[0] or 0
+                                    values[0] = max_id + 1
+                                    cursor.execute(sql, values)
+                                    
+                            elif resolution_mode == 'skip':
+                                id_column = headers[0] if headers else 'id'
+                                cursor.execute(f"SELECT 1 FROM {current_table} WHERE {id_column} = ?", (values[0],))
+                                if not cursor.fetchone():
+                                    placeholders = ', '.join(['?'] * len(headers))
+                                    sql = f"INSERT INTO {current_table} ({columns_str}) VALUES ({placeholders})"
+                                    cursor.execute(sql, values)
+                                    
                         except Exception as e:
                             print(f"[CSV IMPORT] Error importing row in table {current_table}: {e}")
                     

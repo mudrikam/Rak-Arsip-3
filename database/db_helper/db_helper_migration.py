@@ -46,10 +46,18 @@ class DatabaseMigrationHelper:
             with open(migration_file, 'r', encoding='utf-8') as f:
                 sql_content = f.read()
             
-            sql_statements = [stmt.strip() for stmt in sql_content.split(';') if stmt.strip()]
-            
-            for statement in sql_statements:
-                cursor.execute(statement)
+            # Use executescript to run a full SQL script (handles comments and multi-statement files)
+            try:
+                cursor.executescript(sql_content)
+            except Exception:
+                # Fall back to statement-by-statement execution with logging for debugging
+                sql_statements = [stmt.strip() for stmt in sql_content.split(';') if stmt.strip()]
+                for statement in sql_statements:
+                    try:
+                        cursor.execute(statement)
+                    except Exception as stmt_err:
+                        print(f"[MIGRATION] Error executing statement: {statement[:200]!r} -> {stmt_err}")
+                        raise
             
             cursor.execute("INSERT INTO schema_migrations (migration_file) VALUES (?)", (migration_name,))
             self.db_manager.connection.commit()
