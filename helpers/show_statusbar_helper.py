@@ -24,5 +24,3 @@ def get_datetime_string():
     now = datetime.now()
     if sys.platform == "win32":
         return now.strftime("%#d\\%B\\%Y %H:%M")
-    else:
-        return now.strftime("%-d\\%B\\%Y %H:%M")

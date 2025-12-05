@@ -65,20 +65,22 @@ class DatabaseTemplatesHelper:
 
     def delete_template(self, template_name):
         """Delete template by name."""
-        self.db_manager.connect()
+        self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
         cursor.execute("SELECT id FROM templates WHERE name = ?", (template_name,))
         result = cursor.fetchone()
+        self.db_manager.close()
         if not result:
-            self.db_manager.close()
             return
         
         template_id = result[0]
+        self.db_manager.connect()
+        cursor = self.db_manager.connection.cursor()
         cursor.execute("UPDATE files SET template_id = NULL WHERE template_id = ?", (template_id,))
         cursor.execute("DELETE FROM templates WHERE id = ?", (template_id,))
         self.db_manager.connection.commit()
-        self.db_manager.close()
         self.db_manager.create_temp_file()
+        self.db_manager.close()
 
     def create_unique_path(self, base_path):
         """Create unique path if base path already exists."""

@@ -195,6 +195,7 @@ class DatabaseBackupHelper:
                 print(f"Error removing old backup: {e}")
 
     def get_all_user_tables(self):
+        self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
         cursor.execute("""
             SELECT name FROM sqlite_master 
@@ -204,12 +205,15 @@ class DatabaseBackupHelper:
             ORDER BY name
         """)
         tables = [row[0] for row in cursor.fetchall()]
+        self.db_manager.close()
         return tables
     
     def get_table_columns(self, table_name):
+        self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
         cursor.execute(f"PRAGMA table_info({table_name})")
         columns = [row[1] for row in cursor.fetchall()]
+        self.db_manager.close()
         return columns
 
     def import_from_csv(self, csv_path, progress_callback=None):
@@ -268,29 +272,23 @@ class DatabaseBackupHelper:
                     print(f"Error removing {f}: {e}")
 
     def export_to_csv(self, csv_path, progress_callback=None):
-        self.db_manager.connect()
+        self.db_manager.connect(write=False)
         try:
             with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
                 writer = csv.writer(csvfile)
                 cursor = self.db_manager.connection.cursor()
-                
                 tables = self.get_all_user_tables()
-                
                 processed = 0
                 total_rows = 0
                 for table_name in tables:
                     cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
                     total_rows += cursor.fetchone()[0]
-                
                 for table_name in tables:
                     writer.writerow(["TABLE", table_name])
-                    
                     columns = self.get_table_columns(table_name)
                     columns_str = ', '.join(columns)
-                    
                     cursor.execute(f"SELECT {columns_str} FROM {table_name}")
                     writer.writerow(columns)
-                    
                     rows = cursor.fetchall()
                     for row in rows:
                         writer.writerow([row[col] for col in columns])
