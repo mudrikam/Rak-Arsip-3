@@ -2,11 +2,16 @@ import os
 import json
 import time
 from pathlib import Path
+from dotenv import load_dotenv
 
 class GeminiHelper:
     def __init__(self, config_manager, db_manager=None):
         self.config_manager = config_manager
         self.db_manager = db_manager
+        basedir = Path(__file__).parent.parent
+        env_path = basedir / ".env"
+        if env_path.exists():
+            load_dotenv(env_path)
         self.load_ai_config()
         
     def load_ai_config(self):
@@ -25,12 +30,11 @@ class GeminiHelper:
             
     def generate_name_from_image(self, image_path):
         try:
-            gemini_config = self.ai_config.get("gemini", {})
-            api_key = gemini_config.get("api_key", "")
+            api_key = os.getenv("GEMINI_API_KEY", "")
             if not api_key:
-                raise Exception("Gemini API key not configured in ai_config.json")
+                raise Exception("Gemini API key not configured in .env")
             
-            model = gemini_config.get("model", "gemini-2.5-flash")
+            model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
             prompt = self.ai_config.get("prompts", {}).get("name_generation")
             
             if not prompt:
@@ -93,12 +97,11 @@ class GeminiHelper:
     
     def analyze_invoice(self, image_path, max_retries=3, retry_delay=5):
         try:
-            gemini_config = self.ai_config.get("gemini", {})
-            api_key = gemini_config.get("api_key", "")
+            api_key = os.getenv("GEMINI_API_KEY", "")
             if not api_key:
-                raise Exception("Gemini API key not configured in ai_config.json")
+                raise Exception("Gemini API key not configured in .env")
             
-            model = gemini_config.get("model", "gemini-2.5-flash")
+            model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
             prompt = self.ai_config.get("prompts", {}).get("invoice_analysis")
             
             if not prompt:

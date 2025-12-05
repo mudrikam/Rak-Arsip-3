@@ -12,6 +12,7 @@ from pathlib import Path
 from helpers.gemini_helper import GeminiHelper
 from helpers.show_statusbar_helper import show_statusbar_message
 import textwrap
+from dotenv import load_dotenv
 
 class ImageDropLabel(QLabel):
     image_dropped = Signal(str)
@@ -115,6 +116,10 @@ class GenerateNameDialog(QDialog):
     def __init__(self, config_manager, parent=None):
         super().__init__(parent)
         self.config_manager = config_manager
+        basedir = Path(__file__).parent.parent.parent
+        env_path = basedir / ".env"
+        if env_path.exists():
+            load_dotenv(env_path)
         self.setWindowTitle("Generate Project Name from Image")
         # Use the same icon as AboutDialog for consistency
         from PySide6.QtGui import QIcon
@@ -233,8 +238,7 @@ class GenerateNameDialog(QDialog):
 
     def test_gemini_api(self):
         try:
-            ai_config = self.gemini_helper.ai_config
-            api_key = ai_config.get("gemini", {}).get("api_key", "")
+            api_key = os.getenv("GEMINI_API_KEY", "")
             if not api_key:
                 self.api_status_label.setText("API Key is empty.")
                 self.api_status_label.setStyleSheet("color: #d32f2f; font-weight: bold;")
@@ -245,7 +249,7 @@ class GenerateNameDialog(QDialog):
                 from google.genai import types
                 client = genai.Client(api_key=api_key)
                 response = client.models.generate_content(
-                    model=ai_config.get("gemini", {}).get("model", "gemini-2.0-flash"),
+                    model=os.getenv("GEMINI_MODEL", "gemini-2.0-flash"),
                     contents=["Say hello"]
                 )
                 if hasattr(response, "text") and response.text:

@@ -6,6 +6,8 @@ import qtawesome as qta
 from pathlib import Path
 import json
 import shutil
+import os
+from dotenv import load_dotenv, set_key
 
 
 class PreferencesActionsHelper:
@@ -135,60 +137,47 @@ class PreferencesActionsHelper:
             self.parent.gemini_api_show_btn.setIcon(qta.icon("fa6s.eye"))
 
     def _get_gemini_api_key(self):
-        """Get Gemini API key from configuration"""
+        """Get Gemini API key from environment variables"""
         try:
             basedir = Path(__file__).parent.parent.parent.parent
-            ai_config_path = basedir / "configs" / "ai_config.json"
-            if ai_config_path.exists():
-                with open(ai_config_path, "r", encoding="utf-8") as f:
-                    ai_config = json.load(f)
-                return ai_config.get("gemini", {}).get("api_key", "")
+            env_path = basedir / ".env"
+            if env_path.exists():
+                load_dotenv(env_path)
+            return os.getenv("GEMINI_API_KEY", "")
         except Exception:
             pass
         return ""
 
     def _get_gdrive_credentials_path(self):
-        """Get Google Drive service account credentials path"""
+        """Get Google Drive service account credentials path from environment variables"""
         try:
             basedir = Path(__file__).parent.parent.parent.parent
-            ai_config_path = basedir / "configs" / "ai_config.json"
-            if ai_config_path.exists():
-                with open(ai_config_path, "r", encoding="utf-8") as f:
-                    ai_config = json.load(f)
-                return ai_config.get("google_drive", {}).get("credentials_path", "")
+            env_path = basedir / ".env"
+            if env_path.exists():
+                load_dotenv(env_path)
+            path = os.getenv("GOOGLE_DRIVE_CREDENTIALS_PATH", "")
+            if path:
+                path = path.strip("'\"")
+            return path
         except Exception:
             pass
         return ""
 
     def _set_gemini_api_key(self, api_key):
-        """Set Gemini API key in configuration"""
+        """Set Gemini API key in .env file"""
         try:
             basedir = Path(__file__).parent.parent.parent.parent
-            ai_config_path = basedir / "configs" / "ai_config.json"
-            if ai_config_path.exists():
-                with open(ai_config_path, "r", encoding="utf-8") as f:
-                    ai_config = json.load(f)
-                if "gemini" not in ai_config:
-                    ai_config["gemini"] = {}
-                ai_config["gemini"]["api_key"] = api_key
-                with open(ai_config_path, "w", encoding="utf-8") as f:
-                    json.dump(ai_config, f, indent=4)
+            env_path = basedir / ".env"
+            set_key(str(env_path), "GEMINI_API_KEY", api_key)
         except Exception as e:
             QMessageBox.critical(self.parent, "Error", f"Failed to save Gemini API key: {e}")
 
     def _set_gdrive_credentials_path(self, credentials_path):
-        """Set Google Drive credentials path in configuration"""
+        """Set Google Drive credentials path in .env file"""
         try:
             basedir = Path(__file__).parent.parent.parent.parent
-            ai_config_path = basedir / "configs" / "ai_config.json"
-            if ai_config_path.exists():
-                with open(ai_config_path, "r", encoding="utf-8") as f:
-                    ai_config = json.load(f)
-                if "google_drive" not in ai_config:
-                    ai_config["google_drive"] = {}
-                ai_config["google_drive"]["credentials_path"] = credentials_path
-                with open(ai_config_path, "w", encoding="utf-8") as f:
-                    json.dump(ai_config, f, indent=4)
+            env_path = basedir / ".env"
+            set_key(str(env_path), "GOOGLE_DRIVE_CREDENTIALS_PATH", credentials_path)
         except Exception as e:
             QMessageBox.critical(self.parent, "Error", f"Failed to save Google Drive credentials path: {e}")
 
@@ -208,8 +197,20 @@ class PreferencesActionsHelper:
                 contents=["Say hello"]
             )
             if hasattr(response, "text") and response.text:
-                self.parent.gemini_status_label.setText("Gemini API is active.")
-                self.parent.gemini_status_label.setStyleSheet("color: #43a047; font-weight: bold;")
+                # API responded successfully — save key to .env so other parts use it
+                try:
+                    self._set_gemini_api_key(api_key)
+                    # reload env to ensure current process sees the new value
+                    basedir = Path(__file__).parent.parent.parent.parent
+                    env_path = basedir / ".env"
+                    if env_path.exists():
+                        load_dotenv(env_path, override=True)
+                    self.parent.gemini_status_label.setText("Gemini API is active and saved to .env")
+                    self.parent.gemini_status_label.setStyleSheet("color: #43a047; font-weight: bold;")
+                except Exception as save_err:
+                    self.parent.gemini_status_label.setText("Gemini active (not saved)")
+                    self.parent.gemini_status_label.setStyleSheet("color: #f57c00; font-weight: bold;")
+                    QMessageBox.warning(self.parent, "Warning", f"API is active but failed to save to .env: {save_err}")
             else:
                 self.parent.gemini_status_label.setText("No response from Gemini API.")
                 self.parent.gemini_status_label.setStyleSheet("color: #d32f2f; font-weight: bold;")
@@ -278,7 +279,7 @@ class PreferencesActionsHelper:
             
             # If we get here, the credentials are valid
             self._copy_credentials_to_config(json_path)
-            self.parent.gdrive_status_label.setText("Connection successful! Credentials saved.")
+            self.parent.gdrive_status_label.setText("Connection successful! Credentials copied to configs/")
             self.parent.gdrive_status_label.setStyleSheet("color: #43a047; font-weight: bold;")
             
         except ImportError:
@@ -295,32 +296,35 @@ class PreferencesActionsHelper:
             self.parent.gdrive_status_label.setStyleSheet("color: #d32f2f; font-weight: bold;")
 
     def _copy_credentials_to_config(self, source_path):
-        """Copy valid credentials file to configs folder"""
+        """Copy valid credentials file to configs folder and save path to .env"""
         try:
             basedir = Path(__file__).parent.parent.parent.parent
             configs_dir = basedir / "configs"
             configs_dir.mkdir(exist_ok=True)
             
             target_path = configs_dir / "credentials_config.json"
-            shutil.copy2(source_path, target_path)
             
-            # Update the path display to show the config location
+            import time
+            max_retries = 3
+            for retry in range(max_retries):
+                try:
+                    with open(source_path, 'r', encoding='utf-8') as src:
+                        content = src.read()
+                    with open(target_path, 'w', encoding='utf-8') as dst:
+                        dst.write(content)
+                    break
+                except PermissionError:
+                    if retry < max_retries - 1:
+                        time.sleep(0.5)
+                    else:
+                        raise
+            
+            self._set_gdrive_credentials_path(str(target_path))
             self.parent.gdrive_path_edit.setText(str(target_path))
             
         except Exception as e:
             QMessageBox.critical(self.parent, "Error", f"Failed to copy credentials: {e}")
 
-    def _get_gdrive_credentials_path(self):
-        """Get Google Drive credentials path from config folder"""
-        try:
-            basedir = Path(__file__).parent.parent.parent.parent
-            credentials_path = basedir / "configs" / "credentials_config.json"
-            if credentials_path.exists():
-                return str(credentials_path)
-        except Exception:
-            pass
-        return ""
-            
     def load_action_options_data(self):
         """Load action options data from configuration"""
         try:
