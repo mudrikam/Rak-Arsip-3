@@ -22,7 +22,7 @@ class PropertiesWidget(QDockWidget):
 
         container = QWidget(self)
         main_layout = QVBoxLayout(container)
-        main_layout.setContentsMargins(8, 8, 8, 8)
+        main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
         self.scroll_area = QScrollArea(container)
@@ -35,7 +35,7 @@ class PropertiesWidget(QDockWidget):
         self.scroll_content = QWidget()
         self.scroll_area.setWidget(self.scroll_content)
         layout = QVBoxLayout(self.scroll_content)
-        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
         self.image_frame = QFrame(self.scroll_content)
