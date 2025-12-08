@@ -191,9 +191,14 @@ class PreferencesActionsHelper:
         try:
             import google.genai as genai
             from google.genai import types
+            
+            model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+            print(f"DEBUG: Testing with model: {model}")
+            print(f"DEBUG: API Key: {api_key[:20]}...{api_key[-5:]}")
+            
             client = genai.Client(api_key=api_key)
             response = client.models.generate_content(
-                model="gemini-2.0-flash",
+                model=model,
                 contents=["Say hello"]
             )
             if hasattr(response, "text") and response.text:

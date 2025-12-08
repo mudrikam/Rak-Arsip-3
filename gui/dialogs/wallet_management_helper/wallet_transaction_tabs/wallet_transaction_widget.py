@@ -1067,12 +1067,47 @@ class WalletTransactionWidget(QWidget):
                     except Exception as e:
                         self.error.emit(str(e))
             
-            gemini_helper = GeminiHelper(None, self.db_manager)
-            
+            config_manager = None
             if hasattr(self.parent(), 'config_manager'):
-                gemini_helper.config_manager = self.parent().config_manager
+                config_manager = self.parent().config_manager
             elif hasattr(self.parent(), 'parent') and hasattr(self.parent().parent(), 'config_manager'):
-                gemini_helper.config_manager = self.parent().parent().config_manager
+                config_manager = self.parent().parent().config_manager
+            
+            print(f"\nDEBUG: Creating GeminiHelper...")
+            print(f"  config_manager: {config_manager is not None}")
+            print(f"  db_manager: {self.db_manager is not None}")
+            
+            # CRITICAL: Fetch database context BEFORE creating thread
+            # SQLite objects cannot be used across threads
+            db_context = None
+            if self.db_manager and hasattr(self.db_manager, 'wallet_helper'):
+                try:
+                    print("DEBUG: Pre-fetching database context for thread safety...")
+                    pockets = self.db_manager.wallet_helper.get_all_pockets()
+                    categories = self.db_manager.wallet_helper.get_all_categories()
+                    currencies = self.db_manager.wallet_helper.get_all_currencies()
+                    locations = self.db_manager.wallet_helper.get_all_locations()
+                    statuses = self.db_manager.wallet_helper.get_all_transaction_statuses()
+                    
+                    db_context = {
+                        "pockets": pockets,
+                        "categories": categories,
+                        "currencies": currencies,
+                        "locations": locations,
+                        "statuses": statuses
+                    }
+                    print(f"DEBUG: Context fetched - {len(pockets)} pockets, {len(categories)} categories, {len(currencies)} currencies")
+                except Exception as e:
+                    print(f"ERROR fetching context: {e}")
+                    import traceback
+                    traceback.print_exc()
+            
+            # Create GeminiHelper WITHOUT db_manager to avoid thread issues
+            gemini_helper = GeminiHelper(config_manager, None)
+            
+            # Pass the pre-fetched context data
+            if db_context:
+                gemini_helper.set_db_context(db_context)
             
             self.analysis_thread = AnalysisThread(gemini_helper, self.transaction_image_path)
             

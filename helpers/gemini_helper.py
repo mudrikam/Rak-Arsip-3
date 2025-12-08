@@ -8,11 +8,17 @@ class GeminiHelper:
     def __init__(self, config_manager, db_manager=None):
         self.config_manager = config_manager
         self.db_manager = db_manager
+        self.db_context = None  # Pre-fetched database context for thread safety
         basedir = Path(__file__).parent.parent
         env_path = basedir / ".env"
         if env_path.exists():
             load_dotenv(env_path)
         self.load_ai_config()
+    
+    def set_db_context(self, context):
+        """Set pre-fetched database context to avoid SQLite threading issues."""
+        self.db_context = context
+        print(f"DEBUG: Database context set with {len(context.get('pockets', []))} pockets")
         
     def load_ai_config(self):
         try:
@@ -33,6 +39,8 @@ class GeminiHelper:
             api_key = os.getenv("GEMINI_API_KEY", "")
             if not api_key:
                 raise Exception("Gemini API key not configured in .env")
+            
+            print(f"DEBUG: API Key loaded: {api_key[:20]}...{api_key[-5:]} (length: {len(api_key)})")
             
             model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
             prompt = self.ai_config.get("prompts", {}).get("name_generation")
@@ -101,52 +109,96 @@ class GeminiHelper:
             if not api_key:
                 raise Exception("Gemini API key not configured in .env")
             
+            print(f"DEBUG: API Key loaded: {api_key[:20]}...{api_key[-5:]} (length: {len(api_key)})")
+            
             model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
             prompt = self.ai_config.get("prompts", {}).get("invoice_analysis")
             
             if not prompt:
                 raise Exception("invoice_analysis prompt not found in ai_config.json")
             
-            context_parts = []
+            context_data = {}
             
-            if self.db_manager:
+            print(f"\nDEBUG: Checking context sources...")
+            print(f"  db_context (pre-fetched): {self.db_context is not None}")
+            print(f"  db_manager (direct access): {self.db_manager is not None}")
+            
+            # Use pre-fetched context if available (thread-safe)
+            if self.db_context:
                 try:
+                    print("DEBUG: Using pre-fetched database context (thread-safe)...")
+                    
+                    pockets = self.db_context.get('pockets', [])
+                    categories = self.db_context.get('categories', [])
+                    currencies = self.db_context.get('currencies', [])
+                    locations = self.db_context.get('locations', [])
+                    statuses = self.db_context.get('statuses', [])
+                    
+                    print(f"DEBUG: Context has {len(pockets)} pockets, {len(categories)} categories, {len(currencies)} currencies")
+                    
+                    context_data = {
+                        "available_options": {
+                            "pockets": [{"id": p['id'], "name": p['name']} for p in pockets],
+                            "categories": [{"id": c['id'], "name": c['name']} for c in categories],
+                            "currencies": [{"id": c['id'], "code": c['code']} for c in currencies],
+                            "locations": [{"id": l['id'], "name": l['name']} for l in locations],
+                            "transaction_statuses": [{"id": s['id'], "name": s['name']} for s in statuses],
+                            "transaction_types": ["income", "expense", "transfer"],
+                            "item_types": ["Physical", "Digital", "Service", "Subscription", "Other"]
+                        }
+                    }
+                    
+                    print(f"DEBUG: Context data created! Pockets: {len(context_data['available_options']['pockets'])}, Categories: {len(context_data['available_options']['categories'])}")
+                    
+                except Exception as e:
+                    print(f"ERROR processing pre-fetched context: {e}")
+                    import traceback
+                    traceback.print_exc()
+            # Fallback: try direct db_manager access (may fail in thread)
+            elif self.db_manager and hasattr(self.db_manager, 'wallet_helper'):
+                try:
+                    print("WARNING: Using direct db_manager access (may fail in threads)...")
+                    
                     pockets = self.db_manager.wallet_helper.get_all_pockets()
                     categories = self.db_manager.wallet_helper.get_all_categories()
                     currencies = self.db_manager.wallet_helper.get_all_currencies()
                     locations = self.db_manager.wallet_helper.get_all_locations()
                     statuses = self.db_manager.wallet_helper.get_all_transaction_statuses()
                     
-                    context_parts.append("\n\nAvailable options for transaction_details:")
+                    context_data = {
+                        "available_options": {
+                            "pockets": [{"id": p['id'], "name": p['name']} for p in pockets],
+                            "categories": [{"id": c['id'], "name": c['name']} for c in categories],
+                            "currencies": [{"id": c['id'], "code": c['code']} for c in currencies],
+                            "locations": [{"id": l['id'], "name": l['name']} for l in locations],
+                            "transaction_statuses": [{"id": s['id'], "name": s['name']} for s in statuses],
+                            "transaction_types": ["income", "expense", "transfer"],
+                            "item_types": ["Physical", "Digital", "Service", "Subscription", "Other"]
+                        }
+                    }
                     
-                    context_parts.append("\nPockets (use pocket_id):")
-                    for pocket in pockets:
-                        context_parts.append(f"  - id: {pocket['id']}, : {pocket['name']}")
-                    
-                    context_parts.append("\nCategories (use category_id):")
-                    for category in categories:
-                        context_parts.append(f"  - id: {category['id']}, : {category['name']}")
-                    
-                    context_parts.append("\nCurrencies (use currency_id):")
-                    for currency in currencies:
-                        context_parts.append(f"  - id: {currency['id']}, code: {currency['code']}")
-                    
-                    context_parts.append("\nLocations (use location_id):")
-                    for location in locations:
-                        context_parts.append(f"  - id: {location['id']}, : {location['name']}")
-                    
-                    context_parts.append("\nTransaction Statuses (use status_id):")
-                    for status in statuses:
-                        context_parts.append(f"  - id: {status['id']}, : {status['name']}")
-                    
-                    context_parts.append("\nTransaction types: income, expense, transfer")
-                    context_parts.append("\nItems type: Physical, Digital, Service, Subscription, Other")
+                    print(f"DEBUG: Context data created! Pockets: {len(context_data['available_options']['pockets'])}")
                     
                 except Exception as e:
-                    print(f"Error getting database options: {e}")
+                    print(f"ERROR getting database options: {e}")
+                    import traceback
+                    traceback.print_exc()
+            else:
+                print("WARNING: No context available - neither pre-fetched nor db_manager!")
             
-            full_prompt = prompt + "".join(context_parts)
+            if context_data:
+                context_json = json.dumps(context_data, indent=2, ensure_ascii=False)
+                full_prompt = prompt + "\n\n" + context_json
+            else:
+                full_prompt = prompt
+            
+            print("\n" + "="*80)
+            print("=== RAW PROMPT SENT TO GEMINI ===")
+            print("="*80)
             print(full_prompt)
+            print("="*80)
+            print("=== END RAW PROMPT ===")
+            print("="*80 + "\n")
             
             print("\n=== DEBUG: Analyzing Invoice ===")
             print(f"Image: {image_path}")
