@@ -11,9 +11,30 @@ class GeminiHelper:
         self.db_context = None  # Pre-fetched database context for thread safety
         basedir = Path(__file__).parent.parent
         env_path = basedir / ".env"
+        
+        # Create default .env if it doesn't exist
+        if not env_path.exists():
+            self._create_default_env(env_path)
+        
         if env_path.exists():
             load_dotenv(env_path)
         self.load_ai_config()
+    
+    def _create_default_env(self, env_path):
+        """Create default .env file with standard settings."""
+        try:
+            default_content = """DEVELOPMENT=false
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MAX_TOKENS=5000
+GEMINI_TEMPERATURE=0.7
+GOOGLE_DRIVE_CREDENTIALS_PATH=
+"""
+            with open(env_path, 'w', encoding='utf-8') as f:
+                f.write(default_content)
+            print(f"Created default .env file at {env_path}")
+        except Exception as e:
+            print(f"Error creating default .env file: {e}")
     
     def set_db_context(self, context):
         """Set pre-fetched database context to avoid SQLite threading issues."""
