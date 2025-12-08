@@ -1,5 +1,4 @@
-PySide6=6.10.0
-PySide6-Charts
+PySide6==6.10.0
 qtawesome
 google-genai
 google-api-python-client
