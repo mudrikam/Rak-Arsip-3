@@ -1,4 +1,5 @@
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QDialogButtonBox, QWidget, QLineEdit
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QFormLayout, QHBoxLayout, QLabel, QComboBox, QDialogButtonBox, QWidget, QLineEdit
+from PySide6.QtCore import Qt
 import qtawesome as qta
 from helpers.show_statusbar_helper import show_statusbar_message
 
@@ -6,15 +7,30 @@ class SortDialog(QDialog):
     def __init__(self, status_options, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Sort Table")
-        self.setWindowIcon(qta.icon("fa6s.arrow-down-wide-short"))
-        self.setMinimumWidth(340)
-        layout = QVBoxLayout(self)
-
-        field_row = QHBoxLayout()
-        field_row.setContentsMargins(0, 0, 0, 0)
-        field_row.setSpacing(0)
-        field_row.addWidget(QLabel("Sort by:"))
+        if parent is not None:
+            self.setWindowIcon(parent.windowIcon())
+        
+        main_layout = QVBoxLayout(self)
+        main_layout.setSizeConstraint(QVBoxLayout.SetFixedSize)
+        form_layout = QFormLayout()
+        form_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        form_layout.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        
+        def create_icon_label(text, icon_name):
+            container = QWidget()
+            h_layout = QHBoxLayout(container)
+            h_layout.setContentsMargins(0, 0, 0, 0)
+            h_layout.setSpacing(6)
+            h_layout.addStretch()
+            icon_lbl = QLabel()
+            icon_lbl.setPixmap(qta.icon(icon_name).pixmap(16, 16))
+            h_layout.addWidget(icon_lbl)
+            text_lbl = QLabel(text)
+            h_layout.addWidget(text_lbl)
+            return container
+        
         self.field_combo = QComboBox()
+        self.field_combo.setMinimumWidth(200)
         self.sort_fields = [
             ("Date", "date"),
             ("Name", "name"),
@@ -26,42 +42,28 @@ class SortDialog(QDialog):
         ]
         for label, _ in self.sort_fields:
             self.field_combo.addItem(label)
-        field_row.addWidget(self.field_combo)
-        layout.addLayout(field_row)
-
-        self.status_row = QHBoxLayout()
-        self.status_row.setContentsMargins(0, 0, 0, 0)
-        self.status_row.setSpacing(0)
-        self.status_row.addWidget(QLabel("Status:"))
+        form_layout.addRow(create_icon_label("Sort by:", "fa6s.arrow-down-wide-short"), self.field_combo)
+        
         self.status_combo = QComboBox()
+        self.status_combo.setMinimumWidth(200)
         self.status_combo.addItem("All")
         self.status_options = list(status_options) if status_options else []
         for status in self.status_options:
             self.status_combo.addItem(status)
         self.status_combo.setEnabled(False)
-        self.status_row.addWidget(self.status_combo)
-        self.status_row_widget = QWidget()
-        self.status_row_widget.setLayout(self.status_row)
-        self.status_row_widget.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.status_row_widget)
-
-        self.root_row = QHBoxLayout()
-        self.root_row.setContentsMargins(0, 0, 0, 0)
-        self.root_row.setSpacing(0)
-        self.root_row.addWidget(QLabel("Root:"))
+        self.status_label = create_icon_label("Status:", "fa6s.filter")
+        self.status_row_index = form_layout.rowCount()
+        form_layout.addRow(self.status_label, self.status_combo)
+        
         self.root_combo = QComboBox()
+        self.root_combo.setMinimumWidth(200)
         self.root_combo.setEnabled(False)
-        self.root_row.addWidget(self.root_combo)
-        self.root_row_widget = QWidget()
-        self.root_row_widget.setLayout(self.root_row)
-        self.root_row_widget.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.root_row_widget)
-
-        self.client_row = QHBoxLayout()
-        self.client_row.setContentsMargins(0, 0, 0, 0)
-        self.client_row.setSpacing(0)
-        self.client_row.addWidget(QLabel("Client:"))
+        self.root_label = create_icon_label("Root:", "fa6s.code-branch")
+        self.root_row_index = form_layout.rowCount()
+        form_layout.addRow(self.root_label, self.root_combo)
+        
         self.client_combo = QComboBox()
+        self.client_combo.setMinimumWidth(200)
         self.client_combo.setEnabled(False)
         self.client_list = []
         self.client_id_map = {}
@@ -76,30 +78,19 @@ class SortDialog(QDialog):
             for client in self.client_list:
                 self.client_combo.addItem(client["client_name"], client["id"])
                 self.client_id_map[client["id"]] = client["client_name"]
-        self.client_row.addWidget(self.client_combo)
-        self.client_row_widget = QWidget()
-        self.client_row_widget.setLayout(self.client_row)
-        self.client_row_widget.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.client_row_widget)
-
-        self.batch_row = QHBoxLayout()
-        self.batch_row.setContentsMargins(0, 0, 0, 0)
-        self.batch_row.setSpacing(0)
-        self.batch_row.addWidget(QLabel("Batch:"))
+        self.client_label = create_icon_label("Client:", "fa6s.user")
+        self.client_row_index = form_layout.rowCount()
+        form_layout.addRow(self.client_label, self.client_combo)
+        
         self.batch_combo = QComboBox()
+        self.batch_combo.setMinimumWidth(200)
         self.batch_combo.setEnabled(False)
-        self.batch_row.addWidget(self.batch_combo)
-        self.batch_row_widget = QWidget()
-        self.batch_row_widget.setLayout(self.batch_row)
-        self.batch_row_widget.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.batch_row_widget)
-
-        # --- Category & Subcategory filter ---
-        self.category_row = QHBoxLayout()
-        self.category_row.setContentsMargins(0, 0, 0, 0)
-        self.category_row.setSpacing(0)
-        self.category_row.addWidget(QLabel("Category:"))
+        self.batch_label = create_icon_label("Batch:", "fa6s.box")
+        self.batch_row_index = form_layout.rowCount()
+        form_layout.addRow(self.batch_label, self.batch_combo)
+        
         self.category_combo = QComboBox()
+        self.category_combo.setMinimumWidth(200)
         self.category_combo.setEditable(True)
         self.category_combo.setEnabled(False)
         self.category_list = []
@@ -108,42 +99,42 @@ class SortDialog(QDialog):
             self.category_list = self.db_manager.get_all_categories()
             for cat in self.category_list:
                 self.category_combo.addItem(cat)
-        self.category_row.addWidget(self.category_combo)
-        self.category_row_widget = QWidget()
-        self.category_row_widget.setLayout(self.category_row)
-        self.category_row_widget.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.category_row_widget)
-
-        self.subcategory_row = QHBoxLayout()
-        self.subcategory_row.setContentsMargins(0, 0, 0, 0)
-        self.subcategory_row.setSpacing(0)
-        self.subcategory_row.addWidget(QLabel("Subcategory:"))
+        self.category_label = create_icon_label("Category:", "fa6s.folder")
+        self.category_row_index = form_layout.rowCount()
+        form_layout.addRow(self.category_label, self.category_combo)
+        
         self.subcategory_combo = QComboBox()
+        self.subcategory_combo.setMinimumWidth(200)
         self.subcategory_combo.setEditable(True)
         self.subcategory_combo.setEnabled(False)
         self.subcategory_combo.addItem("")
-        self.subcategory_row.addWidget(self.subcategory_combo)
-        self.subcategory_row_widget = QWidget()
-        self.subcategory_row_widget.setLayout(self.subcategory_row)
-        self.subcategory_row_widget.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.subcategory_row_widget)
-
-        order_row = QHBoxLayout()
-        order_row.setContentsMargins(0, 0, 0, 0)
-        order_row.setSpacing(0)
-        order_row.addWidget(QLabel("Order:"))
+        self.subcategory_label = create_icon_label("SubCat:", "fa6s.folder-open")
+        self.subcategory_row_index = form_layout.rowCount()
+        form_layout.addRow(self.subcategory_label, self.subcategory_combo)
+        
         self.order_combo = QComboBox()
+        self.order_combo.setMinimumWidth(200)
         self.order_combo.addItems(["Ascending", "Descending"])
         self.order_combo.setCurrentIndex(1)
-        order_row.addWidget(self.order_combo)
-        layout.addLayout(order_row)
+        form_layout.addRow(create_icon_label("Order:", "fa6s.sort"), self.order_combo)
+        
+        main_layout.addLayout(form_layout)
+
+        main_layout.addLayout(form_layout)
 
         self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         self.button_box.accepted.connect(self._on_accept)
         self.button_box.rejected.connect(self.reject)
-        layout.addWidget(self.button_box)
+        main_layout.addWidget(self.button_box)
 
-        self.setLayout(layout)
+        ok_btn = self.button_box.button(QDialogButtonBox.Ok)
+        cancel_btn = self.button_box.button(QDialogButtonBox.Cancel)
+        if ok_btn is not None:
+            ok_btn.setIcon(qta.icon("fa6s.floppy-disk"))
+        if cancel_btn is not None:
+            cancel_btn.setIcon(qta.icon("fa6s.xmark"))
+
+        self.setLayout(main_layout)
 
         self.field_combo.currentIndexChanged.connect(self._on_field_changed)
         self.client_combo.currentIndexChanged.connect(self._on_client_changed)
@@ -155,21 +146,33 @@ class SortDialog(QDialog):
 
     def _on_field_changed(self, idx):
         field = self.sort_fields[self.field_combo.currentIndex()][1]
-        self.status_combo.setEnabled(field == "status")
-        self.status_row_widget.setVisible(field == "status")
+        
+        is_status = field == "status"
+        self.status_combo.setEnabled(is_status)
+        self.status_label.setVisible(is_status)
+        self.status_combo.setVisible(is_status)
+        
         is_batch = field == "batch_number"
         self.client_combo.setEnabled(is_batch)
-        self.client_row_widget.setVisible(is_batch)
-        self.batch_row_widget.setVisible(is_batch)
+        self.client_label.setVisible(is_batch)
+        self.client_combo.setVisible(is_batch)
+        self.batch_label.setVisible(is_batch)
+        self.batch_combo.setVisible(is_batch)
         self.batch_combo.setEnabled(is_batch and self.client_combo.currentData() is not None)
+        
         is_root = field == "root"
         self.root_combo.setEnabled(is_root)
-        self.root_row_widget.setVisible(is_root)
+        self.root_label.setVisible(is_root)
+        self.root_combo.setVisible(is_root)
+        
         is_category = field == "category"
         self.category_combo.setEnabled(is_category)
-        self.category_row_widget.setVisible(is_category)
+        self.category_label.setVisible(is_category)
+        self.category_combo.setVisible(is_category)
         self.subcategory_combo.setEnabled(is_category and bool(self.category_combo.currentText().strip()))
-        self.subcategory_row_widget.setVisible(is_category)
+        self.subcategory_label.setVisible(is_category)
+        self.subcategory_combo.setVisible(is_category)
+        
         if is_root and self.db_manager:
             self.root_combo.clear()
             roots = self.db_manager.get_all_roots()
@@ -187,6 +190,7 @@ class SortDialog(QDialog):
             self.batch_combo.clear()
             self.batch_combo.setEnabled(False)
         self._update_ok_button_state()
+        self.adjustSize()
 
     def _on_client_changed(self, idx):
         client_id = self.client_combo.currentData()
