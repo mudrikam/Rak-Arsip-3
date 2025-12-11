@@ -1,11 +1,12 @@
 import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
-from PySide6.QtWidgets import QDockWidget, QWidget, QVBoxLayout, QLabel, QFrame, QHBoxLayout, QApplication, QMenu, QSpinBox, QScrollArea
+from PySide6.QtWidgets import QDockWidget, QWidget, QVBoxLayout, QLabel, QFrame, QHBoxLayout, QApplication, QMenu, QSpinBox, QScrollArea, QProgressDialog
 from PySide6.QtGui import QPixmap, QCursor, QMouseEvent, QGuiApplication, QDesktopServices, QAction, QDrag
 from PySide6.QtCore import Qt, QPoint, QEvent, QRect, QMimeData, QUrl
 import qtawesome as qta
 from pathlib import Path
+import time
 import textwrap
 import subprocess
 from helpers.show_statusbar_helper import show_statusbar_message
@@ -648,12 +649,96 @@ class PropertiesWidget(QDockWidget):
                 self._image_files = combined_images
                 
                 print(f"[Properties Preview] Processing {len(self._image_files)} thumbnail(s)...")
-                for img_path in self._image_files:
-                    cached_path = self.thumbnail_cache.get_or_create_thumbnail(str(img_path))
-                    if cached_path:
-                        self._cached_thumbnails.append(cached_path)
-                    else:
-                        self._cached_thumbnails.append(str(img_path))
+                cached_paths = []
+                missing_indices = []
+                try:
+                    for idx, img_path in enumerate(self._image_files):
+                        try:
+                            cached = self.thumbnail_cache.get_cached_thumbnail(str(img_path))
+                            if cached:
+                                cached_paths.append(cached)
+                            else:
+                                cached_paths.append(None)
+                                missing_indices.append(idx)
+                        except Exception as e:
+                            print(f"[Properties Preview] Error while checking cache for {img_path}: {e}")
+                            cached_paths.append(None)
+                            missing_indices.append(idx)
+                except Exception as e:
+                    print(f"[Properties Preview] Unexpected error during cache check: {e}")
+
+                if not missing_indices:
+                    for path in cached_paths:
+                        if path:
+                            self._cached_thumbnails.append(path)
+                        else:
+                            self._cached_thumbnails.append(str(self._image_files[len(self._cached_thumbnails)]))
+                else:
+                    progress_dialog = None
+                    dialog_shown = False
+                    created_count = 0
+                    missing_total = len(missing_indices)
+                    start_ts = time.time()
+                    for idx, img_path in enumerate(self._image_files):
+                        if cached_paths[idx]:
+                            self._cached_thumbnails.append(cached_paths[idx])
+                        else:
+                            try:
+                                elapsed = time.time() - start_ts
+                                if elapsed >= 0.2 and not dialog_shown:
+                                    try:
+                                        parent_widget = self.parent_window if hasattr(self, 'parent_window') and self.parent_window is not None else self
+                                        progress_dialog = QProgressDialog(parent_widget)
+                                        progress_dialog.setWindowTitle("Caching thumbs!")
+                                        progress_dialog.setLabelText("Creating thumbnails...")
+                                        progress_dialog.setMinimum(0)
+                                        progress_dialog.setMaximum(missing_total)
+                                        progress_dialog.setCancelButton(None)
+                                        progress_dialog.setWindowModality(Qt.ApplicationModal)
+                                        try:
+                                            if hasattr(parent_widget, 'windowIcon'):
+                                                parent_icon = parent_widget.windowIcon()
+                                                if parent_icon and not parent_icon.isNull():
+                                                    progress_dialog.setWindowIcon(parent_icon)
+                                        except Exception as e:
+                                            print(f"[Properties Preview] Failed to inherit parent icon: {e}")
+                                        progress_dialog.setMinimumDuration(0)
+                                        progress_dialog.show()
+                                        try:
+                                            QApplication.processEvents()
+                                            parent_geom = parent_widget.frameGeometry() if hasattr(parent_widget, 'frameGeometry') else parent_widget.geometry()
+                                            dlg_geom = progress_dialog.frameGeometry()
+                                            dlg_geom.moveCenter(parent_geom.center())
+                                            progress_dialog.move(dlg_geom.topLeft())
+                                        except Exception as e:
+                                            print(f"[Properties Preview] Failed to center progress dialog: {e}")
+                                        dialog_shown = True
+                                    except Exception as e:
+                                        print(f"[Properties Preview] Failed to create progress dialog: {e}")
+                                        progress_dialog = None
+                                new_cache = self.thumbnail_cache.create_thumbnail(str(img_path))
+                                if new_cache:
+                                    self._cached_thumbnails.append(new_cache)
+                                else:
+                                    self._cached_thumbnails.append(str(img_path))
+                            except Exception as e:
+                                print(f"[Properties Preview] Error creating thumbnail for {img_path}: {e}")
+                                self._cached_thumbnails.append(str(img_path))
+                            finally:
+                                created_count += 1
+                                if dialog_shown and progress_dialog:
+                                    try:
+                                        progress_dialog.setValue(created_count)
+                                        progress_dialog.setLabelText(f"Created {created_count}/{missing_total} thumbnails...")
+                                        QApplication.processEvents()
+                                    except Exception:
+                                        pass
+                    if progress_dialog:
+                        try:
+                            progress_dialog.close()
+                            progress_dialog.deleteLater()
+                        except Exception:
+                            pass
                 
                 try:
                     self._image_index = self._image_files.index(preferred_image)
