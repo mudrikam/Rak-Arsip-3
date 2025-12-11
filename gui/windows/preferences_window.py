@@ -20,7 +20,7 @@ class PreferencesWindow(QDialog):
         self.setModal(True)
         
         # Initialize helpers
-        self.actions_helper = PreferencesActionsHelper(self, config_manager)
+        self.actions_helper = PreferencesActionsHelper(self, config_manager, db_manager.config_manager)
         self.categories_helper = PreferencesCategoriesHelper(self, db_manager)
         self.templates_helper = PreferencesTemplatesHelper(self, db_manager)
         self.backup_helper = PreferencesBackupHelper(self, db_manager)

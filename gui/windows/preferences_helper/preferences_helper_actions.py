@@ -7,15 +7,17 @@ from pathlib import Path
 import json
 import shutil
 import os
+import tempfile
 from dotenv import load_dotenv, set_key
 
 
 class PreferencesActionsHelper:
     """Helper class for Action Options tab in Preferences window"""
     
-    def __init__(self, parent, config_manager):
+    def __init__(self, parent, config_manager, db_config_manager):
         self.parent = parent
         self.config_manager = config_manager
+        self.db_config_manager = db_config_manager
         
     def create_action_options_tab(self):
         """Create and return the Action Options tab widget"""
@@ -123,6 +125,40 @@ class PreferencesActionsHelper:
         
         gdrive_group.setLayout(gdrive_layout)
         layout.addWidget(gdrive_group)
+
+        # Cache Management section
+        cache_group = QGroupBox("Cache Management")
+        cache_layout = QVBoxLayout(cache_group)
+        
+        cache_info_label = QLabel("Clear cached data to free up disk space")
+        cache_info_label.setStyleSheet("color: #666; font-style: italic;")
+        cache_layout.addWidget(cache_info_label)
+        
+        cache_buttons_row = QHBoxLayout()
+        
+        self.parent.clear_thumbnail_cache_btn = QPushButton("Clear Thumbnail Cache")
+        self.parent.clear_thumbnail_cache_btn.setIcon(qta.icon("fa6s.image"))
+        self.parent.clear_thumbnail_cache_btn.clicked.connect(self.clear_thumbnail_cache)
+        
+        self.parent.clear_database_cache_btn = QPushButton("Clear Database Cache")
+        self.parent.clear_database_cache_btn.setIcon(qta.icon("fa6s.database"))
+        self.parent.clear_database_cache_btn.clicked.connect(self.clear_database_cache)
+        
+        self.parent.clear_all_cache_btn = QPushButton("Clear All Cache")
+        self.parent.clear_all_cache_btn.setIcon(qta.icon("fa6s.trash-can"))
+        self.parent.clear_all_cache_btn.clicked.connect(self.clear_all_cache)
+        
+        cache_buttons_row.addWidget(self.parent.clear_thumbnail_cache_btn)
+        cache_buttons_row.addWidget(self.parent.clear_database_cache_btn)
+        cache_buttons_row.addWidget(self.parent.clear_all_cache_btn)
+        cache_layout.addLayout(cache_buttons_row)
+        
+        self.parent.cache_status_label = QLabel("")
+        self.parent.cache_status_label.setStyleSheet("color: #1976d2; font-weight: bold;")
+        cache_layout.addWidget(self.parent.cache_status_label)
+        
+        cache_group.setLayout(cache_layout)
+        layout.addWidget(cache_group)
 
         layout.addStretch()
         return tab
@@ -330,6 +366,94 @@ class PreferencesActionsHelper:
         except Exception as e:
             QMessageBox.critical(self.parent, "Error", f"Failed to copy credentials: {e}")
 
+    def _get_cache_path(self, cache_key):
+        """Get cache path from db config"""
+        try:
+            cache_path = self.db_config_manager.get(f"system_caching.{cache_key}")
+            if cache_path:
+                temp_dir = Path(tempfile.gettempdir())
+                return temp_dir / cache_path
+            return None
+        except Exception:
+            return None
+
+    def _clear_cache_directory(self, cache_path):
+        """Clear a cache directory and return number of files deleted"""
+        if not cache_path or not cache_path.exists():
+            return 0
+        
+        files_deleted = 0
+        try:
+            for item in cache_path.iterdir():
+                if item.is_file():
+                    item.unlink()
+                    files_deleted += 1
+                elif item.is_dir():
+                    shutil.rmtree(item)
+                    files_deleted += 1
+        except Exception as e:
+            raise Exception(f"Failed to clear cache: {e}")
+        
+        return files_deleted
+
+    def clear_thumbnail_cache(self):
+        """Clear thumbnail cache"""
+        try:
+            cache_path = self._get_cache_path("projects_thumbnail_cache")
+            if not cache_path:
+                self.parent.cache_status_label.setText("Thumbnail cache path not configured")
+                self.parent.cache_status_label.setStyleSheet("color: #f57c00; font-weight: bold;")
+                return
+            
+            files_deleted = self._clear_cache_directory(cache_path)
+            self.parent.cache_status_label.setText(f"Thumbnail cache cleared ({files_deleted} items)")
+            self.parent.cache_status_label.setStyleSheet("color: #43a047; font-weight: bold;")
+            
+        except Exception as e:
+            self.parent.cache_status_label.setText(f"Error: {str(e)[:50]}...")
+            self.parent.cache_status_label.setStyleSheet("color: #d32f2f; font-weight: bold;")
+
+    def clear_database_cache(self):
+        """Clear database cache"""
+        try:
+            cache_path = self._get_cache_path("database_cache")
+            if not cache_path:
+                self.parent.cache_status_label.setText("Database cache path not configured")
+                self.parent.cache_status_label.setStyleSheet("color: #f57c00; font-weight: bold;")
+                return
+            
+            files_deleted = self._clear_cache_directory(cache_path)
+            self.parent.cache_status_label.setText(f"Database cache cleared ({files_deleted} items)")
+            self.parent.cache_status_label.setStyleSheet("color: #43a047; font-weight: bold;")
+            
+        except Exception as e:
+            self.parent.cache_status_label.setText(f"Error: {str(e)[:50]}...")
+            self.parent.cache_status_label.setStyleSheet("color: #d32f2f; font-weight: bold;")
+
+    def clear_all_cache(self):
+        """Clear all cache directories"""
+        try:
+            total_deleted = 0
+            
+            thumbnail_path = self._get_cache_path("projects_thumbnail_cache")
+            if thumbnail_path:
+                total_deleted += self._clear_cache_directory(thumbnail_path)
+            
+            database_path = self._get_cache_path("database_cache")
+            if database_path:
+                total_deleted += self._clear_cache_directory(database_path)
+            
+            if total_deleted > 0:
+                self.parent.cache_status_label.setText(f"All cache cleared ({total_deleted} items)")
+                self.parent.cache_status_label.setStyleSheet("color: #43a047; font-weight: bold;")
+            else:
+                self.parent.cache_status_label.setText("No cache items found")
+                self.parent.cache_status_label.setStyleSheet("color: #f57c00; font-weight: bold;")
+                
+        except Exception as e:
+            self.parent.cache_status_label.setText(f"Error: {str(e)[:50]}...")
+            self.parent.cache_status_label.setStyleSheet("color: #d32f2f; font-weight: bold;")
+
     def load_action_options_data(self):
         """Load action options data from configuration"""
         try:
@@ -353,6 +477,9 @@ class PreferencesActionsHelper:
             self.parent.gdrive_status_label.setStyleSheet("color: #43a047; font-weight: bold;")
         else:
             self.parent.gdrive_status_label.setText("")
+        
+        # Clear cache status label
+        self.parent.cache_status_label.setText("")
         
     def save_action_options_data(self):
         """Save action options data to configuration"""
