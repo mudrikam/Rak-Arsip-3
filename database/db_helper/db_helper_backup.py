@@ -16,11 +16,11 @@ class DatabaseBackupHelper:
     def setup_auto_backup_timer(self):
         """Setup automatic backup timer."""
         self.db_manager.auto_backup_timer = QTimer(self.db_manager)
-        self.db_manager.auto_backup_timer.timeout.connect(self.auto_backup_database_daily)
+        self.db_manager.auto_backup_timer.timeout.connect(self.auto_backup_database_hourly)
         self.db_manager.auto_backup_timer.start(60 * 60 * 1000)
 
-    def auto_backup_database_daily(self):
-        """Perform automatic daily backup."""
+    def auto_backup_database_hourly(self):
+        """Perform automatic hourly backup."""
         backup_dir = os.path.join(os.path.dirname(self.db_manager.db_path), "db_backups")
         os.makedirs(backup_dir, exist_ok=True)
         today_str = datetime.now().strftime("%Y%m%d")
@@ -29,7 +29,7 @@ class DatabaseBackupHelper:
         lock_path = os.path.join(self.db_manager.temp_dir, "backup.lock")
         
         if os.path.exists(lock_path):
-            print("Backup sedang berlangsung oleh sesi lain.")
+            print("Backup already in progress by another session.")
             return
         
         self.cleanup_old_backups(backup_dir)
@@ -104,9 +104,9 @@ class DatabaseBackupHelper:
                 widget = self.db_manager._parent_widget if self.db_manager._parent_widget is not None else self.db_manager.parent()
                 main_window = find_main_window(widget) if widget is not None else None
                 if main_window is not None:
-                    show_statusbar_message(main_window, "Hourly backup sucesfully initiated", 3000)
+                    show_statusbar_message(main_window, "Hourly backup successfully initiated", 3000)
         except Exception as e:
-            print(f"Error creating daily backup: {e}")
+            print(f"Error creating hourly backup: {e}")
         finally:
             try:
                 os.remove(lock_path)
@@ -123,7 +123,7 @@ class DatabaseBackupHelper:
         lock_path = os.path.join(self.db_manager.temp_dir, "backup.lock")
         
         if os.path.exists(lock_path):
-            print("Backup sedang berlangsung oleh sesi lain.")
+            print("Backup already in progress by another session.")
             return None
         
         self.cleanup_old_backups(backup_dir)

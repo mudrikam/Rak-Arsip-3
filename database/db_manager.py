@@ -62,7 +62,7 @@ class DatabaseManager(QObject):
         self.connection_helper.ensure_database_exists()
         self.connection_helper.setup_file_watcher()
         if first_launch:
-            self.backup_helper.auto_backup_database_daily()
+            self.backup_helper.auto_backup_database_hourly()
         self.backup_helper.setup_auto_backup_timer()
 
     # Core connection methods - delegate to connection helper
@@ -395,9 +395,9 @@ class DatabaseManager(QObject):
         return self.price_helper.update_earning_note(earning_id, note)
 
     # Backup methods - delegate to backup helper
-    def auto_backup_database_daily(self):
-        """Auto backup database daily."""
-        return self.backup_helper.auto_backup_database_daily()
+    def auto_backup_database_hourly(self):
+        """Auto backup database hourly."""
+        return self.backup_helper.auto_backup_database_hourly()
 
     def manual_backup_database(self):
         """Manual backup database."""
