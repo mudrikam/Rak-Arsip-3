@@ -8,17 +8,22 @@ from PySide6.QtCore import QObject
 class DatabaseCachingHelper(QObject):
     """Disk cache loaded to memory for ultra-fast reads."""
     
-    def __init__(self, db_manager):
+    def __init__(self, db_manager, config_manager=None):
         super().__init__()
         self.db_manager = db_manager
+        self.config_manager = config_manager
         self.cache_connection = None
         self.memory_connection = None
         self.cache_db_path = self._get_cache_path()
     
     def _get_cache_path(self):
-        """Get cache database path in temp folder."""
+        """Get cache database path from db config."""
         temp_dir = tempfile.gettempdir()
-        cache_dir = os.path.join(temp_dir, "RakArsip")
+        if self.config_manager:
+            cache_subpath = self.config_manager.get("system_caching.database_cache")
+            cache_dir = os.path.join(temp_dir, cache_subpath)
+        else:
+            cache_dir = os.path.join(temp_dir, "RakArsip", "database_cache")
         os.makedirs(cache_dir, exist_ok=True)
         return os.path.join(cache_dir, "cache_db.sqlite")
     

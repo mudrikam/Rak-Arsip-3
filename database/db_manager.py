@@ -48,7 +48,7 @@ class DatabaseManager(QObject):
         self.connection_helper = DatabaseConnectionHelper(self)
         self.migration_helper = DatabaseMigrationHelper(self)
         self.backup_helper = DatabaseBackupHelper(self)
-        self.caching_helper = DatabaseCachingHelper(self)
+        self.caching_helper = DatabaseCachingHelper(self, self.config_manager)
         self.categories_helper = DatabaseCategoriesHelper(self)
         self.templates_helper = DatabaseTemplatesHelper(self)
         self.files_helper = DatabaseFilesHelper(self)

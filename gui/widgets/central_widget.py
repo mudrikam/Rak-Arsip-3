@@ -276,7 +276,6 @@ class CentralWidget(QWidget):
         self.page_input.valueChanged.connect(self._on_page_input_value_changed)
         self._pending_page_value = self.page_input.value()
         self._page_input_timer.timeout.connect(self._trigger_goto_page)
-        self.table.itemSelectionChanged.connect(self.on_row_selected)
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self.show_context_menu)
 
@@ -349,7 +348,6 @@ class CentralWidget(QWidget):
                     if row_data:
                         self.selected_row_data = row_data
                         self._selected_row_index = 0
-                        self.row_selected.emit(row_data)
 
     def auto_refresh_table(self):
         self.load_data_from_database()
@@ -466,7 +464,6 @@ class CentralWidget(QWidget):
                 self._selected_row_index = row
                 self.open_explorer()
                 show_statusbar_message(self, f"Double-clicked: Opened {row_data['path']}")
-                self.row_selected.emit(row_data)
 
     def _on_table_cell_clicked(self, row, column):
         self.table.selectRow(row)
@@ -477,7 +474,6 @@ class CentralWidget(QWidget):
                 self.selected_row_data = row_data
                 self._selected_row_index = row
                 show_statusbar_message(self, f"Selected row: {row_data['name']}")
-                self.row_selected.emit(row_data)
 
     def load_data_from_database(self, keep_search=False):
         try:
@@ -622,12 +618,6 @@ class CentralWidget(QWidget):
                     self.table.selectRow(row)
                     self.selected_row_data = row_data
                     self._selected_row_index = row
-                    self.row_selected.emit(row_data)
-                    # Trigger properties widget refresh after select
-                    if hasattr(self.parent(), "properties_widget"):
-                        properties_widget = getattr(self.parent(), "properties_widget")
-                        if properties_widget:
-                            properties_widget.update_properties(row_data)
                     break
 
     def _on_search_text_changed(self, text):

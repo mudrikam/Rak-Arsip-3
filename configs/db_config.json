@@ -4,5 +4,11 @@
         "path": "database/archieve_database.db",
         "create_if_not_exists": true,
         "migration_backup_retention_days": 30
+    },
+    "system_caching": {
+        "enable": true,
+        "default_cache_path": "RakArsip",
+        "projects_thumbnail_cache": "RakArsip/projects_thumbnail_cache",
+        "database_cache": "RakArsip/database_cache"
     }
 }

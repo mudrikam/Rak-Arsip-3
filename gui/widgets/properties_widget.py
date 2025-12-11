@@ -10,6 +10,7 @@ import textwrap
 import subprocess
 from helpers.show_statusbar_helper import show_statusbar_message
 from database.db_manager import DatabaseManager
+from helpers.properties_thumbnail_caching import PropertiesThumbnailCaching
 
 class PropertiesWidget(QDockWidget):
     def __init__(self, parent=None):
@@ -19,6 +20,9 @@ class PropertiesWidget(QDockWidget):
         self.setWindowTitle("Project Properties")
         self.setWindowIcon(qta.icon("fa6s.circle-info"))
         self.parent_window = parent
+        
+        db_config_manager = parent.db_config_manager if hasattr(parent, 'db_config_manager') else None
+        self.thumbnail_cache = PropertiesThumbnailCaching(db_config_manager)
 
         container = QWidget(self)
         main_layout = QVBoxLayout(container)
@@ -211,6 +215,7 @@ class PropertiesWidget(QDockWidget):
 
         self._image_files = []
         self._image_index = 0
+        self._cached_thumbnails = []
 
     def eventFilter(self, obj, event):
         if obj is self.image_label:
@@ -587,6 +592,7 @@ class PropertiesWidget(QDockWidget):
         try:
             self._image_files = []
             self._image_index = 0
+            self._cached_thumbnails = []
             self._hide_image_nav_widget()
             if not file_path:
                 self.set_no_preview()
@@ -602,7 +608,6 @@ class PropertiesWidget(QDockWidget):
                 self.set_no_preview()
                 return
 
-            # Cari folder Preview di dalam folder project
             preview_dir = None
             for item in directory.iterdir():
                 if item.is_dir() and item.name.lower() == "preview":
@@ -617,41 +622,46 @@ class PropertiesWidget(QDockWidget):
                 preview_images = self._find_all_images(preview_dir, limit=10)
                 preview_images = sorted(set(preview_images), key=lambda x: str(x))
 
-            # Prioritas 1: gambar di folder Preview dengan nama sama dengan project
             preferred_image = None
             if preview_images:
                 for img in preview_images:
                     if img.stem.lower() == file_name.lower():
                         preferred_image = img
                         break
-                # Jika tidak ada yang sama persis, ambil gambar pertama di Preview
                 if not preferred_image and preview_images:
                     preferred_image = preview_images[0]
-            # Prioritas 2: gambar di folder lain dengan nama sama dengan project
             if not preferred_image:
                 for img in all_images:
                     if img.stem.lower() == file_name.lower():
                         preferred_image = img
                         break
-            # Prioritas 3: gambar pertama di folder lain
             if not preferred_image and all_images:
                 preferred_image = all_images[0]
 
             if preferred_image:
-                self.display_image(str(preferred_image))
-                # Gabungkan semua gambar untuk navigasi, Preview dulu jika ada
                 combined_images = []
                 if preview_images:
                     combined_images.extend(preview_images)
-                # Hindari duplikat jika gambar Preview sudah ada di all_images
                 combined_images.extend([img for img in all_images if img not in combined_images])
                 if len(combined_images) > 10:
                     combined_images = combined_images[:10]
                 self._image_files = combined_images
+                
+                print(f"[Properties Preview] Processing {len(self._image_files)} thumbnail(s)...")
+                for img_path in self._image_files:
+                    cached_path = self.thumbnail_cache.get_or_create_thumbnail(str(img_path))
+                    if cached_path:
+                        self._cached_thumbnails.append(cached_path)
+                    else:
+                        self._cached_thumbnails.append(str(img_path))
+                
                 try:
                     self._image_index = self._image_files.index(preferred_image)
                 except Exception:
                     self._image_index = 0
+                
+                self.display_image(self._image_index)
+                
                 if len(self._image_files) > 1:
                     self._show_image_nav_widget(len(self._image_files))
                 else:
@@ -681,11 +691,21 @@ class PropertiesWidget(QDockWidget):
         idx = value - 1
         if 0 <= idx < len(self._image_files):
             self._image_index = idx
-            self.display_image(str(self._image_files[idx]))
+            self.display_image(idx)
             self.image_nav_label.setText(f"{value}/{len(self._image_files)} Images")
 
-    def display_image(self, image_path):
+    def display_image(self, image_index_or_path):
         try:
+            if isinstance(image_index_or_path, int):
+                if not self._cached_thumbnails or image_index_or_path >= len(self._cached_thumbnails):
+                    self.set_no_preview()
+                    return
+                image_path = self._cached_thumbnails[image_index_or_path]
+                original_path = str(self._image_files[image_index_or_path])
+            else:
+                image_path = image_index_or_path
+                original_path = image_path
+            
             pixmap = QPixmap(image_path)
             if not pixmap.isNull():
                 scaled_pixmap = pixmap.scaledToWidth(224, Qt.SmoothTransformation)
@@ -695,10 +715,28 @@ class PropertiesWidget(QDockWidget):
                 self.image_label.setText("")
                 tooltip_pixmap = pixmap.scaled(400, 400, Qt.KeepAspectRatio, Qt.SmoothTransformation)
                 self._tooltip_pixmap = tooltip_pixmap
-                self._last_image_path = image_path
+                self._last_image_path = original_path
             else:
+                print(f"[Properties Preview] Failed to load thumbnail: {image_path}")
+                if isinstance(image_index_or_path, int) and image_index_or_path < len(self._image_files):
+                    print(f"[Properties Preview] Retrying with original image: {original_path}")
+                    cached_path = self.thumbnail_cache.create_thumbnail(original_path)
+                    if cached_path:
+                        self._cached_thumbnails[image_index_or_path] = cached_path
+                        pixmap = QPixmap(cached_path)
+                        if not pixmap.isNull():
+                            scaled_pixmap = pixmap.scaledToWidth(224, Qt.SmoothTransformation)
+                            self.image_label.setPixmap(scaled_pixmap)
+                            self.image_label.setFixedSize(scaled_pixmap.size())
+                            self.image_frame.setFixedHeight(scaled_pixmap.height())
+                            self.image_label.setText("")
+                            tooltip_pixmap = pixmap.scaled(400, 400, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                            self._tooltip_pixmap = tooltip_pixmap
+                            self._last_image_path = original_path
+                            return
                 self.set_no_preview()
-        except Exception:
+        except Exception as e:
+            print(f"[Properties Preview] Error displaying image: {e}")
             self.set_no_preview()
 
     def set_no_preview(self):
