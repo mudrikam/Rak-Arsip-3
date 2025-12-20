@@ -348,6 +348,10 @@ class CentralWidget(QWidget):
                     if row_data:
                         self.selected_row_data = row_data
                         self._selected_row_index = 0
+                        try:
+                            self.row_selected.emit(row_data)
+                        except Exception:
+                            pass
 
     def auto_refresh_table(self):
         self.load_data_from_database()
@@ -462,6 +466,10 @@ class CentralWidget(QWidget):
             if row_data:
                 self.selected_row_data = row_data
                 self._selected_row_index = row
+                try:
+                    self.row_selected.emit(row_data)
+                except Exception:
+                    pass
                 self.open_explorer()
                 show_statusbar_message(self, f"Double-clicked: Opened {row_data['path']}")
 
@@ -474,6 +482,10 @@ class CentralWidget(QWidget):
                 self.selected_row_data = row_data
                 self._selected_row_index = row
                 show_statusbar_message(self, f"Selected row: {row_data['name']}")
+                try:
+                    self.row_selected.emit(row_data)
+                except Exception:
+                    pass
 
     def load_data_from_database(self, keep_search=False):
         try:
