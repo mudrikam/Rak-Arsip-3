@@ -1716,10 +1716,6 @@ class DatabaseWalletHelper:
             summary['total_transfer'] = float(transfer_row[0] or 0)
             summary['total_transfer_out'] = float(transfer_row[0] or 0)
         
-        # Available income = income - transfer - expense (showing actual remaining money)
-        summary['adjusted_income'] = summary['total_income'] - summary['total_transfer_out'] - summary['total_expense']
-        summary['net_balance'] = summary['total_income'] - summary['total_expense']
-        
         # Get pocket balances
         cursor.execute("""
             SELECT 
@@ -1760,6 +1756,13 @@ class DatabaseWalletHelper:
             ORDER BY balance DESC
         """)
         summary['pocket_balances'] = [dict(row) for row in cursor.fetchall()]
+        
+        # Calculate Available Income as sum of all pocket balances
+        total_pocket_balance = sum(pocket.get('balance', 0) or 0 for pocket in summary['pocket_balances'])
+        summary['adjusted_income'] = total_pocket_balance
+        
+        # Net Balance = income - expense (without transfer, just to show net flow)
+        summary['net_balance'] = summary['total_income'] - summary['total_expense']
         
         # Get recent transactions (last 5)
         cursor.execute("""
