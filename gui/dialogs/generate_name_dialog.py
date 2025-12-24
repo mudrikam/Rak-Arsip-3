@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
     QFrame, QFileDialog, QMessageBox, QApplication, QProgressBar, QLineEdit
 )
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, QThread, Signal, QTimer
 from PySide6.QtGui import QPixmap, QDragEnterEvent, QDropEvent, QImage, QGuiApplication, QIcon
 import qtawesome as qta
 import os
@@ -88,7 +88,6 @@ class NameGenerationThread(QThread):
 
 class GenerateNameDialog(QDialog):
     def start_api_btn_blink(self):
-        from PySide6.QtCore import QTimer
         self._api_blink_state = False
         if hasattr(self, '_api_blink_timer') and self._api_blink_timer:
             self._api_blink_timer.stop()
@@ -121,9 +120,6 @@ class GenerateNameDialog(QDialog):
         if env_path.exists():
             load_dotenv(env_path)
         self.setWindowTitle("Generate Project Name from Image")
-        # Use the same icon as AboutDialog for consistency
-        from PySide6.QtGui import QIcon
-        from pathlib import Path
         icon_path = Path(__file__).parent.parent.parent / "res" / "rakikon.ico"
         if icon_path.exists():
             self.setWindowIcon(QIcon(str(icon_path)))
