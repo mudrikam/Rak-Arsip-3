@@ -313,6 +313,12 @@ class CentralWidget(QWidget):
         self._path_update_timer.setInterval(100)
         self._path_update_timer.timeout.connect(self._update_path_truncation)
 
+        self._selection_debounce_timer = QTimer(self)
+        self._selection_debounce_timer.setSingleShot(True)
+        self._selection_debounce_timer.setInterval(250)
+        self._selection_debounce_timer.timeout.connect(self._emit_row_selected)
+        self._pending_row_data = None
+
         self.load_data_from_database()
 
         # Connect NameFieldWidget.project_created to refresh_table
@@ -323,8 +329,15 @@ class CentralWidget(QWidget):
         self._category_changed = False
         self._subcategory_changed = False
 
+    def _emit_row_selected(self):
+        if self._pending_row_data:
+            try:
+                self.row_selected.emit(self._pending_row_data)
+            except Exception:
+                pass
+            self._pending_row_data = None
+
     def _on_project_created(self):
-        # Ambil data project terakhir dari database
         self.db_manager.connect()
         files = self.db_manager.get_files_page(page=1, page_size=1, sort_field="id", sort_order="desc")
         self.db_manager.close()
@@ -348,10 +361,8 @@ class CentralWidget(QWidget):
                     if row_data:
                         self.selected_row_data = row_data
                         self._selected_row_index = 0
-                        try:
-                            self.row_selected.emit(row_data)
-                        except Exception:
-                            pass
+                        self._pending_row_data = row_data
+                        self._selection_debounce_timer.start()
 
     def auto_refresh_table(self):
         self.load_data_from_database()
@@ -460,16 +471,14 @@ class CentralWidget(QWidget):
             show_statusbar_message(self, f"URL assigned to {self.selected_row_data['name']}")
 
     def _on_table_double_click(self, row, column):
+        self._selection_debounce_timer.stop()
         item = self.table.item(row, 0)
         if item:
             row_data = item.data(256)
             if row_data:
                 self.selected_row_data = row_data
                 self._selected_row_index = row
-                try:
-                    self.row_selected.emit(row_data)
-                except Exception:
-                    pass
+                self._pending_row_data = None
                 self.open_explorer()
                 show_statusbar_message(self, f"Double-clicked: Opened {row_data['path']}")
 
@@ -482,10 +491,8 @@ class CentralWidget(QWidget):
                 self.selected_row_data = row_data
                 self._selected_row_index = row
                 show_statusbar_message(self, f"Selected row: {row_data['name']}")
-                try:
-                    self.row_selected.emit(row_data)
-                except Exception:
-                    pass
+                self._pending_row_data = row_data
+                self._selection_debounce_timer.start()
 
     def load_data_from_database(self, keep_search=False):
         try:
@@ -866,7 +873,8 @@ class CentralWidget(QWidget):
                 if row_data:
                     self.selected_row_data = row_data
                     self._selected_row_index = current_row
-                    self.row_selected.emit(row_data)
+                    self._pending_row_data = row_data
+                    self._selection_debounce_timer.start()
 
     def _set_status_text_color(self, combo, status):
         if status in self.status_config:
