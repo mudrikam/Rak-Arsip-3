@@ -3,7 +3,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 from PySide6.QtWidgets import QDockWidget, QWidget, QVBoxLayout, QLabel, QFrame, QHBoxLayout, QApplication, QMenu, QSpinBox, QScrollArea, QProgressDialog
 from PySide6.QtGui import QPixmap, QCursor, QMouseEvent, QGuiApplication, QDesktopServices, QAction, QDrag
-from PySide6.QtCore import Qt, QPoint, QEvent, QRect, QMimeData, QUrl
+from PySide6.QtCore import Qt, QPoint, QEvent, QRect, QMimeData, QUrl, QTimer
 import qtawesome as qta
 from pathlib import Path
 import time
@@ -585,41 +585,140 @@ class PropertiesWidget(QDockWidget):
                     break
                 if item.is_dir():
                     self._find_all_images(item, max_depth, current_depth + 1, found, limit)
-        except Exception:
-            pass
+        except PermissionError:
+            print(f"[Properties Preview] Permission denied accessing: {directory}")
+        except Exception as e:
+            print(f"[Properties Preview] Error scanning directory {directory}: {type(e).__name__}: {e}")
         return found
 
     def load_preview_image(self, file_path, file_name):
-        try:
-            self._image_files = []
-            self._image_index = 0
-            self._cached_thumbnails = []
-            self._hide_image_nav_widget()
-            if not file_path:
-                self.set_no_preview()
-                return
-            path_obj = Path(file_path)
-            if path_obj.is_file():
-                directory = path_obj.parent
-            elif path_obj.is_dir():
-                directory = path_obj
+        self._image_files = []
+        self._image_index = 0
+        self._cached_thumbnails = []
+        self._hide_image_nav_widget()
+        
+        if not file_path:
+            self.set_no_preview()
+            return
+        
+        path_obj = Path(file_path)
+        if path_obj.is_file():
+            directory = path_obj.parent
+        elif path_obj.is_dir():
+            directory = path_obj
+        else:
+            directory = path_obj
+        
+        if not directory.exists():
+            print(f"[Properties Preview] Directory does not exist: {directory}")
+            self.set_no_preview()
+            return
+
+        preferred_image = self._find_priority_image(directory, file_name)
+        
+        if preferred_image and preferred_image.exists():
+            print(f"[Properties Preview] Found priority image: {preferred_image.name}")
+            self._image_files = [preferred_image]
+            
+            cached_path = self.thumbnail_cache.get_cached_thumbnail(str(preferred_image))
+            if cached_path and Path(cached_path).exists():
+                self._cached_thumbnails = [cached_path]
+                print(f"[Properties Preview] Using cached thumbnail")
             else:
-                directory = path_obj
-            if not directory.exists():
-                self.set_no_preview()
-                return
+                thumb_path = self.thumbnail_cache.create_thumbnail(str(preferred_image))
+                if thumb_path:
+                    self._cached_thumbnails = [thumb_path]
+                    print(f"[Properties Preview] Generated new thumbnail")
+                else:
+                    self._cached_thumbnails = [str(preferred_image)]
+                    print(f"[Properties Preview] Using original image (thumbnail generation failed)")
+            
+            self.display_image(0)
+            
+            QTimer.singleShot(100, lambda: self._lazy_load_additional_images(directory, preferred_image))
+        else:
+            print(f"[Properties Preview] No priority image found, scanning directory...")
+            self._scan_and_load_images(directory, file_name)
 
-            preview_dir = None
-            for item in directory.iterdir():
-                if item.is_dir() and item.name.lower() == "preview":
-                    preview_dir = item
-                    break
+    def _find_priority_image(self, directory, file_name):
+        preview_dir = directory / "preview"
+        
+        if preview_dir.exists() and preview_dir.is_dir():
+            for ext in self.supported_formats:
+                candidate = preview_dir / f"{file_name}{ext}"
+                if candidate.exists() and candidate.is_file():
+                    return candidate
+        
+        for ext in self.supported_formats:
+            candidate = directory / f"{file_name}{ext}"
+            if candidate.exists() and candidate.is_file():
+                return candidate
+        
+        return None
 
+    def _lazy_load_additional_images(self, directory, exclude_image):
+        try:
+            print(f"[Properties Preview] Lazy loading additional images...")
+            
+            preview_dir = directory / "preview"
+            all_images = []
+            
+            if preview_dir.exists():
+                preview_images = self._find_all_images(preview_dir, limit=10)
+                all_images.extend(preview_images)
+            
+            if len(all_images) < 10:
+                remaining_limit = 10 - len(all_images)
+                dir_images = self._find_all_images(directory, limit=remaining_limit)
+                all_images.extend([img for img in dir_images if img not in all_images])
+            
+            all_images = sorted(set(all_images), key=lambda x: str(x))
+            
+            if exclude_image in all_images:
+                all_images.remove(exclude_image)
+            
+            all_images.insert(0, exclude_image)
+            
+            if len(all_images) > 10:
+                all_images = all_images[:10]
+            
+            if len(all_images) > 1:
+                self._image_files = all_images
+                
+                cached_paths = []
+                missing_indices = []
+                
+                for idx, img_path in enumerate(self._image_files):
+                    cached = self.thumbnail_cache.get_cached_thumbnail(str(img_path))
+                    if cached and Path(cached).exists():
+                        cached_paths.append(cached)
+                    else:
+                        cached_paths.append(None)
+                        missing_indices.append(idx)
+                
+                if missing_indices:
+                    print(f"[Properties Preview] Generating {len(missing_indices)} missing thumbnails in background...")
+                    for idx in missing_indices:
+                        thumb = self.thumbnail_cache.create_thumbnail(str(self._image_files[idx]))
+                        if thumb:
+                            cached_paths[idx] = thumb
+                        else:
+                            cached_paths[idx] = str(self._image_files[idx])
+                
+                self._cached_thumbnails = cached_paths
+                self._show_image_nav_widget(len(self._image_files))
+                print(f"[Properties Preview] Loaded {len(self._image_files)} images total")
+        except Exception as e:
+            print(f"[Properties Preview] Error in lazy loading: {e}")
+
+    def _scan_and_load_images(self, directory, file_name):
+        try:
             all_images = self._find_all_images(directory, limit=10)
             all_images = sorted(set(all_images), key=lambda x: str(x))
 
+            preview_dir = directory / "preview"
             preview_images = []
-            if preview_dir and preview_dir.exists():
+            if preview_dir.exists():
                 preview_images = self._find_all_images(preview_dir, limit=10)
                 preview_images = sorted(set(preview_images), key=lambda x: str(x))
 
@@ -631,11 +730,13 @@ class PropertiesWidget(QDockWidget):
                         break
                 if not preferred_image and preview_images:
                     preferred_image = preview_images[0]
+            
             if not preferred_image:
                 for img in all_images:
                     if img.stem.lower() == file_name.lower():
                         preferred_image = img
                         break
+            
             if not preferred_image and all_images:
                 preferred_image = all_images[0]
 
@@ -651,100 +752,31 @@ class PropertiesWidget(QDockWidget):
                 print(f"[Properties Preview] Processing {len(self._image_files)} thumbnail(s)...")
                 cached_paths = []
                 missing_indices = []
-                try:
-                    for idx, img_path in enumerate(self._image_files):
-                        try:
-                            cached = self.thumbnail_cache.get_cached_thumbnail(str(img_path))
-                            if cached:
-                                cached_paths.append(cached)
-                            else:
-                                cached_paths.append(None)
-                                missing_indices.append(idx)
-                        except Exception as e:
-                            print(f"[Properties Preview] Error while checking cache for {img_path}: {e}")
-                            cached_paths.append(None)
-                            missing_indices.append(idx)
-                except Exception as e:
-                    print(f"[Properties Preview] Unexpected error during cache check: {e}")
+                
+                for idx, img_path in enumerate(self._image_files):
+                    cached = self.thumbnail_cache.get_cached_thumbnail(str(img_path))
+                    if cached and Path(cached).exists():
+                        cached_paths.append(cached)
+                    else:
+                        cached_paths.append(None)
+                        missing_indices.append(idx)
 
                 if not missing_indices:
-                    for path in cached_paths:
-                        if path:
-                            self._cached_thumbnails.append(path)
-                        else:
-                            self._cached_thumbnails.append(str(self._image_files[len(self._cached_thumbnails)]))
+                    self._cached_thumbnails = cached_paths
+                    print(f"[Properties Preview] All thumbnails already cached")
                 else:
-                    progress_dialog = None
-                    dialog_shown = False
-                    created_count = 0
-                    missing_total = len(missing_indices)
-                    start_ts = time.time()
-                    for idx, img_path in enumerate(self._image_files):
-                        if cached_paths[idx]:
-                            self._cached_thumbnails.append(cached_paths[idx])
+                    print(f"[Properties Preview] Generating {len(missing_indices)} missing thumbnails...")
+                    for idx in missing_indices:
+                        thumb = self.thumbnail_cache.create_thumbnail(str(self._image_files[idx]))
+                        if thumb:
+                            cached_paths[idx] = thumb
                         else:
-                            try:
-                                elapsed = time.time() - start_ts
-                                if elapsed >= 0.2 and not dialog_shown:
-                                    try:
-                                        parent_widget = self.parent_window if hasattr(self, 'parent_window') and self.parent_window is not None else self
-                                        progress_dialog = QProgressDialog(parent_widget)
-                                        progress_dialog.setWindowTitle("Caching thumbs!")
-                                        progress_dialog.setLabelText("Creating thumbnails...")
-                                        progress_dialog.setMinimum(0)
-                                        progress_dialog.setMaximum(missing_total)
-                                        progress_dialog.setCancelButton(None)
-                                        progress_dialog.setWindowModality(Qt.ApplicationModal)
-                                        try:
-                                            if hasattr(parent_widget, 'windowIcon'):
-                                                parent_icon = parent_widget.windowIcon()
-                                                if parent_icon and not parent_icon.isNull():
-                                                    progress_dialog.setWindowIcon(parent_icon)
-                                        except Exception as e:
-                                            print(f"[Properties Preview] Failed to inherit parent icon: {e}")
-                                        progress_dialog.setMinimumDuration(0)
-                                        progress_dialog.show()
-                                        try:
-                                            QApplication.processEvents()
-                                            parent_geom = parent_widget.frameGeometry() if hasattr(parent_widget, 'frameGeometry') else parent_widget.geometry()
-                                            dlg_geom = progress_dialog.frameGeometry()
-                                            dlg_geom.moveCenter(parent_geom.center())
-                                            progress_dialog.move(dlg_geom.topLeft())
-                                        except Exception as e:
-                                            print(f"[Properties Preview] Failed to center progress dialog: {e}")
-                                        dialog_shown = True
-                                    except Exception as e:
-                                        print(f"[Properties Preview] Failed to create progress dialog: {e}")
-                                        progress_dialog = None
-                                new_cache = self.thumbnail_cache.create_thumbnail(str(img_path))
-                                if new_cache:
-                                    self._cached_thumbnails.append(new_cache)
-                                else:
-                                    self._cached_thumbnails.append(str(img_path))
-                            except Exception as e:
-                                print(f"[Properties Preview] Error creating thumbnail for {img_path}: {e}")
-                                self._cached_thumbnails.append(str(img_path))
-                            finally:
-                                created_count += 1
-                                if dialog_shown and progress_dialog:
-                                    try:
-                                        progress_dialog.setValue(created_count)
-                                        progress_dialog.setLabelText(f"Created {created_count}/{missing_total} thumbnails...")
-                                        QApplication.processEvents()
-                                    except Exception:
-                                        pass
-                    if progress_dialog:
-                        try:
-                            progress_dialog.close()
-                            progress_dialog.deleteLater()
-                        except Exception:
-                            pass
+                            cached_paths[idx] = str(self._image_files[idx])
+                    
+                    self._cached_thumbnails = cached_paths
                 
-                try:
-                    self._image_index = self._image_files.index(preferred_image)
-                except Exception:
-                    self._image_index = 0
-                
+                pref_idx = self._image_files.index(preferred_image) if preferred_image in self._image_files else 0
+                self._image_index = pref_idx
                 self.display_image(self._image_index)
                 
                 if len(self._image_files) > 1:
@@ -753,7 +785,8 @@ class PropertiesWidget(QDockWidget):
                     self._hide_image_nav_widget()
             else:
                 self.set_no_preview()
-        except Exception:
+        except Exception as e:
+            print(f"[Properties Preview] Error scanning images: {e}")
             self.set_no_preview()
 
     def _show_image_nav_widget(self, count):
@@ -783,6 +816,7 @@ class PropertiesWidget(QDockWidget):
         try:
             if isinstance(image_index_or_path, int):
                 if not self._cached_thumbnails or image_index_or_path >= len(self._cached_thumbnails):
+                    print(f"[Properties Preview] Invalid image index: {image_index_or_path}")
                     self.set_no_preview()
                     return
                 image_path = self._cached_thumbnails[image_index_or_path]
@@ -804,24 +838,25 @@ class PropertiesWidget(QDockWidget):
             else:
                 print(f"[Properties Preview] Failed to load thumbnail: {image_path}")
                 if isinstance(image_index_or_path, int) and image_index_or_path < len(self._image_files):
-                    print(f"[Properties Preview] Retrying with original image: {original_path}")
-                    cached_path = self.thumbnail_cache.create_thumbnail(original_path)
-                    if cached_path:
-                        self._cached_thumbnails[image_index_or_path] = cached_path
-                        pixmap = QPixmap(cached_path)
-                        if not pixmap.isNull():
-                            scaled_pixmap = pixmap.scaledToWidth(224, Qt.SmoothTransformation)
-                            self.image_label.setPixmap(scaled_pixmap)
-                            self.image_label.setFixedSize(scaled_pixmap.size())
-                            self.image_frame.setFixedHeight(scaled_pixmap.height())
-                            self.image_label.setText("")
-                            tooltip_pixmap = pixmap.scaled(400, 400, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                            self._tooltip_pixmap = tooltip_pixmap
-                            self._last_image_path = original_path
-                            return
+                    print(f"[Properties Preview] Trying to load original image instead")
+                    original = str(self._image_files[image_index_or_path])
+                    original_pixmap = QPixmap(original)
+                    if not original_pixmap.isNull():
+                        scaled_pixmap = original_pixmap.scaledToWidth(224, Qt.SmoothTransformation)
+                        self.image_label.setPixmap(scaled_pixmap)
+                        self.image_label.setFixedSize(scaled_pixmap.size())
+                        self.image_frame.setFixedHeight(scaled_pixmap.height())
+                        self.image_label.setText("")
+                        tooltip_pixmap = original_pixmap.scaled(400, 400, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                        self._tooltip_pixmap = tooltip_pixmap
+                        self._last_image_path = original
+                        return
                 self.set_no_preview()
+        except FileNotFoundError as e:
+            print(f"[Properties Preview] Image file not found: {e}")
+            self.set_no_preview()
         except Exception as e:
-            print(f"[Properties Preview] Error displaying image: {e}")
+            print(f"[Properties Preview] Error displaying image: {type(e).__name__}: {e}")
             self.set_no_preview()
 
     def set_no_preview(self):
