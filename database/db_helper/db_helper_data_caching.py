@@ -2,7 +2,7 @@ import sqlite3
 import os
 import shutil
 import tempfile
-from PySide6.QtCore import QObject
+from PySide6.QtCore import QObject, QTimer
 
 
 class DatabaseCachingHelper(QObject):
@@ -16,6 +16,11 @@ class DatabaseCachingHelper(QObject):
         self.memory_connection = None
         self.cache_db_path = self._get_cache_path()
         self._cache_signature = None
+
+        self._signature_timer = QTimer()
+        self._signature_timer.setInterval(1000)
+        self._signature_timer.timeout.connect(self._periodic_signature_check)
+        self._signature_timer.start()
     
     def _get_cache_path(self):
         """Get cache database path from db config."""
@@ -67,8 +72,12 @@ class DatabaseCachingHelper(QObject):
     
     def _load_to_memory(self):
         try:
-            if self.memory_connection:
-                self.memory_connection.close()
+            old_mem = self.memory_connection
+            if old_mem:
+                try:
+                    old_mem.close()
+                except Exception as e:
+                    print(f"[Cache] Error closing old memory cache: {e}")
 
             self.memory_connection = sqlite3.connect(':memory:')
             self.memory_connection.row_factory = sqlite3.Row
@@ -79,12 +88,41 @@ class DatabaseCachingHelper(QObject):
 
             print("[Cache] Loaded to memory")
 
+            try:
+                if getattr(self.db_manager, 'connection', None) is old_mem:
+                    self.db_manager.connection = self.memory_connection
+            except Exception as e:
+                print(f"[Cache] Error updating db_manager.connection to new memory cache: {e}")
+
             self._cache_signature = self.db_manager.connection_helper._compute_db_signature()
         except Exception as e:
             print(f"[Cache] Error loading to memory: {e}")
     
     def update_cache(self):
         self.create_cache()
+
+    def _periodic_signature_check(self):
+        if not os.path.exists(self.db_manager.db_path):
+            return
+
+        try:
+            current_sig = self.db_manager.connection_helper._compute_db_signature()
+        except Exception as e:
+            print(f"[Cache] Error computing DB signature during periodic check: {e}")
+            return
+
+        if self._cache_signature is None:
+            if not os.path.exists(self.cache_db_path) or self.memory_connection is None:
+                self.create_cache()
+            return
+
+        if current_sig != self._cache_signature:
+            print("[Cache] Periodic check detected DB change — rebuilding cache")
+            self.create_cache()
+            try:
+                self.db_manager.data_changed.emit()
+            except Exception as e:
+                print(f"[Cache] Error emitting data_changed after periodic rebuild: {e}")
     
     def get_cache_connection(self):
         if os.path.exists(self.db_manager.db_path):
@@ -117,5 +155,11 @@ class DatabaseCachingHelper(QObject):
         if self.cache_connection:
             self.cache_connection.close()
             self.cache_connection = None
+
+        if hasattr(self, '_signature_timer') and self._signature_timer.isActive():
+            try:
+                self._signature_timer.stop()
+            except Exception as e:
+                print(f"[Cache] Error stopping signature timer: {e}")
 
         self._cache_signature = None
