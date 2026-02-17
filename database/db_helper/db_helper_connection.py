@@ -1,6 +1,7 @@
 import sqlite3
 import os
 import time
+import hashlib
 from PySide6.QtCore import QObject, QTimer
 
 
@@ -11,6 +12,7 @@ class DatabaseConnectionHelper(QObject):
         super().__init__()
         self.db_manager = db_manager
         self.query_start_time = None
+        self._observed_external_signatures = {}
 
     def ensure_database_exists(self):
         db_dir = os.path.dirname(self.db_manager.db_path)
@@ -51,47 +53,105 @@ class DatabaseConnectionHelper(QObject):
         self.db_manager.file_watcher_timer.start(1000)
 
     def check_temp_files(self):
-        """Check for external database changes."""
-        try:
-            if not os.path.exists(self.db_manager.temp_dir):
-                return
-            
-            for temp_file in os.listdir(self.db_manager.temp_dir):
-                if temp_file.startswith("db_change_") and temp_file.endswith(".tmp"):
-                    file_path = os.path.join(self.db_manager.temp_dir, temp_file)
-                    
-                    if self.db_manager.session_id not in temp_file:
-                        print("[DB] External change detected")
-                        self.db_manager.caching_helper.update_cache()
-                        self.db_manager.data_changed.emit()
-                        try:
-                            os.remove(file_path)
-                        except:
-                            pass
-                    else:
-                        file_age = time.time() - os.path.getctime(file_path)
-                        if file_age > 5:
-                            try:
-                                os.remove(file_path)
-                            except:
-                                pass
-        except Exception as e:
-            print(f"[DB] Error checking temp files: {e}")
+        if not os.path.exists(self.db_manager.temp_dir):
+            return
+
+        for temp_file in os.listdir(self.db_manager.temp_dir):
+            if not (temp_file.startswith("db_change_") and temp_file.endswith(".tmp")):
+                continue
+
+            file_path = os.path.join(self.db_manager.temp_dir, temp_file)
+
+            try:
+                with open(file_path, 'r') as f:
+                    content = f.read().strip()
+            except Exception as e:
+                print(f"[DB] Error reading temp file {file_path}: {e}")
+                continue
+
+            parts = content.split(":")
+            origin_session = parts[0] if len(parts) >= 1 else None
+            signature_token = parts[2] if len(parts) >= 3 else None
+
+            if origin_session == self.db_manager.session_id:
+                try:
+                    file_age = time.time() - os.path.getctime(file_path)
+                except Exception as e:
+                    print(f"[DB] Error getting ctime for {file_path}: {e}")
+                    file_age = 0
+                if file_age > 5:
+                    try:
+                        os.remove(file_path)
+                    except Exception as e:
+                        print(f"[DB] Error removing temp file {file_path}: {e}")
+                continue
+
+            if signature_token is None:
+                try:
+                    observed_sig = self._compute_db_signature()
+                except Exception as e:
+                    print(f"[DB] Cannot compute DB signature to validate {file_path}: {e}")
+                    continue
+            else:
+                observed_sig = signature_token
+
+            last_sig = self._observed_external_signatures.get(origin_session)
+
+            if observed_sig != last_sig:
+                print(f"[DB] External change detected from session {origin_session} (sig={observed_sig})")
+                self._observed_external_signatures[origin_session] = observed_sig
+                try:
+                    self.db_manager.caching_helper.update_cache()
+                except Exception as e:
+                    print(f"[DB] Error updating cache after external change: {e}")
+                try:
+                    self.db_manager.data_changed.emit()
+                except Exception as e:
+                    print(f"[DB] Error emitting data_changed signal: {e}")
+
+            try:
+                os.remove(file_path)
+            except Exception as e:
+                print(f"[DB] Error removing temp file {file_path}: {e}")
 
     def create_temp_file(self):
-        """Signal database change and update cache."""
-        try:
-            timestamp = int(time.time() * 1000)
-            temp_filename = f"db_change_{self.db_manager.session_id}_{timestamp}.tmp"
-            temp_path = os.path.join(self.db_manager.temp_dir, temp_filename)
-            
-            with open(temp_path, 'w') as f:
-                f.write(f"{self.db_manager.session_id}:{timestamp}")
-            
-            self.db_manager.caching_helper.update_cache()
-            
-        except Exception as e:
-            print(f"[DB] Error signaling change: {e}")
+        timestamp = int(time.time() * 1000)
+        signature = self._compute_db_signature()
+        temp_filename = f"db_change_{self.db_manager.session_id}_{timestamp}.tmp"
+        temp_path = os.path.join(self.db_manager.temp_dir, temp_filename)
+
+        with open(temp_path, 'w') as f:
+            f.write(f"{self.db_manager.session_id}:{timestamp}:{signature}")
+            f.flush()
+            os.fsync(f.fileno())
+
+        self.db_manager.caching_helper.update_cache()
+
+    def _compute_db_signature(self):
+        db_path = self.db_manager.db_path
+        read_block = 4096
+        stat_info = os.stat(db_path)
+        size = stat_info.st_size
+        mtime = int(stat_info.st_mtime)
+        h = hashlib.sha256()
+        h.update(str(size).encode('utf-8'))
+        h.update(str(mtime).encode('utf-8'))
+        with open(db_path, 'rb') as f:
+            head = f.read(read_block)
+            if size > read_block:
+                f.seek(max(0, size - read_block))
+                tail = f.read(read_block)
+            else:
+                tail = b''
+        h.update(head)
+        h.update(tail)
+        wal_path = db_path + "-wal"
+        if os.path.exists(wal_path):
+            wal_stat = os.stat(wal_path)
+            h.update(str(wal_stat.st_size).encode('utf-8'))
+            with open(wal_path, 'rb') as wf:
+                h.update(wf.read(2048))
+        return h.hexdigest()
     def connect(self, write=True):
         """Create new connection each time: write=True -> main DB, write=False -> cache."""
         self.query_start_time = time.time()
