@@ -164,12 +164,6 @@ class DatabaseConnectionHelper(QObject):
                 tail = b''
         h.update(head)
         h.update(tail)
-        wal_path = db_path + "-wal"
-        if os.path.exists(wal_path):
-            wal_stat = os.stat(wal_path)
-            h.update(str(wal_stat.st_size).encode('utf-8'))
-            with open(wal_path, 'rb') as wf:
-                h.update(wf.read(2048))
         return h.hexdigest()
     def connect(self, write=True):
         """Create new connection each time: write=True -> main DB, write=False -> cache."""

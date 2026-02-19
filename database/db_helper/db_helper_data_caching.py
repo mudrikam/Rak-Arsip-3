@@ -24,6 +24,10 @@ class DatabaseCachingHelper(QObject):
         self._signature_timer.timeout.connect(self._periodic_signature_check)
         self._signature_timer.start()
 
+        # timing guard to avoid rapid repeated rebuilds
+        self._last_rebuild_time = 0.0
+        self._rebuild_cooldown = 2.0  # seconds
+
         # lock used to serialize cache builds across processes
         self.cache_lock_path = self.cache_db_path + ".lock"
         # increase defaults to tolerate slow NAS / network storage
@@ -146,6 +150,7 @@ class DatabaseCachingHelper(QObject):
                     print(f"[Cache] Error removing auxiliary cache file {cache_file}: {e}")
 
         print(f"[Cache] Created at {self.cache_db_path}")
+        self._last_rebuild_time = time.time()
 
         # load and compute signature (signature computation is best-effort)
         try:
@@ -270,6 +275,10 @@ class DatabaseCachingHelper(QObject):
             return
 
         if current_sig != self._cache_signature:
+            # avoid rebuild storms: skip if we rebuilt very recently
+            if time.time() - self._last_rebuild_time < self._rebuild_cooldown:
+                return
+
             print("[Cache] Periodic check detected DB change — rebuilding cache")
             self.create_cache()
             try:
