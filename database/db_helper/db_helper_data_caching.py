@@ -26,8 +26,14 @@ class DatabaseCachingHelper(QObject):
 
         # lock used to serialize cache builds across processes
         self.cache_lock_path = self.cache_db_path + ".lock"
-        self._lock_stale_seconds = 60        # consider lock stale after 60s
-        self._lock_acquire_timeout = 20     # how long to wait to acquire lock (s)
+        # increase defaults to tolerate slow NAS / network storage
+        self._lock_stale_seconds = 120       # consider lock stale after 120s
+        self._lock_acquire_timeout = 60     # how long to wait to acquire lock (s)
+
+        # retry/backoff tuning for unstable I/O on network drives
+        self._backup_retry_attempts = 3
+        self._replace_retry_attempts = 6
+        self._io_retry_delay = 0.25
     
     def _get_cache_path(self):
         """Get cache database path from db config."""
@@ -73,38 +79,104 @@ class DatabaseCachingHelper(QObject):
                 except Exception:
                     break
 
-        try:
-            src = sqlite3.connect(main_db)
-            dst = sqlite3.connect(tmp_path)
-            src.backup(dst)
-            dst.close()
-            src.close()
+        # perform backup + atomic replace with retries to tolerate transient I/O/lock errors
+        backup_ok = False
+        for b_attempt in range(self._backup_retry_attempts):
+            try:
+                src = sqlite3.connect(main_db)
+                dst = sqlite3.connect(tmp_path)
+                src.backup(dst)
+                dst.close()
+                src.close()
+                backup_ok = True
+                break
+            except Exception as be:
+                print(f"[Cache] Backup attempt {b_attempt+1} failed: {be}")
+                time.sleep(self._io_retry_delay * (2 ** b_attempt) + random.uniform(0, 0.05))
 
-            # atomic replace of cache file
-            os.replace(tmp_path, self.cache_db_path)
-
-            for ext in ["-wal", "-shm"]:
-                cache_file = self.cache_db_path + ext
-                if os.path.exists(cache_file):
-                    os.remove(cache_file)
-
-            print(f"[Cache] Created at {self.cache_db_path}")
-
-            self._load_to_memory()
-            self._cache_signature = self.db_manager.connection_helper._compute_db_signature()
-        except Exception as e:
-            print(f"[Cache] Error creating cache: {e}")
-            if os.path.exists(tmp_path):
-                try:
+        if not backup_ok:
+            print("[Cache] Backup failed after retries; aborting cache build")
+            try:
+                if os.path.exists(tmp_path):
                     os.remove(tmp_path)
-                except Exception as rm_e:
-                    print(f"[Cache] Error removing tmp cache file {tmp_path}: {rm_e}")
-        finally:
-            # release lock so other processes can use the newly created cache
+            except Exception:
+                pass
             try:
                 self._release_build_lock()
-            except Exception as e:
-                print(f"[Cache] Error releasing build lock in finally: {e}")
+            except Exception:
+                pass
+            return
+
+        # attempt atomic replace with retry (Windows may keep transient handles open)
+        replaced = False
+        for r_attempt in range(self._replace_retry_attempts):
+            try:
+                os.replace(tmp_path, self.cache_db_path)
+                replaced = True
+                break
+            except PermissionError as pe:
+                if r_attempt == self._replace_retry_attempts - 1:
+                    raise
+                time.sleep(self._io_retry_delay * (2 ** r_attempt) + random.uniform(0, 0.1))
+            except OSError as oe:
+                if r_attempt == self._replace_retry_attempts - 1:
+                    raise
+                time.sleep(self._io_retry_delay * (2 ** r_attempt) + random.uniform(0, 0.1))
+
+        if not replaced:
+            print("[Cache] Could not replace cache file after retries")
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except Exception:
+                pass
+            try:
+                self._release_build_lock()
+            except Exception:
+                pass
+            return
+
+        # remove WAL/SHM side-files if present
+        for ext in ["-wal", "-shm"]:
+            cache_file = self.cache_db_path + ext
+            if os.path.exists(cache_file):
+                try:
+                    os.remove(cache_file)
+                except Exception as e:
+                    print(f"[Cache] Error removing auxiliary cache file {cache_file}: {e}")
+
+        print(f"[Cache] Created at {self.cache_db_path}")
+
+        # load and compute signature (signature computation is best-effort)
+        try:
+            self._load_to_memory()
+        except Exception as e:
+            print(f"[Cache] Error loading cache to memory after replace: {e}")
+
+        try:
+            self._cache_signature = self.db_manager.connection_helper._compute_db_signature()
+        except Exception as e:
+            print(f"[Cache] Warning: cannot compute cache signature after build: {e}")
+
+        # cleanup: attempt to remove any leftover tmp files (retry for Windows)
+        try:
+            if os.path.exists(tmp_path):
+                for rm_attempt in range(6):
+                    try:
+                        os.remove(tmp_path)
+                        break
+                    except PermissionError:
+                        time.sleep(0.15)
+                    except Exception:
+                        break
+        except Exception:
+            pass
+
+        # release lock so other processes can use the newly created cache
+        try:
+            self._release_build_lock()
+        except Exception as e:
+            print(f"[Cache] Error releasing build lock in finally: {e}")
 
     def _acquire_build_lock(self, timeout=None, stale_seconds=None):
         timeout = self._lock_acquire_timeout if timeout is None else timeout

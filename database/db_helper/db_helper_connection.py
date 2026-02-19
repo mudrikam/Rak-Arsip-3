@@ -126,14 +126,18 @@ class DatabaseConnectionHelper(QObject):
             f.flush()
             os.fsync(f.fileno())
 
-        delay = random.uniform(0.5, 1.5)
+        delay = random.uniform(1.0, 3.0)
         time.sleep(delay)
 
         ch = getattr(self.db_manager, 'caching_helper', None)
+        wait_seconds = 15
+        if ch and hasattr(ch, '_lock_acquire_timeout'):
+            wait_seconds = min(wait_seconds, int(ch._lock_acquire_timeout))
+
         if ch and hasattr(ch, 'cache_lock_path'):
             start = time.time()
             while os.path.exists(ch.cache_lock_path):
-                if time.time() - start > 5:
+                if time.time() - start > wait_seconds:
                     break
                 time.sleep(0.1 + random.uniform(0, 0.05))
 
