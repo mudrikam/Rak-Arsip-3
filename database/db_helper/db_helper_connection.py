@@ -1,6 +1,7 @@
 import sqlite3
 import os
 import time
+import random
 import hashlib
 from PySide6.QtCore import QObject, QTimer
 
@@ -125,6 +126,8 @@ class DatabaseConnectionHelper(QObject):
             f.flush()
             os.fsync(f.fileno())
 
+        # small randomized delay to desynchronize concurrent cache rebuilds
+        time.sleep(random.uniform(0.05, 0.35))
         self.db_manager.caching_helper.update_cache()
 
     def _compute_db_signature(self):

@@ -2,6 +2,8 @@ import sqlite3
 import os
 import shutil
 import tempfile
+import time
+import random
 from PySide6.QtCore import QObject, QTimer
 
 
@@ -21,6 +23,11 @@ class DatabaseCachingHelper(QObject):
         self._signature_timer.setInterval(1000)
         self._signature_timer.timeout.connect(self._periodic_signature_check)
         self._signature_timer.start()
+
+        # lock used to serialize cache builds across processes
+        self.cache_lock_path = self.cache_db_path + ".lock"
+        self._lock_stale_seconds = 60        # consider lock stale after 60s
+        self._lock_acquire_timeout = 20     # how long to wait to acquire lock (s)
     
     def _get_cache_path(self):
         """Get cache database path from db config."""
@@ -39,11 +46,29 @@ class DatabaseCachingHelper(QObject):
             print("[Cache] Main database not found")
             return
 
+        # if another process is already building the cache, wait for it (avoid duplicate heavy work)
+        if os.path.exists(self.cache_lock_path):
+            try:
+                self._wait_for_lock_release(timeout=self._lock_acquire_timeout)
+                # other process finished the build — try to load what it produced
+                if os.path.exists(self.cache_db_path):
+                    self._load_to_memory()
+                    return
+            except TimeoutError:
+                print("[Cache] Timeout waiting for existing cache build; proceeding to attempt build")
+
         tmp_path = self.cache_db_path + ".tmp"
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
 
         try:
+            acquired = self._acquire_build_lock(timeout=self._lock_acquire_timeout)
+            if not acquired:
+                # couldn't acquire lock in time; try to load existing cache if present
+                if os.path.exists(self.cache_db_path):
+                    self._load_to_memory()
+                return
+
             src = sqlite3.connect(main_db)
             dst = sqlite3.connect(tmp_path)
             src.backup(dst)
@@ -69,6 +94,57 @@ class DatabaseCachingHelper(QObject):
                     os.remove(tmp_path)
                 except Exception as rm_e:
                     print(f"[Cache] Error removing tmp cache file {tmp_path}: {rm_e}")
+        finally:
+            # always release the build lock if we held it
+            try:
+                self._release_build_lock()
+            except Exception:
+                pass
+
+    def _acquire_build_lock(self, timeout=None, stale_seconds=None):
+        timeout = self._lock_acquire_timeout if timeout is None else timeout
+        stale_seconds = self._lock_stale_seconds if stale_seconds is None else stale_seconds
+        start = time.time()
+        attempt = 0
+        while True:
+            try:
+                fd = os.open(self.cache_lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                with os.fdopen(fd, "w") as f:
+                    f.write(f"{os.getpid()}:{time.time()}")
+                return True
+            except FileExistsError:
+                try:
+                    mtime = os.path.getmtime(self.cache_lock_path)
+                    if time.time() - mtime > stale_seconds:
+                        # lock is stale — attempt to remove it and retry immediately
+                        try:
+                            os.remove(self.cache_lock_path)
+                            print("[Cache] Removed stale build lock")
+                            continue
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+
+                if time.time() - start > timeout:
+                    return False
+                attempt += 1
+                sleep_time = min(0.25 * (2 ** attempt), 1.5) + random.uniform(0, 0.1)
+                time.sleep(sleep_time)
+
+    def _release_build_lock(self):
+        try:
+            if os.path.exists(self.cache_lock_path):
+                os.remove(self.cache_lock_path)
+        except Exception as e:
+            print(f"[Cache] Error releasing build lock: {e}")
+
+    def _wait_for_lock_release(self, timeout=20):
+        start = time.time()
+        while os.path.exists(self.cache_lock_path):
+            if time.time() - start > timeout:
+                raise TimeoutError("Timeout waiting for cache build lock release")
+            time.sleep(0.1)
     
     def _load_to_memory(self):
         try:
@@ -125,6 +201,13 @@ class DatabaseCachingHelper(QObject):
                 print(f"[Cache] Error emitting data_changed after periodic rebuild: {e}")
     
     def get_cache_connection(self):
+        # if another process is building the cache, wait a short while for it to finish
+        if os.path.exists(self.cache_lock_path):
+            try:
+                self._wait_for_lock_release(timeout=self._lock_acquire_timeout)
+            except TimeoutError:
+                print("[Cache] Timeout waiting for concurrent cache build; continuing")
+
         if os.path.exists(self.db_manager.db_path):
             try:
                 current_sig = self.db_manager.connection_helper._compute_db_signature()
