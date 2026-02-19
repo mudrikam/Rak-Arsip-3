@@ -203,9 +203,15 @@ class DatabaseConnectionHelper(QObject):
                 
             except sqlite3.OperationalError as e:
                 if "database is locked" in str(e).lower():
-                    self.db_manager.status_message.emit("Database is locked, waiting for access...", 3000)
-                    time.sleep(1)
-                    retry += 1
+                    # write path: keep waiting (writes may require WAL access)
+                    if write:
+                        self.db_manager.status_message.emit("Database is locked, waiting for access...", 3000)
+                        time.sleep(1)
+                        retry += 1
+                    else:
+                        # read path: do NOT wait — fail fast so reads aren't delayed
+                        self.db_manager.status_message.emit("Database locked — read failed (no wait)", 1500)
+                        raise
                 else:
                     print(f"[DB] Connection error: {e}")
                     raise
