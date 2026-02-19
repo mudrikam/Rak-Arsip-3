@@ -83,6 +83,9 @@ class DatabaseConnectionHelper(QObject):
                 if file_age > 5:
                     try:
                         os.remove(file_path)
+                    except FileNotFoundError:
+                        # another process already removed it — ignore
+                        pass
                     except Exception as e:
                         print(f"[DB] Error removing temp file {file_path}: {e}")
                 continue
@@ -112,6 +115,9 @@ class DatabaseConnectionHelper(QObject):
 
             try:
                 os.remove(file_path)
+            except FileNotFoundError:
+                # processed/removed by another instance — ignore
+                pass
             except Exception as e:
                 print(f"[DB] Error removing temp file {file_path}: {e}")
 
