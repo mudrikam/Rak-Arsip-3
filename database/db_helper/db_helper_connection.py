@@ -126,9 +126,21 @@ class DatabaseConnectionHelper(QObject):
             f.flush()
             os.fsync(f.fileno())
 
-        # small randomized delay to desynchronize concurrent cache rebuilds
-        time.sleep(random.uniform(0.05, 0.35))
-        self.db_manager.caching_helper.update_cache()
+        delay = random.uniform(0.5, 1.5)
+        time.sleep(delay)
+
+        ch = getattr(self.db_manager, 'caching_helper', None)
+        if ch and hasattr(ch, 'cache_lock_path'):
+            start = time.time()
+            while os.path.exists(ch.cache_lock_path):
+                if time.time() - start > 5:
+                    break
+                time.sleep(0.1 + random.uniform(0, 0.05))
+
+        try:
+            self.db_manager.caching_helper.update_cache()
+        except Exception as e:
+            print(f"[DB] Error updating cache from create_temp_file: {e}")
 
     def _compute_db_signature(self):
         db_path = self.db_manager.db_path
