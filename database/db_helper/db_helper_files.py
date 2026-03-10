@@ -127,7 +127,7 @@ class DatabaseFilesHelper:
 
     def get_files_page(self, page=1, page_size=20, search_query=None, sort_field="date", sort_order="desc", 
                        status_value=None, client_id=None, batch_number=None, root_value=None, 
-                       category_value=None, subcategory_value=None):
+                       category_value=None, subcategory_value=None, microstock_platform_id=None):
         """Get paginated files with filtering and sorting."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
@@ -165,7 +165,12 @@ class DatabaseFilesHelper:
         if subcategory_value:
             where_clauses.append("sc.name = ?")
             params.append(subcategory_value)
-        
+
+        if microstock_platform_id:
+            join_clauses.append("JOIN file_microstock_status fms ON fms.file_id = f.id")
+            where_clauses.append("fms.platform_id = ?")
+            params.append(microstock_platform_id)
+
         where_sql = ""
         if where_clauses:
             where_sql = "WHERE " + " AND ".join(where_clauses)
@@ -182,10 +187,23 @@ class DatabaseFilesHelper:
             "status": "s.name",
             "category": "c.name",
             "subcategory": "sc.name",
-            "batch_number": "fcb.batch_number"
+            "batch_number": "fcb.batch_number",
+            "microstock": "fms_sort.status_name",
         }
         sort_sql = sort_map.get(sort_field, "parsed_date")
         order_sql = "DESC" if sort_order == "desc" else "ASC"
+
+        # For microstock sort, add a left join to get status name for the chosen platform
+        microstock_sort_join = ""
+        if sort_field == "microstock" and microstock_platform_id:
+            microstock_sort_join = (
+                f"LEFT JOIN ("
+                f"SELECT fms2.file_id, s2.name AS status_name "
+                f"FROM file_microstock_status fms2 "
+                f"LEFT JOIN statuses s2 ON s2.id = fms2.status_id "
+                f"WHERE fms2.platform_id = {int(microstock_platform_id)}"
+                f") fms_sort ON fms_sort.file_id = f.id"
+            )
         
         sql = f"""
             SELECT
@@ -229,6 +247,7 @@ class DatabaseFilesHelper:
             LEFT JOIN subcategories sc ON f.subcategory_id = sc.id
             LEFT JOIN templates t ON f.template_id = t.id
             {join_sql}
+            {microstock_sort_join}
             {where_sql}
             ORDER BY {sort_sql} {order_sql}, f.id DESC
             LIMIT ? OFFSET ?
@@ -258,7 +277,7 @@ class DatabaseFilesHelper:
         return result
 
     def count_files(self, search_query=None, status_value=None, client_id=None, batch_number=None, 
-                    root_value=None, category_value=None, subcategory_value=None):
+                    root_value=None, category_value=None, subcategory_value=None, microstock_platform_id=None):
         """Count files with filtering."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
@@ -295,7 +314,12 @@ class DatabaseFilesHelper:
         if subcategory_value:
             where_clauses.append("sc.name = ?")
             params.append(subcategory_value)
-        
+
+        if microstock_platform_id:
+            join_clauses.append("JOIN file_microstock_status fms ON fms.file_id = f.id")
+            where_clauses.append("fms.platform_id = ?")
+            params.append(microstock_platform_id)
+
         where_sql = ""
         if where_clauses:
             where_sql = "WHERE " + " AND ".join(where_clauses)

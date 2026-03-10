@@ -39,6 +39,7 @@ class SortDialog(QDialog):
             ("Status", "status"),
             ("Category", "category"),
             ("Batch Number", "batch_number"),
+            ("Microstock", "microstock"),
         ]
         for label, _ in self.sort_fields:
             self.field_combo.addItem(label)
@@ -111,6 +112,14 @@ class SortDialog(QDialog):
         self.subcategory_label = create_icon_label("SubCat:", "fa6s.folder-open")
         self.subcategory_row_index = form_layout.rowCount()
         form_layout.addRow(self.subcategory_label, self.subcategory_combo)
+
+        self.microstock_platform_combo = QComboBox()
+        self.microstock_platform_combo.setMinimumWidth(200)
+        self.microstock_platform_combo.setEnabled(False)
+        self.microstock_platform_label = create_icon_label("Platform:", "fa6s.store")
+        self.microstock_platform_row_index = form_layout.rowCount()
+        form_layout.addRow(self.microstock_platform_label, self.microstock_platform_combo)
+        self.microstock_platform_combo.currentIndexChanged.connect(self._update_ok_button_state)
         
         self.order_combo = QComboBox()
         self.order_combo.setMinimumWidth(200)
@@ -172,6 +181,16 @@ class SortDialog(QDialog):
         self.subcategory_combo.setEnabled(is_category and bool(self.category_combo.currentText().strip()))
         self.subcategory_label.setVisible(is_category)
         self.subcategory_combo.setVisible(is_category)
+
+        is_microstock = field == "microstock"
+        self.microstock_platform_combo.setEnabled(is_microstock)
+        self.microstock_platform_label.setVisible(is_microstock)
+        self.microstock_platform_combo.setVisible(is_microstock)
+        if is_microstock and self.db_manager:
+            self.microstock_platform_combo.clear()
+            platforms = self.db_manager.get_all_microstock_platforms()
+            for p in platforms:
+                self.microstock_platform_combo.addItem(p["platform_name"], p["id"])
         
         if is_root and self.db_manager:
             self.root_combo.clear()
@@ -243,6 +262,8 @@ class SortDialog(QDialog):
         elif field == "category":
             cat = self.category_combo.currentText().strip()
             self.button_box.button(QDialogButtonBox.Ok).setEnabled(bool(cat))
+        elif field == "microstock":
+            self.button_box.button(QDialogButtonBox.Ok).setEnabled(self.microstock_platform_combo.currentData() is not None)
         else:
             self.button_box.button(QDialogButtonBox.Ok).setEnabled(True)
 
@@ -256,6 +277,7 @@ class SortDialog(QDialog):
         root_value = None
         category_value = None
         subcategory_value = None
+        microstock_platform_id = None
         if field == "status" and self.status_combo.currentIndex() > 0:
             status_value = self.status_options[self.status_combo.currentIndex() - 1]
         if field == "batch_number":
@@ -266,9 +288,11 @@ class SortDialog(QDialog):
         if field == "category":
             category_value = self.category_combo.currentText().strip()
             subcategory_value = self.subcategory_combo.currentText().strip()
+        if field == "microstock":
+            microstock_platform_id = self.microstock_platform_combo.currentData()
         show_statusbar_message(
             self,
-            f"Sort dialog accepted: field={field}, order={order}, status={status_value if status_value else 'All'}, client_id={client_id if client_id else '-'}, batch={batch_number if batch_number else '-'}, root={root_value if root_value else 'All'}, category={category_value if category_value else '-'}, subcategory={subcategory_value if subcategory_value else '-'}"
+            f"Sort dialog accepted: field={field}, order={order}, status={status_value if status_value else 'All'}, client_id={client_id if client_id else '-'}, batch={batch_number if batch_number else '-'}, root={root_value if root_value else 'All'}, category={category_value if category_value else '-'}, subcategory={subcategory_value if subcategory_value else '-'}, microstock_platform_id={microstock_platform_id if microstock_platform_id else '-'}"
         )
         self.accept()
 
@@ -282,6 +306,7 @@ class SortDialog(QDialog):
         root_value = None
         category_value = None
         subcategory_value = None
+        microstock_platform_id = None
         if field == "status" and self.status_combo.currentIndex() > 0:
             status_value = self.status_options[self.status_combo.currentIndex() - 1]
         if field == "batch_number":
@@ -292,7 +317,9 @@ class SortDialog(QDialog):
         if field == "category":
             category_value = self.category_combo.currentText().strip()
             subcategory_value = self.subcategory_combo.currentText().strip()
-        return field, order, status_value, client_id, batch_number, root_value, category_value, subcategory_value
+        if field == "microstock":
+            microstock_platform_id = self.microstock_platform_combo.currentData()
+        return field, order, status_value, client_id, batch_number, root_value, category_value, subcategory_value, microstock_platform_id
 
     @staticmethod
     def sort_data(data, field, order, status_value=None, client_id=None, batch_number=None, root_value=None, category_value=None):

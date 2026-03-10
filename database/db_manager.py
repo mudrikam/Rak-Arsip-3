@@ -161,17 +161,17 @@ class DatabaseManager(QObject):
 
     def get_files_page(self, page=1, page_size=20, search_query=None, sort_field="date", sort_order="desc", 
                        status_value=None, client_id=None, batch_number=None, root_value=None, 
-                       category_value=None, subcategory_value=None):
+                       category_value=None, subcategory_value=None, microstock_platform_id=None):
         """Get files page."""
         return self.files_helper.get_files_page(page, page_size, search_query, sort_field, sort_order,
                                                 status_value, client_id, batch_number, root_value, 
-                                                category_value, subcategory_value)
+                                                category_value, subcategory_value, microstock_platform_id)
 
     def count_files(self, search_query=None, status_value=None, client_id=None, batch_number=None, 
-                    root_value=None, category_value=None, subcategory_value=None):
+                    root_value=None, category_value=None, subcategory_value=None, microstock_platform_id=None):
         """Count files."""
         return self.files_helper.count_files(search_query, status_value, client_id, batch_number,
-                                             root_value, category_value, subcategory_value)
+                                             root_value, category_value, subcategory_value, microstock_platform_id)
 
     def get_all_roots(self):
         """Get all roots."""

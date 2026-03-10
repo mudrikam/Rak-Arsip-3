@@ -10,9 +10,10 @@ class DatabaseMicrostockHelper:
         cursor = self.db_manager.connection.cursor()
         cursor.execute("""
             SELECT p.id, p.platform_name, p.platform_url, p.platform_description, p.platform_note,
-                   COUNT(fms.id) as file_count
+                   COUNT(f.id) as file_count
             FROM microstock_platforms p
             LEFT JOIN file_microstock_status fms ON fms.platform_id = p.id
+            LEFT JOIN files f ON f.id = fms.file_id
             GROUP BY p.id
             ORDER BY p.platform_name ASC
         """)

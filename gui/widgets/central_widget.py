@@ -520,6 +520,7 @@ class CentralWidget(QWidget):
             root_value = getattr(self, "sort_root_value", None)
             category_value = getattr(self, "sort_category_value", None)
             subcategory_value = getattr(self, "sort_subcategory_value", None)
+            microstock_platform_id = getattr(self, "sort_microstock_platform_id", None)
             
             # Time count queries
             count_start = time.time()
@@ -532,7 +533,8 @@ class CentralWidget(QWidget):
                 batch_number=batch_number,
                 root_value=root_value,
                 category_value=category_value,
-                subcategory_value=subcategory_value
+                subcategory_value=subcategory_value,
+                microstock_platform_id=microstock_platform_id
             )
             count_end = time.time()
             
@@ -549,7 +551,8 @@ class CentralWidget(QWidget):
                 batch_number=batch_number,
                 root_value=root_value,
                 category_value=category_value,
-                subcategory_value=subcategory_value
+                subcategory_value=subcategory_value,
+                microstock_platform_id=microstock_platform_id
             )
             data_end = time.time()
             
@@ -1107,7 +1110,7 @@ class CentralWidget(QWidget):
         dlg = SortDialog(self.status_options, self)
         if dlg.exec() == QDialog.Accepted:
             result = dlg.get_sort_option(self.status_options)
-            field, order, status_value, client_id, batch_number, root_value, category_value, subcategory_value = result
+            field, order, status_value, client_id, batch_number, root_value, category_value, subcategory_value, microstock_platform_id = result
             self.sort_field = field
             self.sort_order = order
             self.sort_status_value = status_value
@@ -1116,6 +1119,7 @@ class CentralWidget(QWidget):
             self.sort_root_value = root_value
             self.sort_category_value = category_value
             self.sort_subcategory_value = subcategory_value
+            self.sort_microstock_platform_id = microstock_platform_id
             self.current_page = 1
             self.load_data_from_database(keep_search=True)
             show_statusbar_message(

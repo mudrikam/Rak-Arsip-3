@@ -91,9 +91,20 @@ class MicrostockDialog(QDialog):
         left_layout.addStretch()
         body.addWidget(left)
 
-        # --- Right panel: table ---
+        # --- Right panel: add-row + table ---
         right_layout = QVBoxLayout()
         right_layout.setSpacing(4)
+
+        # Add-row: platform combo + Add button
+        add_row = QHBoxLayout()
+        self.platform_combo = _NoWheelCombo()
+        self.platform_combo.setMinimumWidth(200)
+        add_row.addWidget(self.platform_combo, 1)
+        self.add_btn = QPushButton(qta.icon("fa6s.plus"), " Add")
+        self.add_btn.setFocusPolicy(Qt.NoFocus)
+        self.add_btn.clicked.connect(self._on_add_platform)
+        add_row.addWidget(self.add_btn)
+        right_layout.addLayout(add_row)
 
         self.table = QTableWidget()
         self.table.setColumnCount(5)
@@ -107,9 +118,9 @@ class MicrostockDialog(QDialog):
         header.setSectionResizeMode(2, QHeaderView.Fixed)
         header.setSectionResizeMode(3, QHeaderView.Stretch)
         header.setSectionResizeMode(4, QHeaderView.Stretch)
-        header.resizeSection(0, 150)
-        header.resizeSection(1, 150)
-        header.resizeSection(2, 160)
+        header.resizeSection(0, 140)
+        header.resizeSection(1, 140)
+        header.resizeSection(2, 150)
         right_layout.addWidget(self.table)
 
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -118,12 +129,16 @@ class MicrostockDialog(QDialog):
         body.addLayout(right_layout, 1)
         outer.addLayout(body)
 
-        hint = QLabel("Tip: Select a status to assign it directly.")
+        hint = QLabel("Tip: Add a platform, then select its status directly.")
         hint.setStyleSheet("color: #888; font-size: 11px;")
         outer.addWidget(hint)
 
         btn_row = QHBoxLayout()
         btn_row.addStretch()
+        self.remove_btn = QPushButton(qta.icon("fa6s.trash"), " Remove Selected")
+        self.remove_btn.setFocusPolicy(Qt.NoFocus)
+        self.remove_btn.clicked.connect(self._on_remove_platform)
+        btn_row.addWidget(self.remove_btn)
         close_btn = QPushButton(qta.icon("fa6s.xmark"), " Close")
         close_btn.clicked.connect(self.accept)
         btn_row.addWidget(close_btn)
@@ -136,22 +151,36 @@ class MicrostockDialog(QDialog):
             print(f"[Microstock] Error loading statuses: {e}")
             self._statuses = []
 
+    def _load_platform_combo(self):
+        """Populate the add-combo with platforms not yet assigned to this file."""
+        try:
+            all_platforms = self.db_manager.get_all_microstock_platforms()
+            assignments = self.db_manager.get_file_microstock_statuses(self.file_record["id"])
+            assigned_ids = {a["platform_id"] for a in assignments}
+            self.platform_combo.clear()
+            for p in all_platforms:
+                if p["id"] not in assigned_ids:
+                    self.platform_combo.addItem(p["platform_name"], p["id"])
+        except Exception as e:
+            print(f"[Microstock] Error loading platform combo: {e}")
+
     def _load_table(self):
-        """Build one row per platform; status column is a live combo box."""
+        """Build rows only for assigned platforms."""
         self._blocking = True
         self.table.setRowCount(0)
         try:
             all_platforms = self.db_manager.get_all_microstock_platforms()
+            platform_map = {p["id"]: p for p in all_platforms}
             assignments = self.db_manager.get_file_microstock_statuses(self.file_record["id"])
-            assigned_map = {a["platform_id"]: a for a in assignments}
 
-            self.table.setRowCount(len(all_platforms))
-            for row_idx, p in enumerate(all_platforms):
-                platform_id = p["id"]
-                platform_name = p["platform_name"]
-                platform_url = p["platform_url"] or ""
-                platform_desc = p["platform_description"] or ""
-                platform_note = p["platform_note"] or ""
+            self.table.setRowCount(len(assignments))
+            for row_idx, a in enumerate(assignments):
+                platform_id = a["platform_id"]
+                p = platform_map.get(platform_id, {})
+                platform_name = p.get("platform_name", "")
+                platform_url = p.get("platform_url") or ""
+                platform_desc = p.get("platform_description") or ""
+                platform_note = p.get("platform_note") or ""
 
                 name_item = QTableWidgetItem(platform_name)
                 name_item.setData(Qt.UserRole, platform_id)
@@ -170,21 +199,12 @@ class MicrostockDialog(QDialog):
                 for s in self._statuses:
                     combo.addItem(s["name"], s["id"])
 
-                current_assignment = assigned_map.get(platform_id)
-                if current_assignment:
-                    for i in range(combo.count()):
-                        if combo.itemData(i) == current_assignment["status_id"]:
-                            combo.setCurrentIndex(i)
-                            color = next((s["color"] for s in self._statuses if s["id"] == current_assignment["status_id"]), None)
-                            self._apply_combo_color(combo, color)
-                            break
-                else:
-                    for i in range(combo.count()):
-                        if combo.itemText(i) == "Draft":
-                            combo.setCurrentIndex(i)
-                            color = next((s["color"] for s in self._statuses if s["name"] == "Draft"), None)
-                            self._apply_combo_color(combo, color)
-                            break
+                for i in range(combo.count()):
+                    if combo.itemData(i) == a["status_id"]:
+                        combo.setCurrentIndex(i)
+                        color = next((s["color"] for s in self._statuses if s["id"] == a["status_id"]), None)
+                        self._apply_combo_color(combo, color)
+                        break
 
                 combo.currentIndexChanged.connect(
                     lambda idx, pid=platform_id, cb=combo: self._on_status_changed(pid, cb)
@@ -208,6 +228,7 @@ class MicrostockDialog(QDialog):
             print(f"[Microstock] Error loading table: {e}")
         finally:
             self._blocking = False
+        self._load_platform_combo()
 
     def _find_first_image(self, directory, supported, max_depth=3, _depth=0):
         """Recursively find the first image in directory (same strategy as properties widget)."""
@@ -279,6 +300,62 @@ class MicrostockDialog(QDialog):
         else:
             combo.setStyleSheet("")
 
+    def _on_add_platform(self):
+        platform_id = self.platform_combo.currentData()
+        if platform_id is None:
+            return
+        file_id = self.file_record["id"]
+        # Find Draft status id
+        draft_status_id = next((s["id"] for s in self._statuses if s["name"] == "Draft"), None)
+        if draft_status_id is None and self._statuses:
+            draft_status_id = self._statuses[0]["id"]
+        try:
+            self.db_manager.upsert_file_microstock_status(file_id, platform_id, draft_status_id)
+            self._load_table()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to add platform: {e}")
+
+    def _on_remove_platform(self):
+        row = self.table.currentRow()
+        if row < 0:
+            return
+        name_item = self.table.item(row, 0)
+        if name_item is None:
+            return
+        platform_id = name_item.data(Qt.UserRole)
+        platform_name = name_item.text()
+        confirm = QMessageBox.question(
+            self, "Remove Platform",
+            f"Remove <b>{platform_name}</b> from this file's microstock list?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if confirm != QMessageBox.Yes:
+            return
+        try:
+            self.db_manager.delete_file_microstock_status(self.file_record["id"], platform_id)
+            self._load_table()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to remove platform: {e}")
+
+    def _remove_row(self, row):
+        name_item = self.table.item(row, 0)
+        if name_item is None:
+            return
+        platform_id = name_item.data(Qt.UserRole)
+        platform_name = name_item.text()
+        confirm = QMessageBox.question(
+            self, "Remove Platform",
+            f"Remove <b>{platform_name}</b> from this file's microstock list?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if confirm != QMessageBox.Yes:
+            return
+        try:
+            self.db_manager.delete_file_microstock_status(self.file_record["id"], platform_id)
+            self._load_table()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to remove platform: {e}")
+
     def _show_context_menu(self, pos):
         index = self.table.indexAt(pos)
         if not index.isValid():
@@ -290,6 +367,7 @@ class MicrostockDialog(QDialog):
         menu = QMenu(self.table)
         action_open = QAction(qta.icon("fa6s.globe"), "Open URL in Browser", self)
         action_copy_url = QAction(qta.icon("fa6s.copy"), "Copy URL", self)
+        action_remove = QAction(qta.icon("fa6s.trash"), "Remove Platform", self)
         action_open.setEnabled(bool(url))
         action_copy_url.setEnabled(bool(url))
 
@@ -302,8 +380,11 @@ class MicrostockDialog(QDialog):
 
         action_open.triggered.connect(do_open)
         action_copy_url.triggered.connect(do_copy)
+        action_remove.triggered.connect(lambda: self._remove_row(row))
         menu.addAction(action_open)
         menu.addAction(action_copy_url)
+        menu.addSeparator()
+        menu.addAction(action_remove)
         menu.exec(self.table.viewport().mapToGlobal(pos))
 
     def _on_status_changed(self, platform_id, combo):
