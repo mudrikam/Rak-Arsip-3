@@ -115,6 +115,9 @@ class DatabaseFilesHelper:
         # Delete from file_url
         cursor.execute("DELETE FROM file_url WHERE file_id = ?", (file_id,))
         
+        # Delete from file_microstock_status
+        cursor.execute("DELETE FROM file_microstock_status WHERE file_id = ?", (file_id,))
+        
         # Finally, delete from files
         cursor.execute("DELETE FROM files WHERE id = ?", (file_id,))
         
@@ -453,11 +456,31 @@ class DatabaseFilesHelper:
                 "note": fu["note"]
             })
         
+        # Get microstock assignments
+        cursor.execute("""
+            SELECT fms.id, fms.platform_id, fms.note,
+                   p.platform_name, s.name as status_name
+            FROM file_microstock_status fms
+            JOIN microstock_platforms p ON fms.platform_id = p.id
+            JOIN statuses s ON fms.status_id = s.id
+            WHERE fms.file_id = ?
+        """, (file_id,))
+        file_microstock_info = []
+        for fm in cursor.fetchall():
+            file_microstock_info.append({
+                "id": fm["id"],
+                "platform_id": fm["platform_id"],
+                "platform_name": fm["platform_name"],
+                "status_name": fm["status_name"],
+                "note": fm["note"]
+            })
+        
         self.db_manager.close()
         return {
             "item_price": item_price_info,
             "earnings": earnings_info,
             "file_client_price": file_client_price_info,
             "file_client_batch": file_client_batch_info,
-            "file_url": file_url_info
+            "file_url": file_url_info,
+            "file_microstock": file_microstock_info
         }

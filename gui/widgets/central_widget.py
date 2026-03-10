@@ -20,6 +20,7 @@ from helpers.markdown_generator import MarkdownGenerator
 from gui.dialogs.edit_record_dialog import EditRecordDialog
 from gui.dialogs.assign_price_dialog import AssignPriceDialog
 from gui.dialogs.assign_file_url_dialog import AssignFileUrlDialog
+from gui.dialogs.microstock_dialog import MicrostockDialog
 
 class DeleteRecordConfirmDialog(QDialog):
     """Dialog to show record details before deletion"""
@@ -291,6 +292,8 @@ class CentralWidget(QWidget):
         edit_record_shortcut.activated.connect(self.edit_record_shortcut)
         assign_url_shortcut = QShortcut(QKeySequence("Ctrl+L"), self)
         assign_url_shortcut.activated.connect(self.assign_url_shortcut)
+        microstock_shortcut = QShortcut(QKeySequence("Ctrl+M"), self)
+        microstock_shortcut.activated.connect(self.open_microstock_shortcut)
 
         self._search_query = ""
         self._status_filter = None
@@ -469,6 +472,14 @@ class CentralWidget(QWidget):
         dialog = AssignFileUrlDialog(self.selected_row_data, self.db_manager, self)
         if dialog.exec() == QDialog.Accepted:
             show_statusbar_message(self, f"URL assigned to {self.selected_row_data['name']}")
+
+    def open_microstock_shortcut(self):
+        """Handle Ctrl+M shortcut to open Microstock dialog for selected file"""
+        if not self.selected_row_data:
+            show_statusbar_message(self, "No record selected for Microstock.")
+            return
+        dialog = MicrostockDialog(self.selected_row_data, self.db_manager, self.status_config, self)
+        dialog.exec()
 
     def _on_table_double_click(self, row, column):
         self._selection_debounce_timer.stop()
@@ -950,6 +961,8 @@ class CentralWidget(QWidget):
         action_assign_price = QAction(icon_assign_price, "Assign Price\tShift+A", self)
         action_assign_url = QAction(icon_assign_url, "Assign URL\tCtrl+L", self)
 
+        action_microstock = QAction(qta.icon("fa6s.cloud-arrow-up"), "Microstock\tCtrl+M", self)
+
         def do_copy_name():
             QApplication.clipboard().setText(str(row_data['name']))
             show_statusbar_message(self, f"Name copied: {row_data['name']}")
@@ -1067,11 +1080,16 @@ class CentralWidget(QWidget):
             if dialog.exec() == QDialog.Accepted:
                 show_statusbar_message(self, f"URL assigned to {row_data['name']}")
 
+        def do_open_microstock():
+            dialog = MicrostockDialog(row_data, self.db_manager, self.status_config, self)
+            dialog.exec()
+
         action_copy_name.triggered.connect(do_copy_name)
         action_copy_path.triggered.connect(do_copy_path)
         action_open_explorer.triggered.connect(do_open_explorer)
         action_assign_price.triggered.connect(do_assign_price)
         action_assign_url.triggered.connect(do_assign_url)
+        action_microstock.triggered.connect(do_open_microstock)
         action_edit.triggered.connect(do_edit_record)
         action_delete.triggered.connect(do_delete_record)
         menu.addAction(action_copy_name)
@@ -1079,6 +1097,7 @@ class CentralWidget(QWidget):
         menu.addAction(action_open_explorer)
         menu.addAction(action_assign_price)
         menu.addAction(action_assign_url)
+        menu.addAction(action_microstock)
         menu.addAction(action_edit)
         menu.addSeparator()
         menu.addAction(action_delete)

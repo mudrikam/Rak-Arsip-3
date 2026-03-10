@@ -8,6 +8,7 @@ from .preferences_helper.preferences_helper_categories import PreferencesCategor
 from .preferences_helper.preferences_helper_templates import PreferencesTemplatesHelper
 from .preferences_helper.preferences_helper_backup import PreferencesBackupHelper
 from .preferences_helper.preferences_helper_url import PreferencesUrlHelper
+from .preferences_helper.preferences_helper_microstock import PreferencesMicrostockHelper
 
 
 class PreferencesWindow(QDialog):
@@ -25,6 +26,7 @@ class PreferencesWindow(QDialog):
         self.templates_helper = PreferencesTemplatesHelper(self, db_manager)
         self.backup_helper = PreferencesBackupHelper(self, db_manager)
         self.url_helper = PreferencesUrlHelper(self, db_manager)
+        self.microstock_helper = PreferencesMicrostockHelper(self, db_manager)
         
         layout = QVBoxLayout(self)
         
@@ -36,6 +38,7 @@ class PreferencesWindow(QDialog):
         self.tab_widget.addTab(self.templates_helper.create_templates_tab(), qta.icon("fa6s.file-lines"), "Templates")
         self.tab_widget.addTab(self.backup_helper.create_backup_tab(), qta.icon("fa6s.database"), "Backup/Restore")
         self.tab_widget.addTab(self.url_helper.create_url_tab(), qta.icon("fa6s.link"), "URL Providers")
+        self.tab_widget.addTab(self.microstock_helper.create_microstock_tab(), qta.icon("fa6s.cloud-arrow-up"), "Microstock")
         
         layout.addWidget(self.tab_widget)
         
@@ -62,6 +65,7 @@ class PreferencesWindow(QDialog):
         self.categories_helper.load_categories()
         self.templates_helper.load_templates()
         self.url_helper.load_url_providers()
+        self.microstock_helper.load_platforms()
         self.backup_helper.refresh_db_backup_list()
 
     def apply_changes(self):

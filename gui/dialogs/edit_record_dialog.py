@@ -1,4 +1,5 @@
-from PySide6.QtWidgets import QDialog, QFormLayout, QLineEdit, QComboBox, QDialogButtonBox
+from PySide6.QtWidgets import QDialog, QFormLayout, QLineEdit, QComboBox, QDialogButtonBox, QWidget, QHBoxLayout, QLabel
+import qtawesome as qta
 import sys
 import os
 import re
@@ -145,15 +146,30 @@ class EditRecordDialog(QDialog):
         self.date_edit.setEnabled(True)
         self.full_path_edit = QLineEdit(record.get('path', ''))
         self.full_path_edit.setEnabled(False)
-        layout.addRow("Date", self.date_edit)
-        layout.addRow("Name", self.name_edit)
-        layout.addRow("Disk", self.disk_combo)
-        layout.addRow("Root", self.root_combo)
-        layout.addRow("Status", self.status_combo)
-        layout.addRow("Category", self.category_combo)
-        layout.addRow("Subcategory", self.subcategory_combo)
-        layout.addRow("Full Path", self.full_path_edit)
+
+        def _ilbl(icon_name, text):
+            w = QWidget()
+            h = QHBoxLayout(w)
+            h.setContentsMargins(0, 0, 4, 0)
+            h.setSpacing(4)
+            ic = QLabel()
+            ic.setPixmap(qta.icon(icon_name, color="#888").pixmap(14, 14))
+            ic.setFixedSize(14, 14)
+            h.addWidget(ic)
+            h.addWidget(QLabel(text))
+            return w
+
+        layout.addRow(_ilbl("fa6s.calendar", "Date"), self.date_edit)
+        layout.addRow(_ilbl("fa6s.file-lines", "Name"), self.name_edit)
+        layout.addRow(_ilbl("fa6s.hard-drive", "Disk"), self.disk_combo)
+        layout.addRow(_ilbl("fa6s.folder", "Root"), self.root_combo)
+        layout.addRow(_ilbl("fa6s.circle-info", "Status"), self.status_combo)
+        layout.addRow(_ilbl("fa6s.folder-tree", "Category"), self.category_combo)
+        layout.addRow(_ilbl("fa6s.folder-open", "Subcategory"), self.subcategory_combo)
+        layout.addRow(_ilbl("fa6s.link", "Full Path"), self.full_path_edit)
         self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.button_box.button(QDialogButtonBox.Ok).setIcon(qta.icon("fa6s.check"))
+        self.button_box.button(QDialogButtonBox.Cancel).setIcon(qta.icon("fa6s.xmark"))
         layout.addRow(self.button_box)
         self.button_box.accepted.connect(self._on_accept)
         self.button_box.rejected.connect(self.reject)

@@ -47,10 +47,23 @@ class AssignPriceDialog(QDialog):
             self.price_combo.setCurrentIndex(0)
         self.currency_combo.setCurrentText(currency)
         self.note_edit.setText(note)
-        form_layout.addRow(QLabel("Item Name:"), self.item_label)
-        form_layout.addRow(QLabel("Price:"), self.price_combo)
-        form_layout.addRow(QLabel("Currency:"), self.currency_combo)
-        form_layout.addRow(QLabel("Note:"), self.note_edit)
+
+        def _ilbl(icon_name, text):
+            w = QWidget()
+            h = QHBoxLayout(w)
+            h.setContentsMargins(0, 0, 4, 0)
+            h.setSpacing(4)
+            ic = QLabel()
+            ic.setPixmap(qta.icon(icon_name, color="#888").pixmap(14, 14))
+            ic.setFixedSize(14, 14)
+            h.addWidget(ic)
+            h.addWidget(QLabel(text))
+            return w
+
+        form_layout.addRow(_ilbl("fa6s.file-lines", "Item Name:"), self.item_label)
+        form_layout.addRow(_ilbl("fa6s.money-bill", "Price:"), self.price_combo)
+        form_layout.addRow(_ilbl("fa6s.coins", "Currency:"), self.currency_combo)
+        form_layout.addRow(_ilbl("fa6s.note-sticky", "Note:"), self.note_edit)
 
         # Dropdown klien (urut A-Z), editable for quick search
         self.client_combo = QComboBox()
@@ -66,7 +79,7 @@ class AssignPriceDialog(QDialog):
                 if self.client_combo.itemData(idx) == assigned_client_id:
                     self.client_combo.setCurrentIndex(idx)
                     break
-        form_layout.addRow(QLabel("Client:"), self.client_combo)
+        form_layout.addRow(_ilbl("fa6s.user", "Client:"), self.client_combo)
 
         # Batch number dropdown + input + plus button
         batch_row = QHBoxLayout()
@@ -95,7 +108,7 @@ class AssignPriceDialog(QDialog):
         self.delete_batch_btn.setToolTip("Delete batch number")
         batch_row.addWidget(self.delete_batch_btn)
         batch_row.addStretch()
-        form_layout.addRow(QLabel("Batch Number:"), batch_row)
+        form_layout.addRow(_ilbl("fa6s.hashtag", "Batch Number:"), batch_row)
 
         # Disable batch combo and related buttons if no client selected
         if not self.client_combo.currentData():
@@ -152,6 +165,8 @@ class AssignPriceDialog(QDialog):
         main_layout.addLayout(add_row)
 
         self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.button_box.button(QDialogButtonBox.Ok).setIcon(qta.icon("fa6s.check"))
+        self.button_box.button(QDialogButtonBox.Cancel).setIcon(qta.icon("fa6s.xmark"))
         main_layout.addWidget(self.button_box)
         self.button_box.accepted.connect(self._on_accept)
         self.button_box.rejected.connect(self.reject)

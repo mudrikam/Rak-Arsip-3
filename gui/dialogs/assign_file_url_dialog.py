@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QDialog, QFormLayout, QLineEdit, QComboBox, QDialogButtonBox, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QMessageBox, QApplication, QToolTip
+from PySide6.QtWidgets import QDialog, QFormLayout, QLineEdit, QComboBox, QDialogButtonBox, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QMessageBox, QApplication, QToolTip, QWidget
 from PySide6.QtGui import QCursor
 from PySide6.QtCore import Qt
 import qtawesome as qta
@@ -15,14 +15,26 @@ class AssignFileUrlDialog(QDialog):
         
         main_layout = QVBoxLayout(self)
         form_layout = QFormLayout()
-        
+
+        def _ilbl(icon_name, text):
+            w = QWidget()
+            h = QHBoxLayout(w)
+            h.setContentsMargins(0, 0, 4, 0)
+            h.setSpacing(4)
+            ic = QLabel()
+            ic.setPixmap(qta.icon(icon_name, color="#888").pixmap(14, 14))
+            ic.setFixedSize(14, 14)
+            h.addWidget(ic)
+            h.addWidget(QLabel(text))
+            return w
+
         # Item name label
         self.item_label = QLabel(file_record.get("name", ""))
-        form_layout.addRow(QLabel("Item Name:"), self.item_label)
-        
+        form_layout.addRow(_ilbl("fa6s.file-lines", "Item Name:"), self.item_label)
+
         # Provider selection
         self.provider_combo = QComboBox()
-        form_layout.addRow(QLabel("Provider:"), self.provider_combo)
+        form_layout.addRow(_ilbl("fa6s.globe", "Provider:"), self.provider_combo)
         
         # URL entry with paste and copy buttons
         url_layout = QHBoxLayout()
@@ -51,17 +63,19 @@ class AssignFileUrlDialog(QDialog):
         self.open_btn.clicked.connect(self._open_url)
         url_layout.addWidget(self.open_btn)
         
-        form_layout.addRow(QLabel("URL:"), url_layout)
+        form_layout.addRow(_ilbl("fa6s.link", "URL:"), url_layout)
         
         # Note entry
         self.note_edit = QLineEdit()
         self.note_edit.setPlaceholderText("Enter note (optional)")
-        form_layout.addRow(QLabel("Note:"), self.note_edit)
+        form_layout.addRow(_ilbl("fa6s.note-sticky", "Note:"), self.note_edit)
         
         main_layout.addLayout(form_layout)
         
         # Dialog buttons
         self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.button_box.button(QDialogButtonBox.Ok).setIcon(qta.icon("fa6s.check"))
+        self.button_box.button(QDialogButtonBox.Cancel).setIcon(qta.icon("fa6s.xmark"))
         self.button_box.accepted.connect(self._on_accept)
         self.button_box.rejected.connect(self.reject)
         main_layout.addWidget(self.button_box)

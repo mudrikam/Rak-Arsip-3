@@ -19,6 +19,7 @@ from .db_helper.db_helper_batch_manager import DatabaseBatchManagerHelper
 from .db_helper.db_helper_wallet import DatabaseWalletHelper
 from .db_helper.db_helper_migration import DatabaseMigrationHelper
 from .db_helper.db_helper_data_caching import DatabaseCachingHelper
+from .db_helper.db_helper_microstock import DatabaseMicrostockHelper
 
 
 class DatabaseManager(QObject):
@@ -58,6 +59,7 @@ class DatabaseManager(QObject):
         self.urls_helper = DatabaseUrlsHelper(self)
         self.batch_manager_helper = DatabaseBatchManagerHelper(self)
         self.wallet_helper = DatabaseWalletHelper(self)
+        self.microstock_helper = DatabaseMicrostockHelper(self)
 
         self.connection_helper.ensure_database_exists()
         self.connection_helper.setup_file_watcher()
@@ -543,3 +545,27 @@ class DatabaseManager(QObject):
     
     def get_wallet_transaction_items(self, transaction_id):
         return self.wallet_helper.get_transaction_items(transaction_id)
+    # Microstock methods - delegate to microstock helper
+    def get_all_microstock_platforms(self):
+        return self.microstock_helper.get_all_platforms()
+
+    def add_microstock_platform(self, name, url, description, note):
+        return self.microstock_helper.add_platform(name, url, description, note)
+
+    def update_microstock_platform(self, platform_id, name, url, description, note):
+        return self.microstock_helper.update_platform(platform_id, name, url, description, note)
+
+    def delete_microstock_platform(self, platform_id):
+        return self.microstock_helper.delete_platform(platform_id)
+
+    def get_file_microstock_statuses(self, file_id):
+        return self.microstock_helper.get_file_microstock_statuses(file_id)
+
+    def upsert_file_microstock_status(self, file_id, platform_id, status_id, note=""):
+        return self.microstock_helper.upsert_file_microstock_status(file_id, platform_id, status_id, note)
+
+    def delete_file_microstock_status(self, file_id, platform_id):
+        return self.microstock_helper.delete_file_microstock_status(file_id, platform_id)
+
+    def get_all_microstock_statuses(self):
+        return self.microstock_helper.get_all_statuses()
