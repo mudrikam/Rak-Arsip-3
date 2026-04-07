@@ -20,13 +20,13 @@ class DatabaseCachingHelper(QObject):
         self._cache_signature = None
 
         self._signature_timer = QTimer()
-        self._signature_timer.setInterval(1000)
+        self._signature_timer.setInterval(5000)
         self._signature_timer.timeout.connect(self._periodic_signature_check)
         self._signature_timer.start()
 
         # timing guard to avoid rapid repeated rebuilds
         self._last_rebuild_time = 0.0
-        self._rebuild_cooldown = 2.0  # seconds
+        self._rebuild_cooldown = 5.0  # seconds
 
         # lock used to serialize cache builds across processes
         self.cache_lock_path = self.cache_db_path + ".lock"
