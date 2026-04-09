@@ -30,7 +30,7 @@ class DatabaseBatchManagerHelper:
             "SELECT b.batch_number, b.client_id, c.client_name, b.note, b.created_at "
             "FROM batch_list b "
             "JOIN client c ON b.client_id = c.id "
-            "WHERE b.batch_number = ?",
+            "WHERE b.batch_number = %s",
             (batch_number,)
         )
         row = cursor.fetchone()
@@ -50,12 +50,12 @@ class DatabaseBatchManagerHelper:
         cursor = self.db_manager.connection.cursor()
         if created_at:
             cursor.execute(
-                "INSERT INTO batch_list (batch_number, client_id, note, created_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)",
+                "INSERT INTO batch_list (batch_number, client_id, note, created_at, updated_at) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)",
                 (batch_number, client_id, note, created_at)
             )
         else:
             cursor.execute(
-                "INSERT INTO batch_list (batch_number, client_id, note, created_at, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                "INSERT INTO batch_list (batch_number, client_id, note, created_at, updated_at) VALUES (%s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
                 (batch_number, client_id, note)
             )
         self.db_manager.connection.commit()
@@ -67,16 +67,16 @@ class DatabaseBatchManagerHelper:
         cursor = self.db_manager.connection.cursor()
         if created_at:
             cursor.execute(
-                "UPDATE batch_list SET batch_number = ?, note = ?, client_id = ?, created_at = ?, updated_at = CURRENT_TIMESTAMP WHERE batch_number = ?",
+                "UPDATE batch_list SET batch_number = %s, note = %s, client_id = %s, created_at = %s, updated_at = CURRENT_TIMESTAMP WHERE batch_number = %s",
                 (new_batch_number, note, client_id, created_at, old_batch_number)
             )
         else:
             cursor.execute(
-                "UPDATE batch_list SET batch_number = ?, note = ?, client_id = ?, updated_at = CURRENT_TIMESTAMP WHERE batch_number = ?",
+                "UPDATE batch_list SET batch_number = %s, note = %s, client_id = %s, updated_at = CURRENT_TIMESTAMP WHERE batch_number = %s",
                 (new_batch_number, note, client_id, old_batch_number)
             )
         cursor.execute(
-            "UPDATE file_client_batch SET batch_number = ?, updated_at = CURRENT_TIMESTAMP WHERE batch_number = ?",
+            "UPDATE file_client_batch SET batch_number = %s, updated_at = CURRENT_TIMESTAMP WHERE batch_number = %s",
             (new_batch_number, old_batch_number)
         )
         self.db_manager.connection.commit()
@@ -86,8 +86,8 @@ class DatabaseBatchManagerHelper:
     def delete_batch(self, batch_number):
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("DELETE FROM file_client_batch WHERE batch_number = ?", (batch_number,))
-        cursor.execute("DELETE FROM batch_list WHERE batch_number = ?", (batch_number,))
+        cursor.execute("DELETE FROM file_client_batch WHERE batch_number = %s", (batch_number,))
+        cursor.execute("DELETE FROM batch_list WHERE batch_number = %s", (batch_number,))
         self.db_manager.connection.commit()
         self.db_manager.create_temp_file()
         self.db_manager.close()
@@ -103,7 +103,7 @@ class DatabaseBatchManagerHelper:
     def get_batch_file_count(self, batch_number):
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT COUNT(*) FROM file_client_batch WHERE batch_number = ?", (batch_number,))
+        cursor.execute("SELECT COUNT(*) FROM file_client_batch WHERE batch_number = %s", (batch_number,))
         count = cursor.fetchone()[0]
         self.db_manager.close()
         return count
@@ -114,7 +114,7 @@ class DatabaseBatchManagerHelper:
         where_clauses = []
         params = []
         if search_text:
-            where_clauses.append("(b.batch_number LIKE ? OR b.note LIKE ? OR c.client_name LIKE ?)")
+            where_clauses.append("(b.batch_number LIKE %s OR b.note LIKE %s OR c.client_name LIKE %s)")
             params.extend([f"%{search_text}%", f"%{search_text}%", f"%{search_text}%"])
         where_sql = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
         sort_map = {
@@ -132,7 +132,7 @@ class DatabaseBatchManagerHelper:
             JOIN client c ON b.client_id = c.id
             {where_sql}
             ORDER BY {sort_sql} {order_sql}
-            LIMIT ? OFFSET ?
+            LIMIT %s OFFSET %s
         """
         params.extend([limit, offset])
         cursor.execute(sql, params)
@@ -152,11 +152,11 @@ class DatabaseBatchManagerHelper:
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
-            "UPDATE batch_list SET batch_number = ?, note = ?, client_id = ?, created_at = ?, updated_at = CURRENT_TIMESTAMP WHERE batch_number = ?",
+            "UPDATE batch_list SET batch_number = %s, note = %s, client_id = %s, created_at = %s, updated_at = CURRENT_TIMESTAMP WHERE batch_number = %s",
             (new_batch_number, note, client_id, created_at, old_batch_number)
         )
         cursor.execute(
-            "UPDATE file_client_batch SET batch_number = ?, updated_at = CURRENT_TIMESTAMP WHERE batch_number = ?",
+            "UPDATE file_client_batch SET batch_number = %s, updated_at = CURRENT_TIMESTAMP WHERE batch_number = %s",
             (new_batch_number, old_batch_number)
         )
         self.db_manager.connection.commit()
@@ -171,7 +171,7 @@ class DatabaseBatchManagerHelper:
             FROM file_client_batch fcb
             JOIN files f ON fcb.file_id = f.id  
             JOIN statuses s ON f.status_id = s.id
-            WHERE fcb.batch_number = ? 
+            WHERE fcb.batch_number = %s 
             AND s.name IN ('Draft', 'Modelling', 'Rendering', 'Photoshop', 'Need Upload', 'Pending')
             GROUP BY s.name
         """, (batch_number,))

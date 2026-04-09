@@ -6,9 +6,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import QCoreApplication
 import qtawesome as qta
 import os
-import shutil
 import csv
-import sys
 from datetime import datetime, date
 
 
@@ -88,13 +86,12 @@ class PreferencesBackupHelper:
     def refresh_db_backup_list(self):
         """Refresh the database backup list"""
         self.parent.db_backup_list_widget.clear()
-        db_path = self.db_manager.db_path
-        backup_dir = os.path.join(os.path.dirname(db_path), "db_backups")
+        backup_dir = os.path.join(self.db_manager.db_dir, "db_backups")
         if not os.path.exists(backup_dir):
             return
         backup_files = []
         for fname in os.listdir(backup_dir):
-            if fname.startswith("archive_database_") and fname.endswith(".db"):
+            if fname.startswith("archive_database_") and fname.endswith(".sql"):
                 fpath = os.path.join(backup_dir, fname)
                 backup_files.append((fpath, os.path.getmtime(fpath)))
         backup_files.sort(key=lambda x: x[1], reverse=True)
@@ -126,7 +123,7 @@ class PreferencesBackupHelper:
         """Calculate days old from filename"""
         fname = os.path.basename(db_file_path)
         try:
-            base = fname.replace("archive_database_", "").replace(".db", "")
+            base = fname.replace("archive_database_", "").replace(".sql", "")
             dt = datetime.strptime(base, "%Y%m%d").date()
             days_old = (date.today() - dt).days
             return days_old if days_old >= 0 else 0
@@ -135,19 +132,17 @@ class PreferencesBackupHelper:
 
     def restore_db_backup_clicked(self, backup_path, backup_days_old):
         """Handle restore backup button click"""
-        db_path = self.db_manager.db_path
-        db_dir = os.path.dirname(db_path)
-        old_db_path = os.path.join(db_dir, "archive_database_old.db")
         dt = datetime.fromtimestamp(os.path.getmtime(backup_path))
         age_str = f"{backup_days_old} day{'s' if backup_days_old != 1 else ''}"
-        msg = f"This backup is {age_str} old (based on filename, backup file created {dt.strftime('%Y-%m-%d %H:%M:%S')}).\nAre you sure you want to restore this backup?\n\nThe current database will be saved as archive_database_old.db."
+        msg = f"This backup is {age_str} old (based on filename, backup file created {dt.strftime('%Y-%m-%d %H:%M:%S')}).\nAre you sure you want to restore this backup?"
         reply = QMessageBox.question(self.parent, "Restore Database Backup", msg)
         if reply == QMessageBox.Yes:
             try:
-                if os.path.exists(db_path):
-                    shutil.copy2(db_path, old_db_path)
-                shutil.copy2(backup_path, db_path)
-                QMessageBox.information(self.parent, "Success", "Database restored from backup.\nPlease restart the application for changes to take effect.")
+                success = self.db_manager.backup_helper.restore_backup(backup_path)
+                if success:
+                    QMessageBox.information(self.parent, "Success", "Database restored from backup.")
+                else:
+                    QMessageBox.critical(self.parent, "Error", "Failed to restore database backup.")
             except Exception as e:
                 QMessageBox.critical(self.parent, "Error", f"Failed to restore database: {e}")
 
@@ -178,17 +173,15 @@ class PreferencesBackupHelper:
             progress_dialog.setLayout(vbox)
             self.parent.progress_bar = progress_bar
 
+            backup_helper = self.db_manager.backup_helper
+            tables = backup_helper.get_all_user_tables()
+
             total_rows = 0
             self.db_manager.connect(write=False)
             cursor = self.db_manager.connection.cursor()
-            
-            backup_helper = self.db_manager.backup_helper
-            tables = backup_helper.get_all_user_tables()
-            
             for table_name in tables:
                 cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
                 total_rows += cursor.fetchone()[0]
-            
             self.db_manager.close()
 
             progress_bar.setMinimum(0)
@@ -254,7 +247,7 @@ class PreferencesBackupHelper:
             progress_dialog.accept()
             self.parent.progress_bar = None
             
-            self._show_relaunch_dialog()
+            QMessageBox.information(self.parent, "Import Successful", "Database imported successfully.")
             
         except Exception as e:
             if hasattr(self.parent, "progress_bar") and self.parent.progress_bar:
@@ -377,54 +370,3 @@ class PreferencesBackupHelper:
             print(f"[CSV Import] Error counting records: {e}")
         
         return counts
-    
-    def _show_relaunch_dialog(self):
-        """Show relaunch dialog after successful import"""
-        dialog = QDialog(self.parent)
-        dialog.setWindowTitle("Import Successful")
-        dialog.setModal(True)
-        dialog.setMinimumWidth(400)
-        
-        layout = QVBoxLayout(dialog)
-        
-        icon_label = QLabel()
-        icon_label.setPixmap(qta.icon("fa6s.circle-check", color="#4caf50").pixmap(48, 48))
-        
-        message_label = QLabel("<b>Database imported successfully.</b><br><br>Please relaunch the application for changes to take effect.")
-        message_label.setWordWrap(True)
-        
-        header_layout = QHBoxLayout()
-        header_layout.addWidget(icon_label)
-        header_layout.addWidget(message_label, 1)
-        
-        layout.addLayout(header_layout)
-        layout.addSpacing(10)
-        
-        button_layout = QHBoxLayout()
-        button_layout.addStretch()
-        
-        relaunch_btn = QPushButton("Relaunch Now")
-        relaunch_btn.setIcon(qta.icon("fa6s.rotate"))
-        relaunch_btn.clicked.connect(lambda: self._relaunch_app(dialog))
-        
-        cancel_btn = QPushButton("Cancel")
-        cancel_btn.setIcon(qta.icon("fa6s.circle-xmark"))
-        cancel_btn.clicked.connect(dialog.reject)
-        
-        button_layout.addWidget(relaunch_btn)
-        button_layout.addWidget(cancel_btn)
-        
-        layout.addLayout(button_layout)
-        
-        dialog.exec()
-    
-    def _relaunch_app(self, dialog):
-        """Save data and relaunch application"""
-        try:
-            self.db_manager.close()
-            dialog.accept()
-            from PySide6.QtWidgets import QApplication
-            QApplication.quit()
-            os.execl(sys.executable, sys.executable, *sys.argv)
-        except Exception as e:
-            QMessageBox.critical(self.parent, "Error", f"Failed to relaunch: {e}")

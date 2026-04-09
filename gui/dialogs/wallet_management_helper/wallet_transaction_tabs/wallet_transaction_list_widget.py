@@ -695,16 +695,15 @@ class WalletTransactionListWidget(QWidget):
                         if sort_col == 0:
                             return (t.get('transaction_name') or '').lower()
                         if sort_col == 1:
-                            ds = t.get('transaction_date') or ''
+                            ds = t.get('transaction_date')
                             if ds:
                                 try:
-                                    return datetime.fromisoformat(ds.split(' ')[0])
+                                    from datetime import datetime, date
+                                    if isinstance(ds, (datetime, date)):
+                                        return ds if isinstance(ds, datetime) else datetime.combine(ds, datetime.min.time())
+                                    return datetime.fromisoformat(str(ds).split(' ')[0])
                                 except Exception:
-                                    
-                                    try:
-                                        return datetime.strptime(ds.split(' ')[0], '%Y-%m-%d')
-                                    except Exception:
-                                        return datetime.min
+                                    return datetime.min
                             return datetime.min
                         if sort_col == 2:
                             return (t.get('transaction_type') or '').lower()
@@ -743,10 +742,15 @@ class WalletTransactionListWidget(QWidget):
                 self.transactions_table.setItem(row_idx, 0, name_item)
 
                 # Date
-                date_str = transaction.get('transaction_date', '')
-                if date_str:
-                    if ' ' in date_str:
-                        date_str = date_str.split(' ')[0]
+                date_val = transaction.get('transaction_date', '')
+                if date_val:
+                    from datetime import datetime, date
+                    if isinstance(date_val, (datetime, date)):
+                        date_str = date_val.strftime('%Y-%m-%d')
+                    else:
+                        date_str = str(date_val).split(' ')[0]
+                else:
+                    date_str = ''
                 self.transactions_table.setItem(row_idx, 1, QTableWidgetItem(date_str))
 
                 # Type with color

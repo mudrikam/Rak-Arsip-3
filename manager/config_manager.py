@@ -31,7 +31,12 @@ class ConfigManager:
             "GEMINI_MODEL": "",
             "GEMINI_MAX_TOKENS": "",
             "GEMINI_TEMPERATURE": "",
-            "GOOGLE_DRIVE_CREDENTIALS_PATH": ""
+            "GOOGLE_DRIVE_CREDENTIALS_PATH": "",
+            "DB_HOST": "localhost",
+            "DB_PORT": "5432",
+            "DB_NAME": "db_rak_arsip",
+            "DB_USER": "postgres",
+            "DB_PASSWORD": ""
         }
 
         if not env_path.exists():

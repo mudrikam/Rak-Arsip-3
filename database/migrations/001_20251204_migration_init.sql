@@ -84,35 +84,42 @@
 --          2) Measure query time for recent-file query before/after on a test dataset.
 -- Notes: Index creation can take time on large tables; consider creating during low-traffic window.
 
+-- Create schema_migrations table to track applied migrations
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    id SERIAL PRIMARY KEY,
+    migration_name VARCHAR(255) NOT NULL UNIQUE,
+    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS categories (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     name TEXT NOT NULL UNIQUE
 );
 
 CREATE TABLE IF NOT EXISTS subcategories (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     category_id INTEGER NOT NULL,
     name TEXT NOT NULL,
     FOREIGN KEY (category_id) REFERENCES categories(id)
 );
 
 CREATE TABLE IF NOT EXISTS statuses (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
     color TEXT,
     font_weight TEXT
 );
 
 CREATE TABLE IF NOT EXISTS templates (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
     content TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS files (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     date TEXT NOT NULL,
     name TEXT NOT NULL,
     root TEXT NOT NULL,
@@ -121,8 +128,8 @@ CREATE TABLE IF NOT EXISTS files (
     category_id INTEGER,
     subcategory_id INTEGER,
     template_id INTEGER,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (status_id) REFERENCES statuses(id),
     FOREIGN KEY (category_id) REFERENCES categories(id),
     FOREIGN KEY (subcategory_id) REFERENCES subcategories(id),
@@ -130,7 +137,7 @@ CREATE TABLE IF NOT EXISTS files (
 );
 
 CREATE TABLE IF NOT EXISTS teams (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     username TEXT NOT NULL UNIQUE,
     full_name TEXT NOT NULL,
     contact TEXT,
@@ -142,115 +149,115 @@ CREATE TABLE IF NOT EXISTS teams (
     bank TEXT,
     account_number TEXT,
     account_holder TEXT,
-    started_at DATETIME,
-    added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    started_at TIMESTAMP,
+    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS attendance (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     team_id INTEGER NOT NULL,
     date DATE NOT NULL,
-    check_in DATETIME,
-    check_out DATETIME,
+    check_in TIMESTAMP,
+    check_out TIMESTAMP,
     note TEXT,
     FOREIGN KEY (team_id) REFERENCES teams(id)
 );
 
 CREATE TABLE IF NOT EXISTS item_price (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     file_id INTEGER NOT NULL UNIQUE,
     price REAL NOT NULL,
     currency TEXT NOT NULL,
     note TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (file_id) REFERENCES files(id)
 );
 
 CREATE TABLE IF NOT EXISTS earnings (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     team_id INTEGER NOT NULL,
     item_price_id INTEGER NOT NULL,
     amount REAL NOT NULL,
     note TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (team_id) REFERENCES teams(id),
     FOREIGN KEY (item_price_id) REFERENCES item_price(id)
 );
 
 CREATE TABLE IF NOT EXISTS client (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     client_name TEXT NOT NULL,
     contact TEXT,
     links TEXT,
     status TEXT,
     note TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS file_client_price (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     file_id INTEGER NOT NULL,
     item_price_id INTEGER NOT NULL,
     client_id INTEGER NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (file_id) REFERENCES files(id),
     FOREIGN KEY (item_price_id) REFERENCES item_price(id),
     FOREIGN KEY (client_id) REFERENCES client(id)
 );
 
 CREATE TABLE IF NOT EXISTS batch_list (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     batch_number TEXT NOT NULL UNIQUE,
     client_id INTEGER NOT NULL,
     note TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (client_id) REFERENCES client(id)
 );
 
 CREATE TABLE IF NOT EXISTS file_client_batch (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     batch_number TEXT NOT NULL,
     client_id INTEGER NOT NULL,
     file_id INTEGER NOT NULL,
     note TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (batch_number) REFERENCES batch_list(batch_number),
     FOREIGN KEY (client_id) REFERENCES client(id),
     FOREIGN KEY (file_id) REFERENCES files(id)
 );
 
 CREATE TABLE IF NOT EXISTS url_provider (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
     description TEXT,
     status TEXT,
     email TEXT,
     password TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS file_url (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     file_id INTEGER NOT NULL,
     provider_id INTEGER NOT NULL,
     url_value TEXT NOT NULL,
     note TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (file_id) REFERENCES files(id),
     FOREIGN KEY (provider_id) REFERENCES url_provider(id)
 );
 
 CREATE TABLE IF NOT EXISTS wallet_pockets (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
     pocket_type TEXT,
     icon TEXT,
@@ -258,12 +265,12 @@ CREATE TABLE IF NOT EXISTS wallet_pockets (
     image TEXT,
     settings TEXT,
     note TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS wallet_cards (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     pocket_id INTEGER NOT NULL,
     card_name TEXT NOT NULL,
     card_number TEXT NOT NULL,
@@ -271,9 +278,9 @@ CREATE TABLE IF NOT EXISTS wallet_cards (
     vendor TEXT,
     issuer TEXT,
     status TEXT,
-    virtual BOOLEAN DEFAULT 0,
-    issue_date DATETIME,
-    expiry_date DATETIME,
+    virtual BOOLEAN DEFAULT FALSE,
+    issue_date TIMESTAMP,
+    expiry_date TIMESTAMP,
     holder_name TEXT,
     cvv TEXT,
     billing_address TEXT,
@@ -284,40 +291,40 @@ CREATE TABLE IF NOT EXISTS wallet_cards (
     image TEXT,
     color TEXT,
     note TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (pocket_id) REFERENCES wallet_pockets(id)
 );
 
 CREATE TABLE IF NOT EXISTS wallet_categories (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
     note TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS wallet_currency (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     code TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL,
     symbol TEXT,
     note TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS wallet_transaction_statuses (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
     note TEXT,
     color TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS wallet_transaction_locations (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
     location_type TEXT,
     address TEXT,
@@ -333,12 +340,12 @@ CREATE TABLE IF NOT EXISTS wallet_transaction_locations (
     description TEXT,
     rating REAL,
     note TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS wallet_transactions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     pocket_id INTEGER NOT NULL,
     card_id INTEGER,
     destination_pocket_id INTEGER,
@@ -347,12 +354,12 @@ CREATE TABLE IF NOT EXISTS wallet_transactions (
     currency_id INTEGER NOT NULL,
     location_id INTEGER,
     transaction_name TEXT NOT NULL,
-    transaction_date DATETIME NOT NULL,
+    transaction_date TIMESTAMP NOT NULL,
     transaction_type TEXT NOT NULL,
     tags TEXT,
     note TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (pocket_id) REFERENCES wallet_pockets(id),
     FOREIGN KEY (card_id) REFERENCES wallet_cards(id),
     FOREIGN KEY (destination_pocket_id) REFERENCES wallet_pockets(id),
@@ -363,7 +370,7 @@ CREATE TABLE IF NOT EXISTS wallet_transactions (
 );
 
 CREATE TABLE IF NOT EXISTS wallet_transaction_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     wallet_transaction_id INTEGER NOT NULL,
     item_type TEXT NOT NULL,
     sku TEXT,
@@ -380,22 +387,22 @@ CREATE TABLE IF NOT EXISTS wallet_transaction_items (
     color TEXT,
     file_url TEXT,
     license_key TEXT,
-    expiry_date DATETIME,
+    expiry_date TIMESTAMP,
     digital_type TEXT,
     note TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (wallet_transaction_id) REFERENCES wallet_transactions(id)
 );
 
 CREATE TABLE IF NOT EXISTS wallet_transactions_invoice_prove (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     wallet_transaction_id INTEGER NOT NULL,
     image_path TEXT NOT NULL,
     image_name TEXT,
     image_size INTEGER,
     image_type TEXT,
     description TEXT,
-    uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (wallet_transaction_id) REFERENCES wallet_transactions(id)
 );

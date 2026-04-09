@@ -19,7 +19,7 @@ class DatabaseUrlsHelper:
         provider_list = []
         for provider in providers:
             provider_id = provider[0]
-            cursor.execute("SELECT COUNT(*) FROM file_url WHERE provider_id = ?", (provider_id,))
+            cursor.execute("SELECT COUNT(*) FROM file_url WHERE provider_id = %s", (provider_id,))
             url_count = cursor.fetchone()[0]
             provider_list.append(tuple(list(provider) + [url_count]))
         self.db_manager.close()
@@ -29,7 +29,7 @@ class DatabaseUrlsHelper:
         """Get count of file_url entries for a provider"""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT COUNT(*) FROM file_url WHERE provider_id = ?", (provider_id,))
+        cursor.execute("SELECT COUNT(*) FROM file_url WHERE provider_id = %s", (provider_id,))
         count = cursor.fetchone()[0]
         self.db_manager.close()
         return count
@@ -41,11 +41,12 @@ class DatabaseUrlsHelper:
         
         cursor.execute("""
             INSERT INTO url_provider (name, description, status, email, password)
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id
         """, (name, description, status, email, password))
         
         self.db_manager.connection.commit()
-        provider_id = cursor.lastrowid
+        provider_id = cursor.fetchone()[0]
         self.db_manager.close()
         self.db_manager.create_temp_file()
         return provider_id
@@ -57,8 +58,8 @@ class DatabaseUrlsHelper:
         
         cursor.execute("""
             UPDATE url_provider 
-            SET name = ?, description = ?, status = ?, email = ?, password = ?
-            WHERE id = ?
+            SET name = %s, description = %s, status = %s, email = %s, password = %s
+            WHERE id = %s
         """, (name, description, status, email, password, provider_id))
         
         self.db_manager.connection.commit()
@@ -70,7 +71,7 @@ class DatabaseUrlsHelper:
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         
-        cursor.execute("DELETE FROM url_provider WHERE id = ?", (provider_id,))
+        cursor.execute("DELETE FROM url_provider WHERE id = %s", (provider_id,))
         
         self.db_manager.connection.commit()
         self.db_manager.close()
@@ -84,7 +85,7 @@ class DatabaseUrlsHelper:
         cursor.execute("""
             SELECT id, name, description, status, email, password 
             FROM url_provider 
-            WHERE id = ?
+            WHERE id = %s
         """, (provider_id,))
         
         provider = cursor.fetchone()
@@ -98,11 +99,12 @@ class DatabaseUrlsHelper:
         
         cursor.execute("""
             INSERT INTO file_url (file_id, provider_id, url_value, note)
-            VALUES (?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s)
+            RETURNING id
         """, (file_id, provider_id, url_value, note))
         
         self.db_manager.connection.commit()
-        file_url_id = cursor.lastrowid
+        file_url_id = cursor.fetchone()[0]
         self.db_manager.close()
         self.db_manager.create_temp_file()
         return file_url_id
@@ -114,8 +116,8 @@ class DatabaseUrlsHelper:
         
         cursor.execute("""
             UPDATE file_url 
-            SET provider_id = ?, url_value = ?, note = ?
-            WHERE id = ?
+            SET provider_id = %s, url_value = %s, note = %s
+            WHERE id = %s
         """, (provider_id, url_value, note, file_url_id))
         
         self.db_manager.connection.commit()
@@ -131,7 +133,7 @@ class DatabaseUrlsHelper:
             SELECT fu.id, fu.url_value, fu.note, up.name as provider_name
             FROM file_url fu
             JOIN url_provider up ON fu.provider_id = up.id
-            WHERE fu.file_id = ?
+            WHERE fu.file_id = %s
             ORDER BY fu.created_at DESC
         """, (file_id,))
         
@@ -150,7 +152,7 @@ class DatabaseUrlsHelper:
             JOIN file_client_batch fcb ON f.id = fcb.file_id
             JOIN file_url fu ON f.id = fu.file_id
             JOIN url_provider up ON fu.provider_id = up.id
-            WHERE fcb.batch_number = ? AND fcb.client_id = ?
+            WHERE fcb.batch_number = %s AND fcb.client_id = %s
             ORDER BY f.name, up.name
         """, (batch_id, client_id))
         
@@ -178,7 +180,7 @@ class DatabaseUrlsHelper:
             LEFT JOIN file_url fu ON f.id = fu.file_id
             LEFT JOIN url_provider up ON fu.provider_id = up.id
             LEFT JOIN item_price ip ON f.id = ip.file_id
-            WHERE fcb.batch_number = ? AND fcb.client_id = ?
+            WHERE fcb.batch_number = %s AND fcb.client_id = %s
             ORDER BY f.name
         """, (batch_id, client_id))
         
@@ -191,7 +193,7 @@ class DatabaseUrlsHelper:
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         
-        cursor.execute("DELETE FROM file_url WHERE id = ?", (file_url_id,))
+        cursor.execute("DELETE FROM file_url WHERE id = %s", (file_url_id,))
         
         self.db_manager.connection.commit()
         self.db_manager.close()

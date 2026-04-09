@@ -1,4 +1,3 @@
-import sqlite3
 
 
 class DatabaseFilesHelper:
@@ -21,7 +20,7 @@ class DatabaseFilesHelper:
         status_list = []
         for status_name, config in status_config.items():
             cursor.execute(
-                "INSERT INTO statuses (name, color, font_weight) VALUES (?, ?, ?)",
+                "INSERT INTO statuses (name, color, font_weight) VALUES (%s, %s, %s)",
                 (status_name, config["color"], config["font_weight"])
             )
             status_list.append(f"{status_name} ({config['color']})")
@@ -33,7 +32,7 @@ class DatabaseFilesHelper:
         """Get status ID by name."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT id FROM statuses WHERE name = ?", (status_name,))
+        cursor.execute("SELECT id FROM statuses WHERE name = %s", (status_name,))
         result = cursor.fetchone()
         self.db_manager.close()
         if result is not None:
@@ -44,7 +43,7 @@ class DatabaseFilesHelper:
         """Get status name by ID."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT name FROM statuses WHERE id = ?", (status_id,))
+        cursor.execute("SELECT name FROM statuses WHERE id = %s", (status_id,))
         result = cursor.fetchone()
         self.db_manager.close()
         if result is not None:
@@ -57,11 +56,12 @@ class DatabaseFilesHelper:
         cursor = self.db_manager.connection.cursor()
         cursor.execute("""
             INSERT INTO files (date, name, root, path, status_id, category_id, subcategory_id, template_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
         """, (date, name, root, path, status_id, category_id, subcategory_id, template_id))
+        last_id = cursor.fetchone()[0]
         self.db_manager.connection.commit()
         self.db_manager.create_temp_file()
-        last_id = cursor.lastrowid
         self.db_manager.close()
         return last_id
 
@@ -70,7 +70,7 @@ class DatabaseFilesHelper:
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
-            "UPDATE files SET status_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            "UPDATE files SET status_id = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
             (status_id, file_id)
         )
         self.db_manager.connection.commit()
@@ -82,8 +82,8 @@ class DatabaseFilesHelper:
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute("""
-            UPDATE files SET name = ?, root = ?, path = ?, status_id = ?, category_id = ?, subcategory_id = ?, date = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            UPDATE files SET name = %s, root = %s, path = %s, status_id = %s, category_id = %s, subcategory_id = %s, date = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
         """, (name, root, path, status_id, category_id, subcategory_id, date, file_id))
         self.db_manager.connection.commit()
         self.db_manager.close()
@@ -95,31 +95,31 @@ class DatabaseFilesHelper:
         cursor = self.db_manager.connection.cursor()
         
         # Find all item_price_id related to this file_id
-        cursor.execute("SELECT id FROM item_price WHERE file_id = ?", (file_id,))
+        cursor.execute("SELECT id FROM item_price WHERE file_id = %s", (file_id,))
         item_price_rows = cursor.fetchall()
         item_price_ids = [row["id"] for row in item_price_rows] if item_price_rows else []
         
         # Delete earnings related to item_price_id
         if item_price_ids:
-            cursor.executemany("DELETE FROM earnings WHERE item_price_id = ?", [(ipid,) for ipid in item_price_ids])
+            cursor.executemany("DELETE FROM earnings WHERE item_price_id = %s", [(ipid,) for ipid in item_price_ids])
         
         # Delete from item_price
-        cursor.execute("DELETE FROM item_price WHERE file_id = ?", (file_id,))
+        cursor.execute("DELETE FROM item_price WHERE file_id = %s", (file_id,))
         
         # Delete from file_client_price
-        cursor.execute("DELETE FROM file_client_price WHERE file_id = ?", (file_id,))
+        cursor.execute("DELETE FROM file_client_price WHERE file_id = %s", (file_id,))
         
         # Delete from file_client_batch
-        cursor.execute("DELETE FROM file_client_batch WHERE file_id = ?", (file_id,))
+        cursor.execute("DELETE FROM file_client_batch WHERE file_id = %s", (file_id,))
         
         # Delete from file_url
-        cursor.execute("DELETE FROM file_url WHERE file_id = ?", (file_id,))
+        cursor.execute("DELETE FROM file_url WHERE file_id = %s", (file_id,))
         
         # Delete from file_microstock_status
-        cursor.execute("DELETE FROM file_microstock_status WHERE file_id = ?", (file_id,))
+        cursor.execute("DELETE FROM file_microstock_status WHERE file_id = %s", (file_id,))
         
         # Finally, delete from files
-        cursor.execute("DELETE FROM files WHERE id = ?", (file_id,))
+        cursor.execute("DELETE FROM files WHERE id = %s", (file_id,))
         
         self.db_manager.connection.commit()
         self.db_manager.close()
@@ -139,36 +139,36 @@ class DatabaseFilesHelper:
         if search_query:
             search_pattern = f"%{search_query}%"
             where_clauses.append(
-                "(f.name LIKE ? OR f.path LIKE ? OR c.name LIKE ? OR sc.name LIKE ?)"
+                "(f.name LIKE %s OR f.path LIKE %s OR c.name LIKE %s OR sc.name LIKE %s)"
             )
             params.extend([search_pattern] * 4)
         
         if status_value:
-            where_clauses.append("s.name = ?")
+            where_clauses.append("s.name = %s")
             params.append(status_value)
         
         if batch_number and client_id:
             join_clauses.append("JOIN file_client_batch fcb ON fcb.file_id = f.id")
-            where_clauses.append("fcb.batch_number = ?")
+            where_clauses.append("fcb.batch_number = %s")
             params.append(batch_number)
-            where_clauses.append("fcb.client_id = ?")
+            where_clauses.append("fcb.client_id = %s")
             params.append(client_id)
         
         if root_value:
-            where_clauses.append("f.root = ?")
+            where_clauses.append("f.root = %s")
             params.append(root_value)
         
         if category_value:
-            where_clauses.append("c.name = ?")
+            where_clauses.append("c.name = %s")
             params.append(category_value)
         
         if subcategory_value:
-            where_clauses.append("sc.name = ?")
+            where_clauses.append("sc.name = %s")
             params.append(subcategory_value)
 
         if microstock_platform_id:
             join_clauses.append("JOIN file_microstock_status fms ON fms.file_id = f.id")
-            where_clauses.append("fms.platform_id = ?")
+            where_clauses.append("fms.platform_id = %s")
             params.append(microstock_platform_id)
 
         where_sql = ""
@@ -212,33 +212,53 @@ class DatabaseFilesHelper:
                 c.name as category, sc.name as subcategory,
                 t.name as template,
                 CASE 
-                    WHEN f.date LIKE '%_%_%' THEN 
-                        date(
-                            substr(f.date, -4) || '-' ||
-                            (
-                                CASE
-                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) IN ('januari','january') THEN '01'
-                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) IN ('februari','february') THEN '02'
-                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) IN ('maret','march') THEN '03'
-                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) = 'april' THEN '04'
-                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) = 'mei' THEN '05'
-                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) = 'may' THEN '05'
-                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) = 'juni' THEN '06'
-                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) = 'july' THEN '07'
-                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) = 'juli' THEN '07'
-                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) = 'agustus' THEN '08'
-                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) = 'august' THEN '08'
-                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) = 'september' THEN '09'
-                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) = 'oktober' THEN '10'
-                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) = 'october' THEN '10'
-                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) = 'november' THEN '11'
-                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) = 'desember' THEN '12'
-                                    WHEN lower(substr(f.date, instr(f.date, '_') + 1, instr(substr(f.date, instr(f.date, '_') + 1), '_') - 1)) = 'december' THEN '12'
-                                    ELSE '01'
-                                END
-                            ) || '-' ||
-                            printf('%02d', cast(substr(f.date, 1, instr(f.date, '_') - 1) as integer))
-                        )
+                    WHEN position(chr(92) in f.date) > 0 THEN 
+                        CASE
+                            WHEN length(split_part(f.date, chr(92), 1)) = 4 THEN
+                                (
+                                    split_part(f.date, chr(92), 1) || '-' ||
+                                    (
+                                        CASE lower(split_part(f.date, chr(92), 2))
+                                            WHEN 'januari' THEN '01' WHEN 'january' THEN '01'
+                                            WHEN 'februari' THEN '02' WHEN 'february' THEN '02'
+                                            WHEN 'maret' THEN '03' WHEN 'march' THEN '03'
+                                            WHEN 'april' THEN '04'
+                                            WHEN 'mei' THEN '05' WHEN 'may' THEN '05'
+                                            WHEN 'juni' THEN '06' WHEN 'june' THEN '06'
+                                            WHEN 'juli' THEN '07' WHEN 'july' THEN '07'
+                                            WHEN 'agustus' THEN '08' WHEN 'august' THEN '08'
+                                            WHEN 'september' THEN '09'
+                                            WHEN 'oktober' THEN '10' WHEN 'october' THEN '10'
+                                            WHEN 'november' THEN '11'
+                                            WHEN 'desember' THEN '12' WHEN 'december' THEN '12'
+                                            ELSE '01'
+                                        END
+                                    ) || '-' ||
+                                    lpad(split_part(f.date, chr(92), 3), 2, '0')
+                                )
+                            ELSE
+                                (
+                                    split_part(f.date, chr(92), 3) || '-' ||
+                                    (
+                                        CASE lower(split_part(f.date, chr(92), 2))
+                                            WHEN 'januari' THEN '01' WHEN 'january' THEN '01'
+                                            WHEN 'februari' THEN '02' WHEN 'february' THEN '02'
+                                            WHEN 'maret' THEN '03' WHEN 'march' THEN '03'
+                                            WHEN 'april' THEN '04'
+                                            WHEN 'mei' THEN '05' WHEN 'may' THEN '05'
+                                            WHEN 'juni' THEN '06' WHEN 'june' THEN '06'
+                                            WHEN 'juli' THEN '07' WHEN 'july' THEN '07'
+                                            WHEN 'agustus' THEN '08' WHEN 'august' THEN '08'
+                                            WHEN 'september' THEN '09'
+                                            WHEN 'oktober' THEN '10' WHEN 'october' THEN '10'
+                                            WHEN 'november' THEN '11'
+                                            WHEN 'desember' THEN '12' WHEN 'december' THEN '12'
+                                            ELSE '01'
+                                        END
+                                    ) || '-' ||
+                                    lpad(split_part(f.date, chr(92), 1), 2, '0')
+                                )
+                        END
                     ELSE f.date
                 END AS parsed_date
             FROM files f
@@ -250,7 +270,7 @@ class DatabaseFilesHelper:
             {microstock_sort_join}
             {where_sql}
             ORDER BY {sort_sql} {order_sql}, f.id DESC
-            LIMIT ? OFFSET ?
+            LIMIT %s OFFSET %s
         """
         params.extend([page_size, offset])
         cursor.execute(sql, params)
@@ -288,36 +308,36 @@ class DatabaseFilesHelper:
         if search_query:
             search_pattern = f"%{search_query}%"
             where_clauses.append(
-                "(f.name LIKE ? OR f.path LIKE ? OR c.name LIKE ? OR sc.name LIKE ?)"
+                "(f.name LIKE %s OR f.path LIKE %s OR c.name LIKE %s OR sc.name LIKE %s)"
             )
             params.extend([search_pattern] * 4)
         
         if status_value:
-            where_clauses.append("s.name = ?")
+            where_clauses.append("s.name = %s")
             params.append(status_value)
         
         if batch_number and client_id:
             join_clauses.append("JOIN file_client_batch fcb ON fcb.file_id = f.id")
-            where_clauses.append("fcb.batch_number = ?")
+            where_clauses.append("fcb.batch_number = %s")
             params.append(batch_number)
-            where_clauses.append("fcb.client_id = ?")
+            where_clauses.append("fcb.client_id = %s")
             params.append(client_id)
         
         if root_value:
-            where_clauses.append("f.root = ?")
+            where_clauses.append("f.root = %s")
             params.append(root_value)
         
         if category_value:
-            where_clauses.append("c.name = ?")
+            where_clauses.append("c.name = %s")
             params.append(category_value)
         
         if subcategory_value:
-            where_clauses.append("sc.name = ?")
+            where_clauses.append("sc.name = %s")
             params.append(subcategory_value)
 
         if microstock_platform_id:
             join_clauses.append("JOIN file_microstock_status fms ON fms.file_id = f.id")
-            where_clauses.append("fms.platform_id = ?")
+            where_clauses.append("fms.platform_id = %s")
             params.append(microstock_platform_id)
 
         where_sql = ""
@@ -366,7 +386,7 @@ class DatabaseFilesHelper:
             LEFT JOIN statuses s ON f.status_id = s.id
             LEFT JOIN categories c ON f.category_id = c.id
             LEFT JOIN subcategories sc ON f.subcategory_id = sc.id
-            WHERE fcb.batch_number = ? AND fcb.client_id = ?
+            WHERE fcb.batch_number = %s AND fcb.client_id = %s
             ORDER BY f.name
         """, (batch_number, client_id))
         
@@ -397,17 +417,17 @@ class DatabaseFilesHelper:
             SELECT f.id 
             FROM files f
             JOIN file_client_batch fcb ON f.id = fcb.file_id
-            WHERE fcb.batch_number = ? AND fcb.client_id = ?
+            WHERE fcb.batch_number = %s AND fcb.client_id = %s
         """, (batch_number, client_id))
         
         file_ids = [row["id"] for row in cursor.fetchall()]
         
         if file_ids:
             # Update status for all files in the batch
-            placeholders = ",".join(["?"] * len(file_ids))
+            placeholders = ",".join(["%s"] * len(file_ids))
             cursor.execute(f"""
                 UPDATE files 
-                SET status_id = ?, updated_at = CURRENT_TIMESTAMP 
+                SET status_id = %s, updated_at = CURRENT_TIMESTAMP 
                 WHERE id IN ({placeholders})
             """, [status_id] + file_ids)
             
@@ -422,7 +442,7 @@ class DatabaseFilesHelper:
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
         
-        cursor.execute("SELECT id, price, currency, note FROM item_price WHERE file_id = ?", (file_id,))
+        cursor.execute("SELECT id, price, currency, note FROM item_price WHERE file_id = %s", (file_id,))
         item_price_rows = cursor.fetchall()
         item_price_info = []
         item_price_ids = []
@@ -437,7 +457,7 @@ class DatabaseFilesHelper:
         
         earnings_info = []
         for ipid in item_price_ids:
-            cursor.execute("SELECT id, team_id, amount, note FROM earnings WHERE item_price_id = ?", (ipid,))
+            cursor.execute("SELECT id, team_id, amount, note FROM earnings WHERE item_price_id = %s", (ipid,))
             for e in cursor.fetchall():
                 earnings_info.append({
                     "id": e["id"],
@@ -446,7 +466,7 @@ class DatabaseFilesHelper:
                     "note": e["note"]
                 })
         
-        cursor.execute("SELECT id, client_id FROM file_client_price WHERE file_id = ?", (file_id,))
+        cursor.execute("SELECT id, client_id FROM file_client_price WHERE file_id = %s", (file_id,))
         file_client_price_info = []
         for fcp in cursor.fetchall():
             file_client_price_info.append({
@@ -454,7 +474,7 @@ class DatabaseFilesHelper:
                 "client_id": fcp["client_id"]
             })
         
-        cursor.execute("SELECT id, client_id, batch_number FROM file_client_batch WHERE file_id = ?", (file_id,))
+        cursor.execute("SELECT id, client_id, batch_number FROM file_client_batch WHERE file_id = %s", (file_id,))
         file_client_batch_info = []
         for fcb in cursor.fetchall():
             file_client_batch_info.append({
@@ -468,7 +488,7 @@ class DatabaseFilesHelper:
             SELECT fu.id, fu.provider_id, fu.url_value, fu.note, up.name as provider_name 
             FROM file_url fu 
             LEFT JOIN url_provider up ON fu.provider_id = up.id 
-            WHERE fu.file_id = ?
+            WHERE fu.file_id = %s
         """, (file_id,))
         file_url_info = []
         for fu in cursor.fetchall():
@@ -487,7 +507,7 @@ class DatabaseFilesHelper:
             FROM file_microstock_status fms
             JOIN microstock_platforms p ON fms.platform_id = p.id
             JOIN statuses s ON fms.status_id = s.id
-            WHERE fms.file_id = ?
+            WHERE fms.file_id = %s
         """, (file_id,))
         file_microstock_info = []
         for fm in cursor.fetchall():

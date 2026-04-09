@@ -1,4 +1,3 @@
-import sqlite3
 
 
 class DatabasePriceHelper:
@@ -11,7 +10,7 @@ class DatabasePriceHelper:
         """Assign or update price for a file."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT id FROM item_price WHERE file_id = ?", (file_id,))
+        cursor.execute("SELECT id FROM item_price WHERE file_id = %s", (file_id,))
         item_price_row = cursor.fetchone()
         self.db_manager.close()
         
@@ -20,7 +19,7 @@ class DatabasePriceHelper:
             self.db_manager.connect()
             cursor = self.db_manager.connection.cursor()
             cursor.execute(
-                "UPDATE item_price SET price = ?, currency = ?, note = ? WHERE id = ?",
+                "UPDATE item_price SET price = %s, currency = %s, note = %s WHERE id = %s",
                 (price, currency, note, item_price_id)
             )
             self.db_manager.connection.commit()
@@ -30,7 +29,7 @@ class DatabasePriceHelper:
             self.db_manager.connect()
             cursor = self.db_manager.connection.cursor()
             cursor.execute(
-                "INSERT INTO item_price (file_id, price, currency, note) VALUES (?, ?, ?, ?)",
+                "INSERT INTO item_price (file_id, price, currency, note) VALUES (%s, %s, %s, %s)",
                 (file_id, price, currency, note)
             )
             self.db_manager.connection.commit()
@@ -41,7 +40,7 @@ class DatabasePriceHelper:
         """Get price and currency for a file."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT price, currency FROM item_price WHERE file_id = ?", (file_id,))
+        cursor.execute("SELECT price, currency FROM item_price WHERE file_id = %s", (file_id,))
         row = cursor.fetchone()
         self.db_manager.close()
         if row:
@@ -52,7 +51,7 @@ class DatabasePriceHelper:
         """Get detailed price information for a file."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT price, currency, note FROM item_price WHERE file_id = ?", (file_id,))
+        cursor.execute("SELECT price, currency, note FROM item_price WHERE file_id = %s", (file_id,))
         row = cursor.fetchone()
         self.db_manager.close()
         if row:
@@ -64,11 +63,11 @@ class DatabasePriceHelper:
         if cursor is None:
             self.db_manager.connect(write=False)
             cursor = self.db_manager.connection.cursor()
-            cursor.execute("SELECT id FROM item_price WHERE file_id = ?", (file_id,))
+            cursor.execute("SELECT id FROM item_price WHERE file_id = %s", (file_id,))
             row = cursor.fetchone()
             self.db_manager.close()
         else:
-            cursor.execute("SELECT id FROM item_price WHERE file_id = ?", (file_id,))
+            cursor.execute("SELECT id FROM item_price WHERE file_id = %s", (file_id,))
             row = cursor.fetchone()
         if row:
             return row["id"]
@@ -83,7 +82,7 @@ class DatabasePriceHelper:
             FROM earnings e
             JOIN item_price ip ON e.item_price_id = ip.id
             JOIN teams t ON e.team_id = t.id
-            WHERE ip.file_id = ?
+            WHERE ip.file_id = %s
             ORDER BY e.id ASC
         """, (file_id,))
         result = []
@@ -103,14 +102,14 @@ class DatabasePriceHelper:
         # Read-only check
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT id FROM teams WHERE username = ?", (username,))
+        cursor.execute("SELECT id FROM teams WHERE username = %s", (username,))
         team_row = cursor.fetchone()
         if not team_row:
             self.db_manager.close()
             return False
         
         team_id = team_row[0]
-        cursor.execute("SELECT id, price FROM item_price WHERE file_id = ?", (file_id,))
+        cursor.execute("SELECT id, price FROM item_price WHERE file_id = %s", (file_id,))
         price_row = cursor.fetchone()
         if not price_row:
             self.db_manager.close()
@@ -118,9 +117,9 @@ class DatabasePriceHelper:
         
         item_price_id = price_row[0]
         price = price_row[1]
-        cursor.execute("SELECT COUNT(*) FROM earnings WHERE item_price_id = ?", (item_price_id,))
+        cursor.execute("SELECT COUNT(*) FROM earnings WHERE item_price_id = %s", (item_price_id,))
         count = cursor.fetchone()[0]
-        cursor.execute("SELECT id FROM earnings WHERE item_price_id = ? AND team_id = ?", (item_price_id, team_id))
+        cursor.execute("SELECT id FROM earnings WHERE item_price_id = %s AND team_id = %s", (item_price_id, team_id))
         exists = cursor.fetchone()
         self.db_manager.close()
         
@@ -131,7 +130,7 @@ class DatabasePriceHelper:
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
-            "INSERT INTO earnings (team_id, item_price_id, amount, note) VALUES (?, ?, ?, ?)",
+            "INSERT INTO earnings (team_id, item_price_id, amount, note) VALUES (%s, %s, %s, %s)",
             (team_id, item_price_id, 0, note)
         )
         self.db_manager.connection.commit()
@@ -144,7 +143,7 @@ class DatabasePriceHelper:
         """Update earnings shares based on operational percentage."""
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT id, price FROM item_price WHERE file_id = ?", (file_id,))
+        cursor.execute("SELECT id, price FROM item_price WHERE file_id = %s", (file_id,))
         price_row = cursor.fetchone()
         if not price_row:
             self.db_manager.close()
@@ -152,7 +151,7 @@ class DatabasePriceHelper:
         
         item_price_id = price_row[0]
         price = price_row[1]
-        cursor.execute("SELECT id FROM earnings WHERE item_price_id = ?", (item_price_id,))
+        cursor.execute("SELECT id FROM earnings WHERE item_price_id = %s", (item_price_id,))
         earning_rows = cursor.fetchall()
         n = len(earning_rows)
         if n == 0:
@@ -165,7 +164,7 @@ class DatabasePriceHelper:
         
         for row in earning_rows:
             earning_id = row[0]
-            cursor.execute("UPDATE earnings SET amount = ? WHERE id = ?", (share, earning_id))
+            cursor.execute("UPDATE earnings SET amount = %s WHERE id = %s", (share, earning_id))
         
         self.db_manager.connection.commit()
         self.db_manager.close()
@@ -175,7 +174,7 @@ class DatabasePriceHelper:
         """Remove earning and recalculate shares."""
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("DELETE FROM earnings WHERE id = ?", (earning_id,))
+        cursor.execute("DELETE FROM earnings WHERE id = %s", (earning_id,))
         self.db_manager.connection.commit()
         self.db_manager.close()
         operational_percentage = int(self.db_manager.window_config_manager.get("operational_percentage"))
@@ -186,7 +185,7 @@ class DatabasePriceHelper:
         """Update earning note."""
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("UPDATE earnings SET note = ? WHERE id = ?", (note, earning_id))
+        cursor.execute("UPDATE earnings SET note = %s WHERE id = %s", (note, earning_id))
         self.db_manager.connection.commit()
         self.db_manager.close()
         self.db_manager.create_temp_file()

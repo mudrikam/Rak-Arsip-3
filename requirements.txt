@@ -8,3 +8,4 @@ reportlab
 Pillow
 PyMuPDF
 python-dotenv
+psycopg2-binary

@@ -1,4 +1,3 @@
-import sqlite3
 import os
 import time
 from pathlib import Path
@@ -18,7 +17,7 @@ from .db_helper.db_helper_urls import DatabaseUrlsHelper
 from .db_helper.db_helper_batch_manager import DatabaseBatchManagerHelper
 from .db_helper.db_helper_wallet import DatabaseWalletHelper
 from .db_helper.db_helper_migration import DatabaseMigrationHelper
-from .db_helper.db_helper_data_caching import DatabaseCachingHelper
+from .db_helper.db_helper_polling import DatabasePollingHelper
 from .db_helper.db_helper_microstock import DatabaseMicrostockHelper
 
 
@@ -36,20 +35,17 @@ class DatabaseManager(QObject):
         
         self.db_config = config_manager.get("database")
         
-        self.db_path = self.db_config.get("path") if isinstance(self.db_config, dict) else "database/archieve_database.db"
+        self.db_dir = "database"
         
         self.connection = None
         self.session_id = str(int(time.time() * 1000))
-        self.temp_dir = os.path.join(os.path.dirname(self.db_path), "temp")
+        self.temp_dir = os.path.join(self.db_dir, "temp")
         self._parent_widget = parent_widget
-        self._wal_shm_last_clear = 0
-        self._wal_shm_debounce_seconds = 5
-        self._wal_shm_handled = False
 
         self.connection_helper = DatabaseConnectionHelper(self)
         self.migration_helper = DatabaseMigrationHelper(self)
         self.backup_helper = DatabaseBackupHelper(self)
-        self.caching_helper = DatabaseCachingHelper(self, self.config_manager)
+        self.polling_helper = DatabasePollingHelper(self)
         self.categories_helper = DatabaseCategoriesHelper(self)
         self.templates_helper = DatabaseTemplatesHelper(self)
         self.files_helper = DatabaseFilesHelper(self)
@@ -62,7 +58,6 @@ class DatabaseManager(QObject):
         self.microstock_helper = DatabaseMicrostockHelper(self)
 
         self.connection_helper.ensure_database_exists()
-        self.connection_helper.setup_file_watcher()
         if first_launch:
             self.backup_helper.auto_backup_database_hourly()
         self.backup_helper.setup_auto_backup_timer()

@@ -11,23 +11,23 @@
 -- Prerequisites: Migration 001_* must be applied first.
 
 CREATE TABLE IF NOT EXISTS microstock_platforms (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     platform_name TEXT NOT NULL UNIQUE,
     platform_url TEXT,
     platform_description TEXT,
     platform_note TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS file_microstock_status (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     file_id INTEGER NOT NULL,
     platform_id INTEGER NOT NULL,
     status_id INTEGER NOT NULL,
     note TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(file_id, platform_id),
     FOREIGN KEY (file_id) REFERENCES files(id),
     FOREIGN KEY (platform_id) REFERENCES microstock_platforms(id),
