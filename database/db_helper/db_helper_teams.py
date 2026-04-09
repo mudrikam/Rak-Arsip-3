@@ -1,4 +1,3 @@
-import sqlite3
 from datetime import datetime
 
 
@@ -44,7 +43,7 @@ class DatabaseTeamsHelper:
         cursor = self.db_manager.connection.cursor()
         cursor.execute("""
             INSERT INTO teams (username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder, profile_image, added_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
         """, (username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder, profile_image))
         self.db_manager.connection.commit()
         self.db_manager.create_temp_file()
@@ -59,19 +58,19 @@ class DatabaseTeamsHelper:
         cursor = self.db_manager.connection.cursor()
         cursor.execute("""
             UPDATE teams SET
-                username = ?,
-                full_name = ?,
-                contact = ?,
-                address = ?,
-                email = ?,
-                phone = ?,
-                attendance_pin = ?,
-                started_at = ?,
-                bank = ?,
-                account_number = ?,
-                account_holder = ?,
-                profile_image = ?
-            WHERE username = ?
+                username = %s,
+                full_name = %s,
+                contact = %s,
+                address = %s,
+                email = %s,
+                phone = %s,
+                attendance_pin = %s,
+                started_at = %s,
+                bank = %s,
+                account_number = %s,
+                account_holder = %s,
+                profile_image = %s
+            WHERE username = %s
         """, (new_username, full_name, contact, address, email, phone, attendance_pin, started_at, bank, account_number, account_holder, profile_image, old_username))
         self.db_manager.connection.commit()
         self.db_manager.create_temp_file()
@@ -84,7 +83,7 @@ class DatabaseTeamsHelper:
         params = []
         where = ""
         if username:
-            where = "WHERE t.username = ?"
+            where = "WHERE t.username = %s"
             params.append(username)
         
         cursor.execute(f"""
@@ -97,7 +96,7 @@ class DatabaseTeamsHelper:
                 (SELECT COUNT(*) FROM attendance a WHERE a.team_id = t.id) as total_records,
                 (SELECT SUM(
                     CASE WHEN a.check_in IS NOT NULL AND a.check_out IS NOT NULL
-                        THEN (strftime('%s', a.check_out) - strftime('%s', a.check_in))
+                        THEN EXTRACT(EPOCH FROM a.check_out::timestamp - a.check_in::timestamp)
                         ELSE 0 END
                 ) FROM attendance a WHERE a.team_id = t.id) as total_seconds,
                 (SELECT a.check_out FROM attendance a WHERE a.team_id = t.id AND a.check_out IS NOT NULL ORDER BY a.id DESC LIMIT 1) as last_checkout
@@ -141,7 +140,7 @@ class DatabaseTeamsHelper:
         if team_ids:
             # Attendance records
             cursor.execute(
-                f"SELECT team_id, date, check_in, check_out, note, id FROM attendance WHERE team_id IN ({','.join(['?']*len(team_ids))}) ORDER BY id DESC",
+                f"SELECT team_id, date, check_in, check_out, note, id FROM attendance WHERE team_id IN ({','.join(['%s']*len(team_ids))}) ORDER BY id DESC",
                 tuple(team_ids)
             )
             for row in cursor.fetchall():
@@ -163,7 +162,7 @@ class DatabaseTeamsHelper:
                 LEFT JOIN statuses s ON f.status_id = s.id
                 LEFT JOIN file_client_price fcp ON f.id = fcp.file_id
                 LEFT JOIN client c ON fcp.client_id = c.id
-                WHERE t.id IN ({','.join(['?']*len(team_ids))})
+                WHERE t.id IN ({','.join(['%s']*len(team_ids))})
                 """,
                 tuple(team_ids)
             )
@@ -199,7 +198,7 @@ class DatabaseTeamsHelper:
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
-            "SELECT id FROM teams WHERE username = ? AND attendance_pin = ?",
+            "SELECT id FROM teams WHERE username = %s AND attendance_pin = %s",
             (username, pin)
         )
         team_row = cursor.fetchone()
@@ -209,7 +208,7 @@ class DatabaseTeamsHelper:
         
         team_id = team_row[0]
         cursor.execute(
-            "SELECT id, date, check_in, check_out, note FROM attendance WHERE team_id = ? AND check_in IS NOT NULL AND check_out IS NULL ORDER BY id DESC LIMIT 1",
+            "SELECT id, date, check_in, check_out, note FROM attendance WHERE team_id = %s AND check_in IS NOT NULL AND check_out IS NULL ORDER BY id DESC LIMIT 1",
             (team_id,)
         )
         attendance_row = cursor.fetchone()
@@ -230,7 +229,7 @@ class DatabaseTeamsHelper:
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
-            "SELECT id FROM teams WHERE username = ? AND attendance_pin = ?",
+            "SELECT id FROM teams WHERE username = %s AND attendance_pin = %s",
             (username, pin)
         )
         team_row = cursor.fetchone()
@@ -247,7 +246,7 @@ class DatabaseTeamsHelper:
             self.db_manager.connect()
             cursor = self.db_manager.connection.cursor()
             cursor.execute(
-                "INSERT INTO attendance (team_id, date, check_in, note) VALUES (?, ?, ?, ?)",
+                "INSERT INTO attendance (team_id, date, check_in, note) VALUES (%s, %s, %s, %s)",
                 (team_id, now_date, now_str, note)
             )
             self.db_manager.connection.commit()
@@ -259,7 +258,7 @@ class DatabaseTeamsHelper:
             self.db_manager.connect(write=False)
             cursor = self.db_manager.connection.cursor()
             cursor.execute(
-                "SELECT id FROM attendance WHERE team_id = ? AND check_in IS NOT NULL AND check_out IS NULL ORDER BY id DESC LIMIT 1",
+                "SELECT id FROM attendance WHERE team_id = %s AND check_in IS NOT NULL AND check_out IS NULL ORDER BY id DESC LIMIT 1",
                 (team_id,)
             )
             open_attendance = cursor.fetchone()
@@ -270,7 +269,7 @@ class DatabaseTeamsHelper:
                 self.db_manager.connect()
                 cursor = self.db_manager.connection.cursor()
                 cursor.execute(
-                    "UPDATE attendance SET check_out = ?, note = ? WHERE id = ?",
+                    "UPDATE attendance SET check_out = %s, note = %s WHERE id = %s",
                     (now_str, note, att_id)
                 )
                 self.db_manager.connection.commit()
@@ -288,7 +287,7 @@ class DatabaseTeamsHelper:
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
-            "SELECT id FROM teams WHERE username = ? AND attendance_pin = ?",
+            "SELECT id FROM teams WHERE username = %s AND attendance_pin = %s",
             (username, pin)
         )
         team_row = cursor.fetchone()
@@ -298,7 +297,7 @@ class DatabaseTeamsHelper:
         
         team_id = team_row[0]
         cursor.execute(
-            "SELECT date, check_in, check_out, note FROM attendance WHERE team_id = ? ORDER BY id DESC LIMIT 1",
+            "SELECT date, check_in, check_out, note FROM attendance WHERE team_id = %s ORDER BY id DESC LIMIT 1",
             (team_id,)
         )
         attendance_row = cursor.fetchone()
@@ -317,13 +316,13 @@ class DatabaseTeamsHelper:
         """Get all attendance records for username."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT id FROM teams WHERE username = ?", (username,))
+        cursor.execute("SELECT id FROM teams WHERE username = %s", (username,))
         team_row = cursor.fetchone()
         records = []
         if team_row:
             team_id = team_row[0]
             cursor.execute(
-                "SELECT date, check_in, check_out, note, id FROM attendance WHERE team_id = ? ORDER BY id DESC",
+                "SELECT date, check_in, check_out, note, id FROM attendance WHERE team_id = %s ORDER BY id DESC",
                 (team_id,)
             )
             records = cursor.fetchall()
@@ -334,7 +333,7 @@ class DatabaseTeamsHelper:
         """Get paginated attendance records for team."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        where_clauses = ["team_id = ?"]
+        where_clauses = ["team_id = %s"]
         params = [team_id]
         
         hari_map = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]
@@ -342,11 +341,11 @@ class DatabaseTeamsHelper:
         
         if search_text:
             search_pattern = f"%{search_text}%"
-            where_clauses.append("(note LIKE ? OR date LIKE ? OR check_in LIKE ? OR check_out LIKE ?)")
+            where_clauses.append("(note LIKE %s OR date LIKE %s OR check_in LIKE %s OR check_out LIKE %s)")
             params.extend([search_pattern] * 4)
         
         if day_filter and day_filter != "All Days":
-            where_clauses.append("strftime('%w', date) = ?")
+            where_clauses.append("EXTRACT(DOW FROM date::date)::integer = %s")
             idx = hari_map.index(day_filter) if day_filter in hari_map else None
             if idx is not None:
                 params.append(str((idx + 1) % 7))  # SQLite: Sunday=0, Python: Monday=0
@@ -354,11 +353,11 @@ class DatabaseTeamsHelper:
         if month_filter and month_filter != "All Months":
             idx = bulan_map.index(month_filter) + 1 if month_filter in bulan_map else None
             if idx:
-                where_clauses.append("CAST(strftime('%m', date) AS INTEGER) = ?")
+                where_clauses.append("EXTRACT(MONTH FROM date::date)::integer = %s")
                 params.append(idx)
         
         if year_filter and year_filter != "All Years":
-            where_clauses.append("strftime('%Y', date) = ?")
+            where_clauses.append("EXTRACT(YEAR FROM date::date)::integer::text = %s")
             params.append(year_filter)
         
         where_sql = "WHERE " + " AND ".join(where_clauses)
@@ -377,7 +376,7 @@ class DatabaseTeamsHelper:
             FROM attendance
             {where_sql}
             ORDER BY {sort_sql} {order_sql}, id DESC
-            LIMIT ? OFFSET ?
+            LIMIT %s OFFSET %s
         """
         params.extend([limit, offset])
         cursor.execute(sql, params)
@@ -389,7 +388,7 @@ class DatabaseTeamsHelper:
         """Count attendance records with filters."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        where_clauses = ["team_id = ?"]
+        where_clauses = ["team_id = %s"]
         params = [team_id]
         
         hari_map = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]
@@ -397,23 +396,23 @@ class DatabaseTeamsHelper:
         
         if search_text:
             search_pattern = f"%{search_text}%"
-            where_clauses.append("(note LIKE ? OR date LIKE ? OR check_in LIKE ? OR check_out LIKE ?)")
+            where_clauses.append("(note LIKE %s OR date LIKE %s OR check_in LIKE %s OR check_out LIKE %s)")
             params.extend([search_pattern] * 4)
         
         if day_filter and day_filter != "All Days":
             idx = hari_map.index(day_filter) if day_filter in hari_map else None
             if idx is not None:
-                where_clauses.append("strftime('%w', date) = ?")
+                where_clauses.append("EXTRACT(DOW FROM date::date)::integer = %s")
                 params.append(str((idx + 1) % 7))
         
         if month_filter and month_filter != "All Months":
             idx = bulan_map.index(month_filter) + 1 if month_filter in bulan_map else None
             if idx:
-                where_clauses.append("CAST(strftime('%m', date) AS INTEGER) = ?")
+                where_clauses.append("EXTRACT(MONTH FROM date::date)::integer = %s")
                 params.append(idx)
         
         if year_filter and year_filter != "All Years":
-            where_clauses.append("strftime('%Y', date) = ?")
+            where_clauses.append("EXTRACT(YEAR FROM date::date)::integer::text = %s")
             params.append(year_filter)
         
         where_sql = "WHERE " + " AND ".join(where_clauses)
@@ -427,7 +426,7 @@ class DatabaseTeamsHelper:
         """Get attendance summary with filters."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        where_clauses = ["team_id = ?"]
+        where_clauses = ["team_id = %s"]
         params = [team_id]
         
         hari_map = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]
@@ -435,23 +434,23 @@ class DatabaseTeamsHelper:
         
         if search_text:
             search_pattern = f"%{search_text}%"
-            where_clauses.append("(note LIKE ? OR date LIKE ? OR check_in LIKE ? OR check_out LIKE ?)")
+            where_clauses.append("(note LIKE %s OR date LIKE %s OR check_in LIKE %s OR check_out LIKE %s)")
             params.extend([search_pattern] * 4)
         
         if day_filter and day_filter != "All Days":
             idx = hari_map.index(day_filter) if day_filter in hari_map else None
             if idx is not None:
-                where_clauses.append("strftime('%w', date) = ?")
+                where_clauses.append("EXTRACT(DOW FROM date::date)::integer = %s")
                 params.append(str((idx + 1) % 7))
         
         if month_filter and month_filter != "All Months":
             idx = bulan_map.index(month_filter) + 1 if month_filter in bulan_map else None
             if idx:
-                where_clauses.append("CAST(strftime('%m', date) AS INTEGER) = ?")
+                where_clauses.append("EXTRACT(MONTH FROM date::date)::integer = %s")
                 params.append(idx)
         
         if year_filter and year_filter != "All Years":
-            where_clauses.append("strftime('%Y', date) = ?")
+            where_clauses.append("EXTRACT(YEAR FROM date::date)::integer::text = %s")
             params.append(year_filter)
         
         where_sql = "WHERE " + " AND ".join(where_clauses)
@@ -474,8 +473,8 @@ class DatabaseTeamsHelper:
                 total_days.add(date)
             if check_in and check_out:
                 try:
-                    dt_in = datetime.strptime(check_in, "%Y-%m-%d %H:%M:%S")
-                    dt_out = datetime.strptime(check_out, "%Y-%m-%d %H:%M:%S")
+                    dt_in = datetime.strptime(str(check_in)[:19], "%Y-%m-%d %H:%M:%S") if not isinstance(check_in, datetime) else check_in
+                    dt_out = datetime.strptime(str(check_out)[:19], "%Y-%m-%d %H:%M:%S") if not isinstance(check_out, datetime) else check_out
                     total_seconds += int((dt_out - dt_in).total_seconds())
                     last_checkout = check_out
                 except Exception:
@@ -496,18 +495,18 @@ class DatabaseTeamsHelper:
         """Get paginated earnings for team."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        where_clauses = ["t.id = ?"]
+        where_clauses = ["t.id = %s"]
         params = [team_id]
         
         if search_text:
             search_pattern = f"%{search_text}%"
             where_clauses.append(
-                "(f.name LIKE ? OR f.date LIKE ? OR e.amount LIKE ? OR e.note LIKE ? OR s.name LIKE ? OR c.client_name LIKE ? OR fcb.batch_number LIKE ?)"
+                "(f.name LIKE %s OR f.date LIKE %s OR e.amount LIKE %s OR e.note LIKE %s OR s.name LIKE %s OR c.client_name LIKE %s OR fcb.batch_number LIKE %s)"
             )
             params.extend([search_pattern] * 7)
         
         if batch_filter and batch_filter != "All Batches":
-            where_clauses.append("fcb.batch_number = ?")
+            where_clauses.append("fcb.batch_number = %s")
             params.append(batch_filter)
         
         where_sql = "WHERE " + " AND ".join(where_clauses)
@@ -536,7 +535,7 @@ class DatabaseTeamsHelper:
             LEFT JOIN file_client_batch fcb ON f.id = fcb.file_id AND c.id = fcb.client_id
             {where_sql}
             ORDER BY {sort_sql} {order_sql}, f.date DESC
-            LIMIT ? OFFSET ?
+            LIMIT %s OFFSET %s
         """
         params.extend([limit, offset])
         cursor.execute(sql, params)
@@ -548,18 +547,18 @@ class DatabaseTeamsHelper:
         """Count earnings with filters."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        where_clauses = ["t.id = ?"]
+        where_clauses = ["t.id = %s"]
         params = [team_id]
         
         if search_text:
             search_pattern = f"%{search_text}%"
             where_clauses.append(
-                "(f.name LIKE ? OR f.date LIKE ? OR e.amount LIKE ? OR e.note LIKE ? OR s.name LIKE ? OR c.client_name LIKE ? OR fcb.batch_number LIKE ?)"
+                "(f.name LIKE %s OR f.date LIKE %s OR e.amount LIKE %s OR e.note LIKE %s OR s.name LIKE %s OR c.client_name LIKE %s OR fcb.batch_number LIKE %s)"
             )
             params.extend([search_pattern] * 7)
         
         if batch_filter and batch_filter != "All Batches":
-            where_clauses.append("fcb.batch_number = ?")
+            where_clauses.append("fcb.batch_number = %s")
             params.append(batch_filter)
         
         where_sql = "WHERE " + " AND ".join(where_clauses)
@@ -585,18 +584,18 @@ class DatabaseTeamsHelper:
         """Get earnings summary with filters."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        where_clauses = ["t.id = ?"]
+        where_clauses = ["t.id = %s"]
         params = [team_id]
         
         if search_text:
             search_pattern = f"%{search_text}%"
             where_clauses.append(
-                "(f.name LIKE ? OR f.date LIKE ? OR e.amount LIKE ? OR e.note LIKE ? OR s.name LIKE ? OR c.client_name LIKE ? OR fcb.batch_number LIKE ?)"
+                "(f.name LIKE %s OR f.date LIKE %s OR e.amount LIKE %s OR e.note LIKE %s OR s.name LIKE %s OR c.client_name LIKE %s OR fcb.batch_number LIKE %s)"
             )
             params.extend([search_pattern] * 7)
         
         if batch_filter and batch_filter != "All Batches":
-            where_clauses.append("fcb.batch_number = ?")
+            where_clauses.append("fcb.batch_number = %s")
             params.append(batch_filter)
         
         where_sql = "WHERE " + " AND ".join(where_clauses)

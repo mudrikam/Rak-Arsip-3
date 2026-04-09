@@ -1,4 +1,3 @@
-import sqlite3
 import os
 
 
@@ -9,7 +8,7 @@ class DatabaseCategoriesHelper:
         # Check if new_name already exists (read)
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT id FROM categories WHERE name = ?", (new_name,))
+        cursor.execute("SELECT id FROM categories WHERE name = %s", (new_name,))
         if cursor.fetchone():
             self.db_manager.close()
             raise Exception(f"Category '{new_name}' already exists.")
@@ -17,7 +16,7 @@ class DatabaseCategoriesHelper:
         # Get old category id (read)
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT id FROM categories WHERE name = ?", (old_name,))
+        cursor.execute("SELECT id FROM categories WHERE name = %s", (old_name,))
         result = cursor.fetchone()
         if not result:
             self.db_manager.close()
@@ -27,7 +26,7 @@ class DatabaseCategoriesHelper:
         # Update category name (write)
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("UPDATE categories SET name = ? WHERE id = ?", (new_name, category_id))
+        cursor.execute("UPDATE categories SET name = %s WHERE id = %s", (new_name, category_id))
         self.db_manager.connection.commit()
         self.db_manager.close()
         self.db_manager.create_temp_file()
@@ -37,7 +36,7 @@ class DatabaseCategoriesHelper:
         # Get category id (read)
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT id FROM categories WHERE name = ?", (category_name,))
+        cursor.execute("SELECT id FROM categories WHERE name = %s", (category_name,))
         category = cursor.fetchone()
         if not category:
             self.db_manager.close()
@@ -47,7 +46,7 @@ class DatabaseCategoriesHelper:
         # Check if new subcategory name already exists for this category (read)
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT id FROM subcategories WHERE category_id = ? AND name = ?", (category_id, new_subcategory_name))
+        cursor.execute("SELECT id FROM subcategories WHERE category_id = %s AND name = %s", (category_id, new_subcategory_name))
         if cursor.fetchone():
             self.db_manager.close()
             raise Exception(f"Subcategory '{new_subcategory_name}' already exists in category '{category_name}'.")
@@ -55,7 +54,7 @@ class DatabaseCategoriesHelper:
         # Get old subcategory id (read)
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT id FROM subcategories WHERE category_id = ? AND name = ?", (category_id, old_subcategory_name))
+        cursor.execute("SELECT id FROM subcategories WHERE category_id = %s AND name = %s", (category_id, old_subcategory_name))
         subcategory = cursor.fetchone()
         if not subcategory:
             self.db_manager.close()
@@ -65,7 +64,7 @@ class DatabaseCategoriesHelper:
         # Update subcategory name (write)
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("UPDATE subcategories SET name = ? WHERE id = ?", (new_subcategory_name, subcategory_id))
+        cursor.execute("UPDATE subcategories SET name = %s WHERE id = %s", (new_subcategory_name, subcategory_id))
         self.db_manager.connection.commit()
         self.db_manager.close()
         self.db_manager.create_temp_file()
@@ -91,7 +90,7 @@ class DatabaseCategoriesHelper:
             SELECT DISTINCT sc.name 
             FROM subcategories sc 
             JOIN categories c ON sc.category_id = c.id 
-            WHERE c.name = ? 
+            WHERE c.name = %s 
             ORDER BY sc.name
         """, (category_name,))
         result = [row[0] for row in cursor.fetchall()]
@@ -102,7 +101,7 @@ class DatabaseCategoriesHelper:
         """Get existing category ID or create new category."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT id FROM categories WHERE name = ?", (category_name,))
+        cursor.execute("SELECT id FROM categories WHERE name = %s", (category_name,))
         result = cursor.fetchone()
         self.db_manager.close()
         if result:
@@ -110,10 +109,10 @@ class DatabaseCategoriesHelper:
         
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("INSERT INTO categories (name) VALUES (?)", (category_name,))
+        cursor.execute("INSERT INTO categories (name) VALUES (%s) RETURNING id", (category_name,))
         self.db_manager.connection.commit()
         self.db_manager.create_temp_file()
-        last_id = cursor.lastrowid
+        last_id = cursor.fetchone()[0]
         self.db_manager.close()
         return last_id
 
@@ -122,7 +121,7 @@ class DatabaseCategoriesHelper:
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
-            "SELECT id FROM subcategories WHERE category_id = ? AND name = ?",
+            "SELECT id FROM subcategories WHERE category_id = %s AND name = %s",
             (category_id, subcategory_name)
         )
         result = cursor.fetchone()
@@ -133,12 +132,12 @@ class DatabaseCategoriesHelper:
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
-            "INSERT INTO subcategories (category_id, name) VALUES (?, ?)",
+            "INSERT INTO subcategories (category_id, name) VALUES (%s, %s) RETURNING id",
             (category_id, subcategory_name)
         )
         self.db_manager.connection.commit()
         self.db_manager.create_temp_file()
-        last_id = cursor.lastrowid
+        last_id = cursor.fetchone()[0]
         self.db_manager.close()
         return last_id
 
@@ -146,16 +145,16 @@ class DatabaseCategoriesHelper:
         """Delete category and all associated subcategories."""
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT id FROM categories WHERE name = ?", (category_name,))
+        cursor.execute("SELECT id FROM categories WHERE name = %s", (category_name,))
         result = cursor.fetchone()
         if not result:
             self.db_manager.close()
             return
         
         category_id = result[0]
-        cursor.execute("UPDATE files SET category_id = NULL WHERE category_id = ?", (category_id,))
-        cursor.execute("DELETE FROM subcategories WHERE category_id = ?", (category_id,))
-        cursor.execute("DELETE FROM categories WHERE id = ?", (category_id,))
+        cursor.execute("UPDATE files SET category_id = NULL WHERE category_id = %s", (category_id,))
+        cursor.execute("DELETE FROM subcategories WHERE category_id = %s", (category_id,))
+        cursor.execute("DELETE FROM categories WHERE id = %s", (category_id,))
         self.db_manager.connection.commit()
         self.db_manager.close()
         self.db_manager.create_temp_file()
@@ -164,22 +163,22 @@ class DatabaseCategoriesHelper:
         """Delete specific subcategory."""
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT id FROM categories WHERE name = ?", (category_name,))
+        cursor.execute("SELECT id FROM categories WHERE name = %s", (category_name,))
         category = cursor.fetchone()
         if not category:
             self.db_manager.close()
             return
         
         category_id = category[0]
-        cursor.execute("SELECT id FROM subcategories WHERE category_id = ? AND name = ?", (category_id, subcategory_name))
+        cursor.execute("SELECT id FROM subcategories WHERE category_id = %s AND name = %s", (category_id, subcategory_name))
         subcategory = cursor.fetchone()
         if not subcategory:
             self.db_manager.close()
             return
         
         subcategory_id = subcategory[0]
-        cursor.execute("UPDATE files SET subcategory_id = NULL WHERE subcategory_id = ?", (subcategory_id,))
-        cursor.execute("DELETE FROM subcategories WHERE id = ?", (subcategory_id,))
+        cursor.execute("UPDATE files SET subcategory_id = NULL WHERE subcategory_id = %s", (subcategory_id,))
+        cursor.execute("DELETE FROM subcategories WHERE id = %s", (subcategory_id,))
         self.db_manager.connection.commit()
         self.db_manager.close()
         self.db_manager.create_temp_file()

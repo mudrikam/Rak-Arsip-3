@@ -1,4 +1,3 @@
-import sqlite3
 import os
 
 
@@ -9,7 +8,7 @@ class DatabaseTemplatesHelper:
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
-            "UPDATE templates SET name = ?, content = ? WHERE id = ?",
+            "UPDATE templates SET name = %s, content = %s WHERE id = %s",
             (name, content, template_id)
         )
         self.db_manager.connection.commit()
@@ -20,7 +19,7 @@ class DatabaseTemplatesHelper:
         """Get template by name."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT id, name, content FROM templates WHERE name = ?", (name,))
+        cursor.execute("SELECT id, name, content FROM templates WHERE name = %s", (name,))
         result = cursor.fetchone()
         self.db_manager.close()
         if result:
@@ -44,7 +43,7 @@ class DatabaseTemplatesHelper:
         """Get template by ID."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT id, name, content FROM templates WHERE id = ?", (template_id,))
+        cursor.execute("SELECT id, name, content FROM templates WHERE id = %s", (template_id,))
         result = cursor.fetchone()
         self.db_manager.close()
         return result
@@ -54,12 +53,12 @@ class DatabaseTemplatesHelper:
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
-            "INSERT INTO templates (name, content) VALUES (?, ?)",
+            "INSERT INTO templates (name, content) VALUES (%s, %s) RETURNING id",
             (name, content)
         )
         self.db_manager.connection.commit()
         self.db_manager.create_temp_file()
-        last_id = cursor.lastrowid
+        last_id = cursor.fetchone()[0]
         self.db_manager.close()
         return last_id
 
@@ -67,7 +66,7 @@ class DatabaseTemplatesHelper:
         """Delete template by name."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT id FROM templates WHERE name = ?", (template_name,))
+        cursor.execute("SELECT id FROM templates WHERE name = %s", (template_name,))
         result = cursor.fetchone()
         self.db_manager.close()
         if not result:
@@ -76,8 +75,8 @@ class DatabaseTemplatesHelper:
         template_id = result[0]
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("UPDATE files SET template_id = NULL WHERE template_id = ?", (template_id,))
-        cursor.execute("DELETE FROM templates WHERE id = ?", (template_id,))
+        cursor.execute("UPDATE files SET template_id = NULL WHERE template_id = %s", (template_id,))
+        cursor.execute("DELETE FROM templates WHERE id = %s", (template_id,))
         self.db_manager.connection.commit()
         self.db_manager.create_temp_file()
         self.db_manager.close()

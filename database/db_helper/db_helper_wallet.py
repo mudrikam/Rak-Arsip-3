@@ -1,4 +1,3 @@
-import sqlite3
 import os
 from datetime import datetime
 
@@ -18,19 +17,19 @@ class DatabaseWalletHelper:
         params = []
         
         if search_text:
-            query += " AND name LIKE ?"
+            query += " AND name LIKE %s"
             params.append(f"%{search_text}%")
         
         if pocket_type:
-            query += " AND pocket_type = ?"
+            query += " AND pocket_type = %s"
             params.append(pocket_type)
         
         if icon:
-            query += " AND icon = ?"
+            query += " AND icon = %s"
             params.append(icon)
         
         if color:
-            query += " AND color = ?"
+            query += " AND color = %s"
             params.append(color)
         
         query += " ORDER BY name"
@@ -51,23 +50,23 @@ class DatabaseWalletHelper:
         params = []
         
         if pocket_id:
-            query += " AND pocket_id = ?"
+            query += " AND pocket_id = %s"
             params.append(pocket_id)
         
         if search_text:
-            query += " AND card_name LIKE ?"
+            query += " AND card_name LIKE %s"
             params.append(f"%{search_text}%")
         
         if card_type:
-            query += " AND card_type = ?"
+            query += " AND card_type = %s"
             params.append(card_type)
         
         if vendor:
-            query += " AND vendor = ?"
+            query += " AND vendor = %s"
             params.append(vendor)
         
         if status:
-            query += " AND status = ?"
+            query += " AND status = %s"
             params.append(status)
         
         query += " ORDER BY card_name"
@@ -107,7 +106,7 @@ class DatabaseWalletHelper:
         where_clause = ""
         params = []
         if pocket_id:
-            where_clause = "WHERE pocket_id = ? AND"
+            where_clause = "WHERE pocket_id = %s AND"
             params = [pocket_id]
         else:
             where_clause = "WHERE"
@@ -169,7 +168,7 @@ class DatabaseWalletHelper:
         try:
             self.db_manager.connect(write=False)
             cursor = self.db_manager.connection.cursor()
-            cursor.execute("SELECT * FROM wallet_transaction_locations WHERE id = ?", (location_id,))
+            cursor.execute("SELECT * FROM wallet_transaction_locations WHERE id = %s", (location_id,))
             row = cursor.fetchone()
             return dict(row) if row else None
         except Exception as e:
@@ -194,9 +193,9 @@ class DatabaseWalletHelper:
                 LEFT JOIN wallet_transaction_statuses wts ON wt.status_id = wts.id
                 LEFT JOIN wallet_currency wcur ON wt.currency_id = wcur.id
                 LEFT JOIN wallet_transaction_locations wtl ON wt.location_id = wtl.id
-                WHERE wt.pocket_id = ?
+                WHERE wt.pocket_id = %s
                 ORDER BY wt.transaction_date DESC
-                LIMIT ? OFFSET ?
+                LIMIT %s OFFSET %s
             """, (pocket_id, limit, offset))
         else:
             cursor.execute("""
@@ -211,7 +210,7 @@ class DatabaseWalletHelper:
                 LEFT JOIN wallet_currency wcur ON wt.currency_id = wcur.id
                 LEFT JOIN wallet_transaction_locations wtl ON wt.location_id = wtl.id
                 ORDER BY wt.transaction_date DESC
-                LIMIT ? OFFSET ?
+                LIMIT %s OFFSET %s
             """, (limit, offset))
         rows = cursor.fetchall()
         transactions = [dict(row) for row in rows]
@@ -224,7 +223,7 @@ class DatabaseWalletHelper:
         cursor = self.db_manager.connection.cursor()
         cursor.execute("""
             SELECT * FROM wallet_transaction_items 
-            WHERE wallet_transaction_id = ?
+            WHERE wallet_transaction_id = %s
             ORDER BY id
         """, (transaction_id,))
         rows = cursor.fetchall()
@@ -236,7 +235,7 @@ class DatabaseWalletHelper:
         """Count transactions for a specific pocket."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT COUNT(*) as count FROM wallet_transactions WHERE pocket_id = ?", (pocket_id,))
+        cursor.execute("SELECT COUNT(*) as count FROM wallet_transactions WHERE pocket_id = %s", (pocket_id,))
         count = cursor.fetchone()['count']
         self.db_manager.close()
         return count
@@ -245,7 +244,7 @@ class DatabaseWalletHelper:
         """Count transactions for a specific card."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT COUNT(*) as count FROM wallet_transactions WHERE card_id = ?", (card_id,))
+        cursor.execute("SELECT COUNT(*) as count FROM wallet_transactions WHERE card_id = %s", (card_id,))
         count = cursor.fetchone()['count']
         self.db_manager.close()
         return count
@@ -258,7 +257,7 @@ class DatabaseWalletHelper:
             SELECT COUNT(*) as count 
             FROM wallet_transaction_items wti
             JOIN wallet_transactions wt ON wti.wallet_transaction_id = wt.id
-            WHERE wt.pocket_id = ?
+            WHERE wt.pocket_id = %s
         """, (pocket_id,))
         count = cursor.fetchone()['count']
         self.db_manager.close()
@@ -272,7 +271,7 @@ class DatabaseWalletHelper:
             SELECT COUNT(*) as count 
             FROM wallet_transaction_items wti
             JOIN wallet_transactions wt ON wti.wallet_transaction_id = wt.id
-            WHERE wt.card_id = ?
+            WHERE wt.card_id = %s
         """, (card_id,))
         count = cursor.fetchone()['count']
         self.db_manager.close()
@@ -282,7 +281,7 @@ class DatabaseWalletHelper:
         """Delete all transactions for a specific pocket."""
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("DELETE FROM wallet_transactions WHERE pocket_id = ?", (pocket_id,))
+        cursor.execute("DELETE FROM wallet_transactions WHERE pocket_id = %s", (pocket_id,))
         self.db_manager.connection.commit()
         self.db_manager.create_temp_file()
         self.db_manager.close()
@@ -291,7 +290,7 @@ class DatabaseWalletHelper:
         """Delete all transactions for a specific card."""
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("DELETE FROM wallet_transactions WHERE card_id = ?", (card_id,))
+        cursor.execute("DELETE FROM wallet_transactions WHERE card_id = %s", (card_id,))
         self.db_manager.connection.commit()
         self.db_manager.create_temp_file()
         self.db_manager.close()
@@ -303,7 +302,7 @@ class DatabaseWalletHelper:
         cursor.execute("""
             DELETE FROM wallet_transaction_items 
             WHERE wallet_transaction_id IN (
-                SELECT id FROM wallet_transactions WHERE pocket_id = ?
+                SELECT id FROM wallet_transactions WHERE pocket_id = %s
             )
         """, (pocket_id,))
         self.db_manager.connection.commit()
@@ -317,7 +316,7 @@ class DatabaseWalletHelper:
         cursor.execute("""
             DELETE FROM wallet_transaction_items 
             WHERE wallet_transaction_id IN (
-                SELECT id FROM wallet_transactions WHERE card_id = ?
+                SELECT id FROM wallet_transactions WHERE card_id = %s
             )
         """, (card_id,))
         self.db_manager.connection.commit()
@@ -329,10 +328,10 @@ class DatabaseWalletHelper:
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
-            "INSERT INTO wallet_categories (name, note) VALUES (?, ?)",
+            "INSERT INTO wallet_categories (name, note) VALUES (%s, %s) RETURNING id",
             (name, note)
         )
-        category_id = cursor.lastrowid
+        category_id = cursor.fetchone()[0]
         self.db_manager.connection.commit()
         self.db_manager.create_temp_file()
         self.db_manager.close()
@@ -343,7 +342,7 @@ class DatabaseWalletHelper:
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
-            "UPDATE wallet_categories SET name = ?, note = ? WHERE id = ?",
+            "UPDATE wallet_categories SET name = %s, note = %s WHERE id = %s",
             (name, note, category_id)
         )
         self.db_manager.connection.commit()
@@ -354,7 +353,7 @@ class DatabaseWalletHelper:
         """Delete a wallet category."""
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("DELETE FROM wallet_categories WHERE id = ?", (category_id,))
+        cursor.execute("DELETE FROM wallet_categories WHERE id = %s", (category_id,))
         self.db_manager.connection.commit()
         self.db_manager.create_temp_file()
         self.db_manager.close()
@@ -364,10 +363,10 @@ class DatabaseWalletHelper:
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
-            "INSERT INTO wallet_currency (code, name, symbol, note) VALUES (?, ?, ?, ?)",
+            "INSERT INTO wallet_currency (code, name, symbol, note) VALUES (%s, %s, %s, %s) RETURNING id",
             (code, name, symbol, note)
         )
-        currency_id = cursor.lastrowid
+        currency_id = cursor.fetchone()[0]
         self.db_manager.connection.commit()
         self.db_manager.create_temp_file()
         self.db_manager.close()
@@ -378,7 +377,7 @@ class DatabaseWalletHelper:
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
-            "UPDATE wallet_currency SET code = ?, name = ?, symbol = ?, note = ? WHERE id = ?",
+            "UPDATE wallet_currency SET code = %s, name = %s, symbol = %s, note = %s WHERE id = %s",
             (code, name, symbol, note, currency_id)
         )
         self.db_manager.connection.commit()
@@ -389,7 +388,7 @@ class DatabaseWalletHelper:
         """Delete a wallet currency."""
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("DELETE FROM wallet_currency WHERE id = ?", (currency_id,))
+        cursor.execute("DELETE FROM wallet_currency WHERE id = %s", (currency_id,))
         self.db_manager.connection.commit()
         self.db_manager.create_temp_file()
         self.db_manager.close()
@@ -399,10 +398,10 @@ class DatabaseWalletHelper:
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
-            "INSERT INTO wallet_transaction_statuses (name, note) VALUES (?, ?)",
+            "INSERT INTO wallet_transaction_statuses (name, note) VALUES (%s, %s) RETURNING id",
             (name, note)
         )
-        status_id = cursor.lastrowid
+        status_id = cursor.fetchone()[0]
         self.db_manager.connection.commit()
         self.db_manager.create_temp_file()
         self.db_manager.close()
@@ -413,7 +412,7 @@ class DatabaseWalletHelper:
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
-            "UPDATE wallet_transaction_statuses SET name = ?, note = ? WHERE id = ?",
+            "UPDATE wallet_transaction_statuses SET name = %s, note = %s WHERE id = %s",
             (name, note, status_id)
         )
         self.db_manager.connection.commit()
@@ -424,7 +423,7 @@ class DatabaseWalletHelper:
         """Delete a wallet transaction status."""
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("DELETE FROM wallet_transaction_statuses WHERE id = ?", (status_id,))
+        cursor.execute("DELETE FROM wallet_transaction_statuses WHERE id = %s", (status_id,))
         self.db_manager.connection.commit()
         self.db_manager.create_temp_file()
         self.db_manager.close()
@@ -434,10 +433,10 @@ class DatabaseWalletHelper:
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
-            "INSERT INTO wallet_pockets (name, pocket_type, icon, color, image, settings, note) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO wallet_pockets (name, pocket_type, icon, color, image, settings, note) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
             (name, pocket_type, icon, color, image, settings, note)
         )
-        pocket_id = cursor.lastrowid
+        pocket_id = cursor.fetchone()[0]
         self.db_manager.connection.commit()
         self.db_manager.create_temp_file()
         self.db_manager.close()
@@ -456,10 +455,11 @@ class DatabaseWalletHelper:
             cursor.execute("""
                 INSERT INTO wallet_transaction_locations
                 (name, location_type, address, city, country, postal_code, online_url, contact, phone, email, status, description, rating, note, image)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
             """, (name, location_type, address, city, country, postal_code, online_url, contact, phone, email, status, description, rating, note, None))
 
-            location_id = cursor.lastrowid
+            location_id = cursor.fetchone()[0]
             self.db_manager.connection.commit()
             self.db_manager.create_temp_file()
 
@@ -473,7 +473,7 @@ class DatabaseWalletHelper:
                         rel = os.path.relpath(output_path, basedir).replace("\\", "/")
                         self.db_manager.connect()
                         cursor = self.db_manager.connection.cursor()
-                        cursor.execute("UPDATE wallet_transaction_locations SET image = ? WHERE id = ?", (rel, location_id))
+                        cursor.execute("UPDATE wallet_transaction_locations SET image = %s WHERE id = %s", (rel, location_id))
                         self.db_manager.connection.commit()
                         self.db_manager.create_temp_file()
                         try:
@@ -507,7 +507,7 @@ class DatabaseWalletHelper:
             # Retrieve existing image path so we can cleanup if replaced
             self.db_manager.connect(write=False)
             cursor = self.db_manager.connection.cursor()
-            cursor.execute("SELECT image FROM wallet_transaction_locations WHERE id = ?", (location_id,))
+            cursor.execute("SELECT image FROM wallet_transaction_locations WHERE id = %s", (location_id,))
             row = cursor.fetchone()
             existing_image = row['image'] if row and 'image' in row.keys() else None
             self.db_manager.close()
@@ -526,9 +526,9 @@ class DatabaseWalletHelper:
             cursor = self.db_manager.connection.cursor()
             cursor.execute("""
                 UPDATE wallet_transaction_locations
-                SET name = ?, location_type = ?, address = ?, city = ?, country = ?, postal_code = ?,
-                    online_url = ?, contact = ?, phone = ?, email = ?, status = ?, description = ?, rating = ?, note = ?, image = ?
-                WHERE id = ?
+                SET name = %s, location_type = %s, address = %s, city = %s, country = %s, postal_code = %s,
+                    online_url = %s, contact = %s, phone = %s, email = %s, status = %s, description = %s, rating = %s, note = %s, image = %s
+                WHERE id = %s
             """, (name, location_type, address, city, country, postal_code, online_url, contact, phone, email, status, description, rating, note, new_rel, location_id))
             self.db_manager.connection.commit()
             self.db_manager.create_temp_file()
@@ -574,11 +574,11 @@ class DatabaseWalletHelper:
             self.db_manager.connect()
             cursor = self.db_manager.connection.cursor()
             
-            cursor.execute("SELECT image FROM wallet_transaction_locations WHERE id = ?", (location_id,))
+            cursor.execute("SELECT image FROM wallet_transaction_locations WHERE id = %s", (location_id,))
             row = cursor.fetchone()
             image_path = row['image'] if row and 'image' in row.keys() else None
 
-            cursor.execute("DELETE FROM wallet_transaction_locations WHERE id = ?", (location_id,))
+            cursor.execute("DELETE FROM wallet_transaction_locations WHERE id = %s", (location_id,))
             self.db_manager.connection.commit()
             self.db_manager.create_temp_file()
 
@@ -604,7 +604,7 @@ class DatabaseWalletHelper:
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
-            "UPDATE wallet_pockets SET name = ?, pocket_type = ?, icon = ?, color = ?, image = ?, settings = ?, note = ? WHERE id = ?",
+            "UPDATE wallet_pockets SET name = %s, pocket_type = %s, icon = %s, color = %s, image = %s, settings = %s, note = %s WHERE id = %s",
             (name, pocket_type, icon, color, image, settings, note, pocket_id)
         )
         self.db_manager.connection.commit()
@@ -615,7 +615,7 @@ class DatabaseWalletHelper:
         """Delete a wallet pocket."""
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("DELETE FROM wallet_pockets WHERE id = ?", (pocket_id,))
+        cursor.execute("DELETE FROM wallet_pockets WHERE id = %s", (pocket_id,))
         self.db_manager.connection.commit()
         self.db_manager.create_temp_file()
         self.db_manager.close()
@@ -632,12 +632,13 @@ class DatabaseWalletHelper:
             (pocket_id, card_name, card_number, card_type, vendor, issuer, status, virtual, 
              issue_date, expiry_date, holder_name, cvv, billing_address, phone, email, 
              country, card_limit, image, color, note) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id""",
             (pocket_id, card_name, card_number, card_type, vendor, issuer, status, virtual,
              issue_date, expiry_date, holder_name, cvv, billing_address, phone, email,
              country, card_limit, image, color, note)
         )
-        card_id = cursor.lastrowid
+        card_id = cursor.fetchone()[0]
         self.db_manager.connection.commit()
         self.db_manager.create_temp_file()
         self.db_manager.close()
@@ -652,11 +653,11 @@ class DatabaseWalletHelper:
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
             """UPDATE wallet_cards SET 
-            pocket_id = ?, card_name = ?, card_number = ?, card_type = ?, vendor = ?, 
-            issuer = ?, status = ?, virtual = ?, issue_date = ?, expiry_date = ?, 
-            holder_name = ?, cvv = ?, billing_address = ?, phone = ?, email = ?, 
-            country = ?, card_limit = ?, image = ?, color = ?, note = ? 
-            WHERE id = ?""",
+            pocket_id = %s, card_name = %s, card_number = %s, card_type = %s, vendor = %s, 
+            issuer = %s, status = %s, virtual = %s, issue_date = %s, expiry_date = %s, 
+            holder_name = %s, cvv = %s, billing_address = %s, phone = %s, email = %s, 
+            country = %s, card_limit = %s, image = %s, color = %s, note = %s 
+            WHERE id = %s""",
             (pocket_id, card_name, card_number, card_type, vendor, issuer, status, virtual,
              issue_date, expiry_date, holder_name, cvv, billing_address, phone, email,
              country, card_limit, image, color, note, card_id)
@@ -669,7 +670,7 @@ class DatabaseWalletHelper:
         """Delete a wallet card."""
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("DELETE FROM wallet_cards WHERE id = ?", (card_id,))
+        cursor.execute("DELETE FROM wallet_cards WHERE id = %s", (card_id,))
         self.db_manager.connection.commit()
         self.db_manager.create_temp_file()
         self.db_manager.close()
@@ -707,34 +708,34 @@ class DatabaseWalletHelper:
         params = []
         
         if search_text:
-            query += " AND t.transaction_name LIKE ?"
+            query += " AND t.transaction_name LIKE %s"
             params.append(f"%{search_text}%")
         
         if transaction_type:
-            query += " AND t.transaction_type = ?"
+            query += " AND t.transaction_type = %s"
             params.append(transaction_type)
         
         if pocket_id is not None and pocket_id != "":
-            query += " AND t.pocket_id = ?"
+            query += " AND t.pocket_id = %s"
             params.append(pocket_id)
         
         if category_id is not None and category_id != "":
-            query += " AND t.category_id = ?"
+            query += " AND t.category_id = %s"
             params.append(category_id)
         
         if date_from and date_to:
-            query += " AND DATE(t.transaction_date) BETWEEN ? AND ?"
+            query += " AND DATE(t.transaction_date) BETWEEN %s AND %s"
             params.extend([date_from, date_to])
         
-        query += " GROUP BY t.id ORDER BY t.transaction_date DESC"
+        query += " GROUP BY t.id, t.transaction_date, t.transaction_name, t.transaction_type, p.name, ca.card_name, c.name, s.name, cu.symbol ORDER BY t.transaction_date DESC"
         
         # Add pagination
         if limit:
-            query += " LIMIT ?"
+            query += " LIMIT %s"
             params.append(limit)
             
             if offset:
-                query += " OFFSET ?"
+                query += " OFFSET %s"
                 params.append(offset)
         
         cursor.execute(query, params)
@@ -759,23 +760,23 @@ class DatabaseWalletHelper:
             params = []
             
             if search_text:
-                query += " AND t.transaction_name LIKE ?"
+                query += " AND t.transaction_name LIKE %s"
                 params.append(f"%{search_text}%")
             
             if transaction_type:
-                query += " AND t.transaction_type = ?"
+                query += " AND t.transaction_type = %s"
                 params.append(transaction_type)
             
             if pocket_id is not None and pocket_id != "":
-                query += " AND t.pocket_id = ?"
+                query += " AND t.pocket_id = %s"
                 params.append(pocket_id)
             
             if category_id is not None and category_id != "":
-                query += " AND t.category_id = ?"
+                query += " AND t.category_id = %s"
                 params.append(category_id)
             
             if date_from and date_to:
-                query += " AND DATE(t.transaction_date) BETWEEN ? AND ?"
+                query += " AND DATE(t.transaction_date) BETWEEN %s AND %s"
                 params.extend([date_from, date_to])
             
             cursor.execute(query, params)
@@ -798,11 +799,12 @@ class DatabaseWalletHelper:
             INSERT INTO wallet_transactions 
             (pocket_id, destination_pocket_id, card_id, category_id, status_id, currency_id, location_id, 
              transaction_name, transaction_date, transaction_type, tags, note)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
         """, (pocket_id, destination_pocket_id, card_id, category_id, status_id, currency_id, location_id,
               transaction_name, transaction_date, transaction_type, tags, note))
         
-        transaction_id = cursor.lastrowid
+        transaction_id = cursor.fetchone()[0]
         self.db_manager.connection.commit()
         self.db_manager.create_temp_file()
         self.db_manager.close()
@@ -820,12 +822,13 @@ class DatabaseWalletHelper:
             (wallet_transaction_id, item_type, sku, item_name, item_description,
              quantity, unit, amount, width, height, depth, weight, material, color,
              file_url, license_key, expiry_date, digital_type, note)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
         """, (wallet_transaction_id, item_type, sku, item_name, item_description,
               quantity, unit, amount, width, height, depth, weight, material, color,
               file_url, license_key, expiry_date, digital_type, note))
         
-        item_id = cursor.lastrowid
+        item_id = cursor.fetchone()[0]
         self.db_manager.connection.commit()
         self.db_manager.create_temp_file()
         self.db_manager.close()
@@ -841,11 +844,11 @@ class DatabaseWalletHelper:
             cursor = self.db_manager.connection.cursor()
             cursor.execute("""
                 UPDATE wallet_transaction_items
-                SET item_type = ?, sku = ?, item_name = ?, item_description = ?,
-                    quantity = ?, unit = ?, amount = ?, width = ?, height = ?, 
-                    depth = ?, weight = ?, material = ?, color = ?,
-                    file_url = ?, license_key = ?, expiry_date = ?, digital_type = ?, note = ?
-                WHERE id = ?
+                SET item_type = %s, sku = %s, item_name = %s, item_description = %s,
+                    quantity = %s, unit = %s, amount = %s, width = %s, height = %s, 
+                    depth = %s, weight = %s, material = %s, color = %s,
+                    file_url = %s, license_key = %s, expiry_date = %s, digital_type = %s, note = %s
+                WHERE id = %s
             """, (item_type, sku, item_name, item_description,
                   quantity, unit, amount, width, height, depth, weight, material, color,
                   file_url, license_key, expiry_date, digital_type, note, item_id))
@@ -865,17 +868,17 @@ class DatabaseWalletHelper:
             self.db_manager.connect()
             cursor = self.db_manager.connection.cursor()
             
-            cursor.execute("SELECT image_path FROM wallet_transactions_invoice_prove WHERE wallet_transaction_id = ?", 
+            cursor.execute("SELECT image_path FROM wallet_transactions_invoice_prove WHERE wallet_transaction_id = %s", 
                           (transaction_id,))
             invoice_paths = [row[0] for row in cursor.fetchall()]
             
-            cursor.execute("DELETE FROM wallet_transactions_invoice_prove WHERE wallet_transaction_id = ?", 
+            cursor.execute("DELETE FROM wallet_transactions_invoice_prove WHERE wallet_transaction_id = %s", 
                           (transaction_id,))
             
-            cursor.execute("DELETE FROM wallet_transaction_items WHERE wallet_transaction_id = ?", 
+            cursor.execute("DELETE FROM wallet_transaction_items WHERE wallet_transaction_id = %s", 
                           (transaction_id,))
             
-            cursor.execute("DELETE FROM wallet_transactions WHERE id = ?", (transaction_id,))
+            cursor.execute("DELETE FROM wallet_transactions WHERE id = %s", (transaction_id,))
             
             self.db_manager.connection.commit()
             self.db_manager.create_temp_file()
@@ -915,7 +918,7 @@ class DatabaseWalletHelper:
                 LEFT JOIN wallet_currency cu ON t.currency_id = cu.id
                 LEFT JOIN wallet_transaction_locations l ON t.location_id = l.id
                 LEFT JOIN wallet_cards ca ON t.card_id = ca.id
-                WHERE t.id = ?
+                WHERE t.id = %s
             """, (transaction_id,))
             
             transaction = cursor.fetchone()
@@ -937,9 +940,9 @@ class DatabaseWalletHelper:
             
             cursor.execute("""
                 UPDATE wallet_transactions 
-                SET pocket_id=?, destination_pocket_id=?, card_id=?, category_id=?, status_id=?, currency_id=?, location_id=?,
-                    transaction_name=?, transaction_date=?, transaction_type=?, tags=?, note=?
-                WHERE id=?
+                SET pocket_id=%s, destination_pocket_id=%s, card_id=%s, category_id=%s, status_id=%s, currency_id=%s, location_id=%s,
+                    transaction_name=%s, transaction_date=%s, transaction_type=%s, tags=%s, note=%s
+                WHERE id=%s
             """, (pocket_id, destination_pocket_id, card_id, category_id, status_id, currency_id, location_id,
                   transaction_name, transaction_date, transaction_type, tags, note, transaction_id))
             
@@ -959,7 +962,7 @@ class DatabaseWalletHelper:
             self.db_manager.connect()
             cursor = self.db_manager.connection.cursor()
             
-            cursor.execute("DELETE FROM wallet_transaction_items WHERE wallet_transaction_id = ?", 
+            cursor.execute("DELETE FROM wallet_transaction_items WHERE wallet_transaction_id = %s", 
                           (transaction_id,))
             
             self.db_manager.connection.commit()
@@ -977,7 +980,7 @@ class DatabaseWalletHelper:
             self.db_manager.connect()
             cursor = self.db_manager.connection.cursor()
             
-            cursor.execute("DELETE FROM wallet_transaction_items WHERE id = ?", 
+            cursor.execute("DELETE FROM wallet_transaction_items WHERE id = %s", 
                           (item_id,))
             
             self.db_manager.connection.commit()
@@ -995,7 +998,7 @@ class DatabaseWalletHelper:
             self.db_manager.connect(write=False)
             cursor = self.db_manager.connection.cursor()
             
-            cursor.execute("SELECT COUNT(*) FROM wallet_transaction_items WHERE wallet_transaction_id = ?", 
+            cursor.execute("SELECT COUNT(*) FROM wallet_transaction_items WHERE wallet_transaction_id = %s", 
                           (transaction_id,))
             count = cursor.fetchone()[0]
             return count
@@ -1012,7 +1015,7 @@ class DatabaseWalletHelper:
             self.db_manager.connect(write=False)
             cursor = self.db_manager.connection.cursor()
             
-            cursor.execute("SELECT COUNT(*) FROM wallet_transactions_invoice_prove WHERE wallet_transaction_id = ?", 
+            cursor.execute("SELECT COUNT(*) FROM wallet_transactions_invoice_prove WHERE wallet_transaction_id = %s", 
                           (transaction_id,))
             count = cursor.fetchone()[0]
             return count
@@ -1029,7 +1032,7 @@ class DatabaseWalletHelper:
             self.db_manager.connect(write=False)
             cursor = self.db_manager.connection.cursor()
             
-            cursor.execute("SELECT image_path FROM wallet_transactions_invoice_prove WHERE wallet_transaction_id = ?", 
+            cursor.execute("SELECT image_path FROM wallet_transactions_invoice_prove WHERE wallet_transaction_id = %s", 
                           (transaction_id,))
             images = cursor.fetchall()
             return [img[0] for img in images] if images else []
@@ -1050,10 +1053,11 @@ class DatabaseWalletHelper:
             cursor.execute("""
                 INSERT INTO wallet_transactions_invoice_prove
                 (wallet_transaction_id, image_path, image_name, image_size, image_type, description)
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id
             """, (transaction_id, image_path, image_name, image_size, image_type, description))
             
-            invoice_id = cursor.lastrowid
+            invoice_id = cursor.fetchone()[0]
             self.db_manager.connection.commit()
             self.db_manager.create_temp_file()
             return invoice_id
@@ -1072,7 +1076,7 @@ class DatabaseWalletHelper:
             
             cursor.execute("""
                 SELECT * FROM wallet_transactions_invoice_prove 
-                WHERE wallet_transaction_id = ?
+                WHERE wallet_transaction_id = %s
                 ORDER BY uploaded_at DESC
                 LIMIT 1
             """, (transaction_id,))
@@ -1100,9 +1104,9 @@ class DatabaseWalletHelper:
                 
                 cursor.execute("""
                     UPDATE wallet_transactions_invoice_prove 
-                    SET image_path=?, image_name=?, image_size=?, image_type=?, description=?,
+                    SET image_path=%s, image_name=%s, image_size=%s, image_type=%s, description=%s,
                         uploaded_at=CURRENT_TIMESTAMP
-                    WHERE wallet_transaction_id=?
+                    WHERE wallet_transaction_id=%s
                 """, (image_path, image_name, image_size, image_type, description, transaction_id))
                 
                 self.db_manager.connection.commit()
@@ -1125,7 +1129,7 @@ class DatabaseWalletHelper:
             self.db_manager.connect()
             cursor = self.db_manager.connection.cursor()
             
-            cursor.execute("DELETE FROM wallet_transactions_invoice_prove WHERE wallet_transaction_id = ?", 
+            cursor.execute("DELETE FROM wallet_transactions_invoice_prove WHERE wallet_transaction_id = %s", 
                           (transaction_id,))
             
             self.db_manager.connection.commit()
@@ -1157,7 +1161,7 @@ class DatabaseWalletHelper:
             exclude_clause = ""
             params_income = [pocket_id]
             if exclude_transaction_id:
-                exclude_clause = " AND t.id != ?"
+                exclude_clause = " AND t.id != %s"
                 params_income.append(exclude_transaction_id)
             
             # Get income total
@@ -1165,7 +1169,7 @@ class DatabaseWalletHelper:
                 SELECT COALESCE(SUM(ti.quantity * ti.amount), 0) as total
                 FROM wallet_transactions t
                 LEFT JOIN wallet_transaction_items ti ON t.id = ti.wallet_transaction_id
-                WHERE t.pocket_id = ? AND t.transaction_type = 'income'{exclude_clause}
+                WHERE t.pocket_id = %s AND t.transaction_type = 'income'{exclude_clause}
             """, tuple(params_income))
             income_total = cursor.fetchone()[0]
             
@@ -1179,7 +1183,7 @@ class DatabaseWalletHelper:
                 SELECT COALESCE(SUM(ti.quantity * ti.amount), 0) as total
                 FROM wallet_transactions t
                 LEFT JOIN wallet_transaction_items ti ON t.id = ti.wallet_transaction_id
-                WHERE t.pocket_id = ? AND t.transaction_type = 'expense'{exclude_clause}
+                WHERE t.pocket_id = %s AND t.transaction_type = 'expense'{exclude_clause}
             """, tuple(params_expense))
             expense_total = cursor.fetchone()[0]
             
@@ -1193,7 +1197,7 @@ class DatabaseWalletHelper:
                 SELECT COALESCE(SUM(ti.quantity * ti.amount), 0) as total
                 FROM wallet_transactions t
                 LEFT JOIN wallet_transaction_items ti ON t.id = ti.wallet_transaction_id
-                WHERE t.pocket_id = ? AND t.transaction_type = 'transfer'{exclude_clause}
+                WHERE t.pocket_id = %s AND t.transaction_type = 'transfer'{exclude_clause}
             """, tuple(params_transfer_out))
             transfer_out_total = cursor.fetchone()[0]
             
@@ -1207,7 +1211,7 @@ class DatabaseWalletHelper:
                 SELECT COALESCE(SUM(ti.quantity * ti.amount), 0) as total
                 FROM wallet_transactions t
                 LEFT JOIN wallet_transaction_items ti ON t.id = ti.wallet_transaction_id
-                WHERE t.destination_pocket_id = ? AND t.transaction_type = 'transfer'{exclude_clause}
+                WHERE t.destination_pocket_id = %s AND t.transaction_type = 'transfer'{exclude_clause}
             """, tuple(params_transfer_in))
             transfer_in_total = cursor.fetchone()[0]
             
@@ -1230,7 +1234,7 @@ class DatabaseWalletHelper:
             cursor.execute("""
                 SELECT symbol
                 FROM wallet_currency
-                WHERE id = ?
+                WHERE id = %s
             """, (currency_id,))
             row = cursor.fetchone()
             return row[0] if row and row[0] else "Rp"
@@ -1314,19 +1318,19 @@ class DatabaseWalletHelper:
             params = []
             
             if date_from and date_to:
-                where_clauses.append("DATE(t.transaction_date) BETWEEN ? AND ?")
+                where_clauses.append("DATE(t.transaction_date) BETWEEN %s AND %s")
                 params.extend([date_from, date_to])
             
             if pocket_id:
-                where_clauses.append("t.pocket_id = ?")
+                where_clauses.append("t.pocket_id = %s")
                 params.append(pocket_id)
             
             if category_id:
-                where_clauses.append("t.category_id = ?")
+                where_clauses.append("t.category_id = %s")
                 params.append(category_id)
             
             if transaction_type:
-                where_clauses.append("t.transaction_type = ?")
+                where_clauses.append("t.transaction_type = %s")
                 params.append(transaction_type)
             
             where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
@@ -1364,15 +1368,15 @@ class DatabaseWalletHelper:
             params = []
             
             if date_from and date_to:
-                where_clauses.append("DATE(t.transaction_date) BETWEEN ? AND ?")
+                where_clauses.append("DATE(t.transaction_date) BETWEEN %s AND %s")
                 params.extend([date_from, date_to])
             
             if category_id:
-                where_clauses.append("t.category_id = ?")
+                where_clauses.append("t.category_id = %s")
                 params.append(category_id)
             
             if transaction_type:
-                where_clauses.append("t.transaction_type = ?")
+                where_clauses.append("t.transaction_type = %s")
                 params.append(transaction_type)
             
             where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
@@ -1412,15 +1416,15 @@ class DatabaseWalletHelper:
             params = []
             
             if date_from and date_to:
-                where_clauses.append("DATE(t.transaction_date) BETWEEN ? AND ?")
+                where_clauses.append("DATE(t.transaction_date) BETWEEN %s AND %s")
                 params.extend([date_from, date_to])
             
             if pocket_id:
-                where_clauses.append("t.pocket_id = ?")
+                where_clauses.append("t.pocket_id = %s")
                 params.append(pocket_id)
             
             if transaction_type:
-                where_clauses.append("t.transaction_type = ?")
+                where_clauses.append("t.transaction_type = %s")
                 params.append(transaction_type)
             
             where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
@@ -1460,23 +1464,23 @@ class DatabaseWalletHelper:
             params = []
             
             if date_from and date_to:
-                where_clauses.append("DATE(t.transaction_date) BETWEEN ? AND ?")
+                where_clauses.append("DATE(t.transaction_date) BETWEEN %s AND %s")
                 params.extend([date_from, date_to])
             
             if pocket_id:
-                where_clauses.append("t.pocket_id = ?")
+                where_clauses.append("t.pocket_id = %s")
                 params.append(pocket_id)
             
             if category_id:
-                where_clauses.append("t.category_id = ?")
+                where_clauses.append("t.category_id = %s")
                 params.append(category_id)
             
             if location_id:
-                where_clauses.append("t.location_id = ?")
+                where_clauses.append("t.location_id = %s")
                 params.append(location_id)
             
             if transaction_type:
-                where_clauses.append("t.transaction_type = ?")
+                where_clauses.append("t.transaction_type = %s")
                 params.append(transaction_type)
             
             where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
@@ -1513,38 +1517,38 @@ class DatabaseWalletHelper:
             cursor = self.db_manager.connection.cursor()
             
             if group_by == "day":
-                date_format = "%Y-%m-%d"
+                date_format = "YYYY-MM-DD"
             elif group_by == "week":
-                date_format = "%Y-W%W"
+                date_format = 'IYYY-"W"IW'
             elif group_by == "year":
-                date_format = "%Y"
+                date_format = "YYYY"
             else:
-                date_format = "%Y-%m"
+                date_format = "YYYY-MM"
             
             where_clauses = []
             params = []
             
             if date_from and date_to:
-                where_clauses.append("DATE(t.transaction_date) BETWEEN ? AND ?")
+                where_clauses.append("DATE(t.transaction_date) BETWEEN %s AND %s")
                 params.extend([date_from, date_to])
             
             if pocket_id:
-                where_clauses.append("t.pocket_id = ?")
+                where_clauses.append("t.pocket_id = %s")
                 params.append(pocket_id)
             
             if category_id:
-                where_clauses.append("t.category_id = ?")
+                where_clauses.append("t.category_id = %s")
                 params.append(category_id)
             
             if transaction_type:
-                where_clauses.append("t.transaction_type = ?")
+                where_clauses.append("t.transaction_type = %s")
                 params.append(transaction_type)
             
             where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
             
             cursor.execute(f"""
                 SELECT 
-                    strftime('{date_format}', t.transaction_date) as period,
+                    TO_CHAR(t.transaction_date, '{date_format}') as period,
                     t.transaction_type,
                     COUNT(DISTINCT t.id) as transaction_count,
                     COALESCE(SUM(ti.quantity * ti.amount), 0) as total_amount,
@@ -1553,8 +1557,8 @@ class DatabaseWalletHelper:
                 LEFT JOIN wallet_transaction_items ti ON t.id = ti.wallet_transaction_id
                 LEFT JOIN wallet_currency cu ON t.currency_id = cu.id
                 WHERE {where_sql}
-                GROUP BY period, t.transaction_type, cu.symbol
-                ORDER BY period, t.transaction_type
+                GROUP BY TO_CHAR(t.transaction_date, '{date_format}'), t.transaction_type, cu.symbol
+                ORDER BY 1, t.transaction_type
             """, params)
             
             rows = cursor.fetchall()
@@ -1576,27 +1580,27 @@ class DatabaseWalletHelper:
         params = []
         
         if date_from:
-            where_clauses.append("wt.transaction_date >= ?")
+            where_clauses.append("wt.transaction_date >= %s")
             params.append(date_from)
         
         if date_to:
-            where_clauses.append("wt.transaction_date <= ?")
+            where_clauses.append("wt.transaction_date <= %s")
             params.append(date_to)
         
         if pocket_id:
-            where_clauses.append("wt.pocket_id = ?")
+            where_clauses.append("wt.pocket_id = %s")
             params.append(pocket_id)
         
         if category_id:
-            where_clauses.append("wt.category_id = ?")
+            where_clauses.append("wt.category_id = %s")
             params.append(category_id)
         
         if transaction_type:
-            where_clauses.append("wt.transaction_type = ?")
+            where_clauses.append("wt.transaction_type = %s")
             params.append(transaction_type)
         
         if search_text:
-            where_clauses.append("wt.transaction_name LIKE ?")
+            where_clauses.append("wt.transaction_name LIKE %s")
             params.append(f"%{search_text}%")
         
         where_clause = " AND ".join(where_clauses)
@@ -1622,7 +1626,8 @@ class DatabaseWalletHelper:
             LEFT JOIN wallet_transaction_statuses wts ON wt.status_id = wts.id
             LEFT JOIN wallet_transaction_items wti ON wt.id = wti.wallet_transaction_id
             WHERE {where_clause}
-            GROUP BY wt.id
+            GROUP BY wt.id, wt.transaction_date, wt.transaction_name, wt.transaction_type,
+                     wp.name, wc.name, wcard.card_name, wl.name, curr.symbol, wts.name
             ORDER BY wt.transaction_date DESC
         """
         
@@ -1780,7 +1785,8 @@ class DatabaseWalletHelper:
             LEFT JOIN wallet_categories wc ON wt.category_id = wc.id
             LEFT JOIN wallet_transaction_items wti ON wt.id = wti.wallet_transaction_id
             LEFT JOIN wallet_currency curr ON wt.currency_id = curr.id
-            GROUP BY wt.id
+            GROUP BY wt.id, wt.transaction_date, wt.transaction_name, wt.transaction_type,
+                     wp.name, wc.name, curr.symbol, wt.created_at
             ORDER BY wt.transaction_date DESC, wt.created_at DESC
             LIMIT 5
         """)
@@ -1796,9 +1802,9 @@ class DatabaseWalletHelper:
             LEFT JOIN wallet_categories wc ON wt.category_id = wc.id
             LEFT JOIN wallet_transaction_items wti ON wt.id = wti.wallet_transaction_id
             WHERE wt.transaction_type IN ('income', 'expense')
-            GROUP BY wc.id, wt.transaction_type
-            HAVING total > 0
-            ORDER BY total DESC
+            GROUP BY wc.id, wc.name, wt.transaction_type
+            HAVING COALESCE(SUM(wti.amount * wti.quantity), 0) > 0
+            ORDER BY COALESCE(SUM(wti.amount * wti.quantity), 0) DESC
             LIMIT 10
         """)
         summary['category_breakdown'] = [dict(row) for row in cursor.fetchall()]
@@ -1806,14 +1812,14 @@ class DatabaseWalletHelper:
         # Get monthly trend (last 6 months)
         cursor.execute("""
             SELECT 
-                strftime('%Y-%m', wt.transaction_date) as month,
+                TO_CHAR(wt.transaction_date, 'YYYY-MM') as month,
                 wt.transaction_type,
                 COALESCE(SUM(wti.amount * wti.quantity), 0) as total
             FROM wallet_transactions wt
             LEFT JOIN wallet_transaction_items wti ON wt.id = wti.wallet_transaction_id
-            WHERE wt.transaction_date >= date('now', '-6 months')
-            GROUP BY month, wt.transaction_type
-            ORDER BY month ASC
+            WHERE wt.transaction_date >= CURRENT_DATE - INTERVAL '6 months'
+            GROUP BY TO_CHAR(wt.transaction_date, 'YYYY-MM'), wt.transaction_type
+            ORDER BY 1 ASC
         """)
         summary['monthly_trend'] = [dict(row) for row in cursor.fetchall()]
         
@@ -1827,8 +1833,8 @@ class DatabaseWalletHelper:
             LEFT JOIN wallet_transaction_locations wl ON wt.location_id = wl.id
             LEFT JOIN wallet_transaction_items wti ON wt.id = wti.wallet_transaction_id
             WHERE wl.name IS NOT NULL
-            GROUP BY wl.id
-            HAVING total_amount > 0
+            GROUP BY wl.id, wl.name
+            HAVING COALESCE(SUM(wti.amount * wti.quantity), 0) > 0
             ORDER BY transaction_count DESC
             LIMIT 5
         """)
@@ -1844,13 +1850,13 @@ class DatabaseWalletHelper:
         
         cursor.execute("""
             SELECT 
-                strftime('%Y', wt.transaction_date) as year,
+                TO_CHAR(wt.transaction_date, 'YYYY') as year,
                 wt.transaction_type,
                 COALESCE(SUM(wti.amount * wti.quantity), 0) as total
             FROM wallet_transactions wt
             LEFT JOIN wallet_transaction_items wti ON wt.id = wti.wallet_transaction_id
-            GROUP BY year, wt.transaction_type
-            ORDER BY year DESC
+            GROUP BY TO_CHAR(wt.transaction_date, 'YYYY'), wt.transaction_type
+            ORDER BY 1 DESC
         """)
         
         result = [dict(row) for row in cursor.fetchall()]
@@ -1865,15 +1871,15 @@ class DatabaseWalletHelper:
         cursor.execute("""
             SELECT 
                 CASE 
-                    WHEN strftime('%Y-%m', wt.transaction_date) = strftime('%Y-%m', 'now') THEN 'current'
-                    WHEN strftime('%Y-%m', wt.transaction_date) = strftime('%Y-%m', 'now', '-1 month') THEN 'previous'
+                    WHEN TO_CHAR(wt.transaction_date, 'YYYY-MM') = TO_CHAR(CURRENT_DATE, 'YYYY-MM') THEN 'current'
+                    WHEN TO_CHAR(wt.transaction_date, 'YYYY-MM') = TO_CHAR(CURRENT_DATE - INTERVAL '1 month', 'YYYY-MM') THEN 'previous'
                 END as period,
                 wt.transaction_type,
                 COALESCE(SUM(wti.amount * wti.quantity), 0) as total
             FROM wallet_transactions wt
             LEFT JOIN wallet_transaction_items wti ON wt.id = wti.wallet_transaction_id
-            WHERE wt.transaction_date >= date('now', 'start of month', '-1 month')
-            GROUP BY period, wt.transaction_type
+            WHERE wt.transaction_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month'
+            GROUP BY 1, wt.transaction_type
         """)
         
         rows = [dict(row) for row in cursor.fetchall()]
@@ -1906,23 +1912,23 @@ class DatabaseWalletHelper:
             params = []
             
             if date_from and date_to:
-                where_clauses.append("DATE(t.transaction_date) BETWEEN ? AND ?")
+                where_clauses.append("DATE(t.transaction_date) BETWEEN %s AND %s")
                 params.extend([date_from, date_to])
             
             if pocket_id:
-                where_clauses.append("t.pocket_id = ?")
+                where_clauses.append("t.pocket_id = %s")
                 params.append(pocket_id)
             
             if category_id:
-                where_clauses.append("t.category_id = ?")
+                where_clauses.append("t.category_id = %s")
                 params.append(category_id)
             
             if transaction_type:
-                where_clauses.append("t.transaction_type = ?")
+                where_clauses.append("t.transaction_type = %s")
                 params.append(transaction_type)
             
             if search_text:
-                where_clauses.append("t.transaction_name LIKE ?")
+                where_clauses.append("t.transaction_name LIKE %s")
                 params.append(f"%{search_text}%")
             
             where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
@@ -1948,7 +1954,8 @@ class DatabaseWalletHelper:
                 LEFT JOIN wallet_currency cu ON t.currency_id = cu.id
                 LEFT JOIN wallet_transaction_statuses s ON t.status_id = s.id
                 WHERE {where_sql}
-                GROUP BY t.id
+                GROUP BY t.id, t.transaction_date, t.transaction_name, t.transaction_type,
+                         p.name, c.name, ca.card_name, l.name, cu.symbol, s.name
                 ORDER BY t.transaction_date DESC
             """, params)
             
@@ -2021,23 +2028,23 @@ class DatabaseWalletHelper:
             if not matching_ids:
                 return []
             
-            where_clauses.append(f"t.id IN ({','.join('?' * len(matching_ids))})")
+            where_clauses.append(f"t.id IN ({','.join('%s' * len(matching_ids))})")
             params.extend(matching_ids)
             
             if date_from and date_to:
-                where_clauses.append("DATE(t.transaction_date) BETWEEN ? AND ?")
+                where_clauses.append("DATE(t.transaction_date) BETWEEN %s AND %s")
                 params.extend([date_from, date_to])
             
             if pocket_id:
-                where_clauses.append("t.pocket_id = ?")
+                where_clauses.append("t.pocket_id = %s")
                 params.append(pocket_id)
             
             if category_id:
-                where_clauses.append("t.category_id = ?")
+                where_clauses.append("t.category_id = %s")
                 params.append(category_id)
             
             if transaction_type:
-                where_clauses.append("t.transaction_type = ?")
+                where_clauses.append("t.transaction_type = %s")
                 params.append(transaction_type)
             
             where_sql = " AND ".join(where_clauses)

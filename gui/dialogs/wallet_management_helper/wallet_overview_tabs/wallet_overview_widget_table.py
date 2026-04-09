@@ -71,11 +71,14 @@ class WalletOverviewTable(QWidget):
             # Try both 'transaction_id' and 'id' keys
             transaction_id = trans.get('transaction_id') or trans.get('id')
             
-            date_str = trans.get('transaction_date', '')
-            if date_str:
+            date_val = trans.get('transaction_date', '')
+            if date_val:
                 try:
-                    from datetime import datetime
-                    date_obj = datetime.fromisoformat(date_str)
+                    from datetime import datetime, date
+                    if isinstance(date_val, (datetime, date)):
+                        date_obj = date_val if isinstance(date_val, datetime) else datetime.combine(date_val, datetime.min.time())
+                    else:
+                        date_obj = datetime.fromisoformat(str(date_val))
                     date_str = date_obj.strftime('%Y-%m-%d')
                     
                     if date_from is None or date_obj < date_from:
@@ -83,7 +86,9 @@ class WalletOverviewTable(QWidget):
                     if date_to is None or date_obj > date_to:
                         date_to = date_obj
                 except:
-                    pass
+                    date_str = str(date_val)
+            else:
+                date_str = ''
             
             date_item = QTableWidgetItem(date_str)
             date_item.setData(Qt.UserRole, transaction_id)

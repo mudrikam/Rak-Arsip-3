@@ -7,7 +7,7 @@ class UIHelper:
     def __init__(self, dialog):
         self.dialog = dialog
 
-    def format_date_indonesian(self, date_str, with_time=False, language="id"):
+    def format_date_indonesian(self, date_input, with_time=False, language="id"):
         if language == "en":
             hari_map = {
                 0: "Monday", 1: "Tuesday", 2: "Wednesday", 3: "Thursday", 4: "Friday", 5: "Saturday", 6: "Sunday"
@@ -24,13 +24,20 @@ class UIHelper:
                 1: "Januari", 2: "Februari", 3: "Maret", 4: "April", 5: "Mei", 6: "Juni",
                 7: "Juli", 8: "Agustus", 9: "September", 10: "Oktober", 11: "November", 12: "Desember"
             }
-        if not date_str:
+        if not date_input:
             return "-"
         try:
-            if with_time:
-                dt = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
+            from datetime import datetime as _dt, date as _date
+            if isinstance(date_input, _dt):
+                dt = date_input
+            elif isinstance(date_input, _date):
+                dt = _dt.combine(date_input, _dt.min.time())
             else:
-                dt = datetime.strptime(date_str, "%Y-%m-%d")
+                s = str(date_input).strip()
+                if with_time and ' ' in s:
+                    dt = _dt.strptime(s, "%Y-%m-%d %H:%M:%S")
+                else:
+                    dt = _dt.strptime(s[:10], "%Y-%m-%d")
             hari = hari_map[dt.weekday()]
             bulan = bulan_map[dt.month]
             if with_time:
@@ -38,7 +45,7 @@ class UIHelper:
             else:
                 return f"{hari}, {dt.day} {bulan} {dt.year}"
         except Exception:
-            return date_str
+            return str(date_input)
 
     def copy_detail_to_clipboard(self, key, btn=None):
         widget = self.dialog.details_widgets.get(key)

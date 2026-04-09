@@ -42,7 +42,7 @@ class ClientDataDatabaseHelper:
         db_manager = self.get_db_manager()
         db_manager.connect(write=False)
         cursor = db_manager.connection.cursor()
-        cursor.execute("SELECT id, client_name, contact, links, status, note FROM client WHERE id = ?", (client_id,))
+        cursor.execute("SELECT id, client_name, contact, links, status, note FROM client WHERE id = %s", (client_id,))
         row = cursor.fetchone()
         db_manager.close()
         if row:
@@ -61,7 +61,7 @@ class ClientDataDatabaseHelper:
         db_manager = self.get_db_manager()
         db_manager.connect(write=False)
         cursor = db_manager.connection.cursor()
-        cursor.execute("SELECT client_name FROM client WHERE id = ?", (client_id,))
+        cursor.execute("SELECT client_name FROM client WHERE id = %s", (client_id,))
         row = cursor.fetchone()
         db_manager.close()
         if row:
@@ -162,7 +162,7 @@ class ClientDataDatabaseHelper:
         db_manager = self.get_db_manager()
         db_manager.connect(write=False)
         cursor = db_manager.connection.cursor()
-        cursor.execute("SELECT path FROM files WHERE id = ?", (file_id,))
+        cursor.execute("SELECT path FROM files WHERE id = %s", (file_id,))
         row = cursor.fetchone()
         db_manager.close()
         return row[0] if row and row[0] else ""

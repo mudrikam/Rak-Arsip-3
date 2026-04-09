@@ -385,7 +385,11 @@ class WalletReportByTagsTab(QWidget):
             self.table.insertRow(row_idx)
             
             self.table.setItem(row_idx, 0, QTableWidgetItem(transaction.get('transaction_name', '')))
-            self.table.setItem(row_idx, 1, QTableWidgetItem(transaction.get('transaction_date', '')))
+            date_val = transaction.get('transaction_date', '')
+            from datetime import datetime as _dt, date as _date
+            if isinstance(date_val, (_dt, _date)):
+                date_val = date_val.strftime('%Y-%m-%d')
+            self.table.setItem(row_idx, 1, QTableWidgetItem(str(date_val) if date_val else ''))
             
             trans_type = transaction.get('transaction_type', '').title()
             type_item = QTableWidgetItem(trans_type)

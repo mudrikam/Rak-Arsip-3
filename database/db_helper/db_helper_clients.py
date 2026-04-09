@@ -1,4 +1,3 @@
-import sqlite3
 
 
 class DatabaseClientsHelper:
@@ -43,7 +42,7 @@ class DatabaseClientsHelper:
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
-            "INSERT INTO client (client_name, contact, links, status, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            "INSERT INTO client (client_name, contact, links, status, note, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
             (client_name, contact, links, status, note)
         )
         self.db_manager.connection.commit()
@@ -55,7 +54,7 @@ class DatabaseClientsHelper:
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
-            "UPDATE client SET client_name = ?, contact = ?, links = ?, status = ?, note = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            "UPDATE client SET client_name = %s, contact = %s, links = %s, status = %s, note = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
             (client_name, contact, links, status, note, client_id)
         )
         self.db_manager.connection.commit()
@@ -67,18 +66,18 @@ class DatabaseClientsHelper:
         """Get paginated files for specific client."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        where_clauses = ["fcp.client_id = ?"]
+        where_clauses = ["fcp.client_id = %s"]
         params = [client_id]
         
         if search_text:
             search_pattern = f"%{search_text}%"
             where_clauses.append(
-                "(f.name LIKE ? OR f.date LIKE ? OR ip.price LIKE ? OR s.name LIKE ? OR ip.note LIKE ?)"
+                "(f.name LIKE %s OR f.date LIKE %s OR ip.price LIKE %s OR s.name LIKE %s OR ip.note LIKE %s)"
             )
             params.extend([search_pattern] * 5)
         
         if batch_filter:
-            where_clauses.append("fcb.batch_number = ?")
+            where_clauses.append("fcb.batch_number = %s")
             params.append(batch_filter)
         
         join_batch = "LEFT JOIN file_client_batch fcb ON fcb.file_id = f.id AND fcb.client_id = fcp.client_id"
@@ -112,7 +111,7 @@ class DatabaseClientsHelper:
             {join_batch}
             {where_sql}
             ORDER BY {sort_sql} {order_sql}, f.date DESC
-            LIMIT ? OFFSET ?
+            LIMIT %s OFFSET %s
         """
         params.extend([limit, offset])
         cursor.execute(sql, params)
@@ -135,18 +134,18 @@ class DatabaseClientsHelper:
         """Count files for specific client with filters."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        where_clauses = ["fcp.client_id = ?"]
+        where_clauses = ["fcp.client_id = %s"]
         params = [client_id]
         
         if search_text:
             search_pattern = f"%{search_text}%"
             where_clauses.append(
-                "(f.name LIKE ? OR f.date LIKE ? OR ip.price LIKE ? OR s.name LIKE ? OR ip.note LIKE ?)"
+                "(f.name LIKE %s OR f.date LIKE %s OR ip.price LIKE %s OR s.name LIKE %s OR ip.note LIKE %s)"
             )
             params.extend([search_pattern] * 5)
         
         if batch_filter:
-            where_clauses.append("fcb.batch_number = ?")
+            where_clauses.append("fcb.batch_number = %s")
             params.append(batch_filter)
         
         join_batch = "LEFT JOIN file_client_batch fcb ON fcb.file_id = f.id AND fcb.client_id = fcp.client_id"
@@ -170,25 +169,25 @@ class DatabaseClientsHelper:
         """Sum prices for specific client with filters."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        where_clauses = ["fcp.client_id = ?"]
+        where_clauses = ["fcp.client_id = %s"]
         params = [client_id]
         
         if search_text:
             search_pattern = f"%{search_text}%"
             where_clauses.append(
-                "(f.name LIKE ? OR f.date LIKE ? OR ip.price LIKE ? OR s.name LIKE ? OR ip.note LIKE ?)"
+                "(f.name LIKE %s OR f.date LIKE %s OR ip.price LIKE %s OR s.name LIKE %s OR ip.note LIKE %s)"
             )
             params.extend([search_pattern] * 5)
         
         if batch_filter:
-            where_clauses.append("fcb.batch_number = ?")
+            where_clauses.append("fcb.batch_number = %s")
             params.append(batch_filter)
         
         join_batch = "LEFT JOIN file_client_batch fcb ON fcb.file_id = f.id AND fcb.client_id = fcp.client_id"
         where_sql = "WHERE " + " AND ".join(where_clauses)
         
         sql = f"""
-            SELECT SUM(CASE WHEN ip.price IS NOT NULL AND ip.price != '' THEN CAST(ip.price AS FLOAT) ELSE 0 END) as total_price,
+            SELECT SUM(CASE WHEN ip.price IS NOT NULL THEN CAST(ip.price AS NUMERIC) ELSE 0 END) as total_price,
                    MAX(ip.currency) as currency
             FROM file_client_price fcp
             JOIN files f ON fcp.file_id = f.id
@@ -212,7 +211,7 @@ class DatabaseClientsHelper:
             SELECT c.client_name
             FROM file_client_price fcp
             JOIN client c ON fcp.client_id = c.id
-            WHERE fcp.file_id = ?
+            WHERE fcp.file_id = %s
             LIMIT 1
         """, (file_id,))
         row = cursor.fetchone()
@@ -225,7 +224,7 @@ class DatabaseClientsHelper:
         """Get total file count for client."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT COUNT(*) FROM file_client_price WHERE client_id = ?", (client_id,))
+        cursor.execute("SELECT COUNT(*) FROM file_client_price WHERE client_id = %s", (client_id,))
         count = cursor.fetchone()[0]
         self.db_manager.close()
         return count
@@ -238,7 +237,7 @@ class DatabaseClientsHelper:
         assigned_client_id = None
         if item_price_id:
             cursor.execute(
-                "SELECT client_id FROM file_client_price WHERE file_id = ? AND item_price_id = ?",
+                "SELECT client_id FROM file_client_price WHERE file_id = %s AND item_price_id = %s",
                 (file_id, item_price_id)
             )
             row = cursor.fetchone()
@@ -252,7 +251,7 @@ class DatabaseClientsHelper:
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
-            "SELECT id FROM file_client_price WHERE file_id = ? AND item_price_id = ? AND client_id = ?",
+            "SELECT id FROM file_client_price WHERE file_id = %s AND item_price_id = %s AND client_id = %s",
             (file_id, item_price_id, client_id)
         )
         exists = cursor.fetchone()
@@ -262,7 +261,7 @@ class DatabaseClientsHelper:
             self.db_manager.connect()
             cursor = self.db_manager.connection.cursor()
             cursor.execute(
-                "INSERT INTO file_client_price (file_id, item_price_id, client_id, created_at, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                "INSERT INTO file_client_price (file_id, item_price_id, client_id, created_at, updated_at) VALUES (%s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
                 (file_id, item_price_id, client_id)
             )
             self.db_manager.connection.commit()
@@ -273,12 +272,12 @@ class DatabaseClientsHelper:
         """Update file-client relationship."""
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("DELETE FROM file_client_price WHERE file_id = ?", (file_id,))
+        cursor.execute("DELETE FROM file_client_price WHERE file_id = %s", (file_id,))
         self.db_manager.connection.commit()
         
         if client_id and item_price_id:
             cursor.execute(
-                "INSERT INTO file_client_price (file_id, item_price_id, client_id, created_at, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                "INSERT INTO file_client_price (file_id, item_price_id, client_id, created_at, updated_at) VALUES (%s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
                 (file_id, item_price_id, client_id)
             )
             self.db_manager.connection.commit()
@@ -291,7 +290,7 @@ class DatabaseClientsHelper:
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
-            "UPDATE file_client_batch SET client_id = ?, updated_at = CURRENT_TIMESTAMP WHERE file_id = ? AND client_id = ?",
+            "UPDATE file_client_batch SET client_id = %s, updated_at = CURRENT_TIMESTAMP WHERE file_id = %s AND client_id = %s",
             (new_client_id, file_id, old_client_id)
         )
         self.db_manager.connection.commit()
@@ -303,7 +302,7 @@ class DatabaseClientsHelper:
         """Add new batch number."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT COUNT(*) FROM batch_list WHERE batch_number = ?", (batch_number,))
+        cursor.execute("SELECT COUNT(*) FROM batch_list WHERE batch_number = %s", (batch_number,))
         exists = cursor.fetchone()[0]
         self.db_manager.close()
         if not exists:
@@ -312,7 +311,7 @@ class DatabaseClientsHelper:
             self.db_manager.connect()
             cursor = self.db_manager.connection.cursor()
             cursor.execute(
-                "INSERT INTO batch_list (batch_number, client_id, note, created_at, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                "INSERT INTO batch_list (batch_number, client_id, note, created_at, updated_at) VALUES (%s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
                 (batch_number, client_id, note)
             )
             self.db_manager.connection.commit()
@@ -324,7 +323,7 @@ class DatabaseClientsHelper:
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
-            "SELECT id FROM file_client_batch WHERE file_id = ? AND client_id = ?",
+            "SELECT id FROM file_client_batch WHERE file_id = %s AND client_id = %s",
             (file_id, client_id)
         )
         row = cursor.fetchone()
@@ -333,7 +332,7 @@ class DatabaseClientsHelper:
             self.db_manager.connect()
             cursor = self.db_manager.connection.cursor()
             cursor.execute(
-                "UPDATE file_client_batch SET batch_number = ?, note = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                "UPDATE file_client_batch SET batch_number = %s, note = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
                 (batch_number, note, row[0])
             )
             self.db_manager.connection.commit()
@@ -343,7 +342,7 @@ class DatabaseClientsHelper:
             self.db_manager.connect()
             cursor = self.db_manager.connection.cursor()
             cursor.execute(
-                "INSERT INTO file_client_batch (file_id, client_id, batch_number, note, created_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                "INSERT INTO file_client_batch (file_id, client_id, batch_number, note, created_at, updated_at) VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
                 (file_id, client_id, batch_number, note)
             )
             self.db_manager.connection.commit()
@@ -355,7 +354,7 @@ class DatabaseClientsHelper:
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
-            "SELECT batch_number FROM file_client_batch WHERE file_id = ? AND client_id = ? ORDER BY id DESC LIMIT 1",
+            "SELECT batch_number FROM file_client_batch WHERE file_id = %s AND client_id = %s ORDER BY id DESC LIMIT 1",
             (file_id, client_id)
         )
         row = cursor.fetchone()
@@ -368,7 +367,7 @@ class DatabaseClientsHelper:
         """Get batch list details."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT note, client_id, created_at FROM batch_list WHERE batch_number = ?", (batch_number,))
+        cursor.execute("SELECT note, client_id, created_at FROM batch_list WHERE batch_number = %s", (batch_number,))
         row = cursor.fetchone()
         self.db_manager.close()
         if row:
@@ -381,7 +380,7 @@ class DatabaseClientsHelper:
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
-            "UPDATE batch_list SET note = ?, client_id = ?, updated_at = CURRENT_TIMESTAMP WHERE batch_number = ?",
+            "UPDATE batch_list SET note = %s, client_id = %s, updated_at = CURRENT_TIMESTAMP WHERE batch_number = %s",
             (note, client_id, batch_number)
         )
         self.db_manager.connection.commit()
@@ -393,11 +392,11 @@ class DatabaseClientsHelper:
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
-            "UPDATE batch_list SET batch_number = ?, note = ?, client_id = ?, updated_at = CURRENT_TIMESTAMP WHERE batch_number = ?",
+            "UPDATE batch_list SET batch_number = %s, note = %s, client_id = %s, updated_at = CURRENT_TIMESTAMP WHERE batch_number = %s",
             (new_batch_number, note, client_id, old_batch_number)
         )
         cursor.execute(
-            "UPDATE file_client_batch SET batch_number = ?, updated_at = CURRENT_TIMESTAMP WHERE batch_number = ?",
+            "UPDATE file_client_batch SET batch_number = %s, updated_at = CURRENT_TIMESTAMP WHERE batch_number = %s",
             (new_batch_number, old_batch_number)
         )
         self.db_manager.connection.commit()
@@ -408,7 +407,7 @@ class DatabaseClientsHelper:
         """Count files in batch."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT COUNT(*) FROM file_client_batch WHERE batch_number = ?", (batch_number,))
+        cursor.execute("SELECT COUNT(*) FROM file_client_batch WHERE batch_number = %s", (batch_number,))
         count = cursor.fetchone()[0]
         self.db_manager.close()
         return count
@@ -417,8 +416,8 @@ class DatabaseClientsHelper:
         """Delete batch and all associated file-client-batch records."""
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("DELETE FROM file_client_batch WHERE batch_number = ?", (batch_number,))
-        cursor.execute("DELETE FROM batch_list WHERE batch_number = ?", (batch_number,))
+        cursor.execute("DELETE FROM file_client_batch WHERE batch_number = %s", (batch_number,))
+        cursor.execute("DELETE FROM batch_list WHERE batch_number = %s", (batch_number,))
         self.db_manager.connection.commit()
         self.db_manager.create_temp_file()
         self.db_manager.close()
@@ -428,7 +427,7 @@ class DatabaseClientsHelper:
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
-            "SELECT batch_number FROM file_client_batch WHERE file_id = ? AND client_id = ? ORDER BY id DESC LIMIT 1",
+            "SELECT batch_number FROM file_client_batch WHERE file_id = %s AND client_id = %s ORDER BY id DESC LIMIT 1",
             (file_id, client_id)
         )
         row = cursor.fetchone()
@@ -453,7 +452,7 @@ class DatabaseClientsHelper:
         """Get all batch numbers for a client."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT batch_number, note, created_at FROM batch_list WHERE client_id = ? ORDER BY batch_number ASC", (client_id,))
+        cursor.execute("SELECT batch_number, note, created_at FROM batch_list WHERE client_id = %s ORDER BY batch_number ASC", (client_id,))
         batch_numbers = []
         for row in cursor.fetchall():
             # Return as tuple (batch_number, note, created_at)
@@ -465,18 +464,18 @@ class DatabaseClientsHelper:
         """Get status-based statistics (count and total price) for specific client with filters."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        where_clauses = ["fcp.client_id = ?"]
+        where_clauses = ["fcp.client_id = %s"]
         params = [client_id]
         
         if search_text:
             search_pattern = f"%{search_text}%"
             where_clauses.append(
-                "(f.name LIKE ? OR f.date LIKE ? OR ip.price LIKE ? OR s.name LIKE ? OR ip.note LIKE ?)"
+                "(f.name LIKE %s OR f.date LIKE %s OR ip.price LIKE %s OR s.name LIKE %s OR ip.note LIKE %s)"
             )
             params.extend([search_pattern] * 5)
         
         if batch_filter:
-            where_clauses.append("fcb.batch_number = ?")
+            where_clauses.append("fcb.batch_number = %s")
             params.append(batch_filter)
         
         join_batch = "LEFT JOIN file_client_batch fcb ON fcb.file_id = f.id AND fcb.client_id = fcp.client_id"
@@ -486,7 +485,7 @@ class DatabaseClientsHelper:
             SELECT
                 s.name as status,
                 COUNT(*) as count,
-                SUM(CASE WHEN ip.price IS NOT NULL AND ip.price != '' THEN CAST(ip.price AS FLOAT) ELSE 0 END) as total_price
+                SUM(CASE WHEN ip.price IS NOT NULL THEN CAST(ip.price AS NUMERIC) ELSE 0 END) as total_price
             FROM file_client_price fcp
             JOIN files f ON fcp.file_id = f.id
             JOIN item_price ip ON fcp.item_price_id = ip.id
@@ -535,7 +534,7 @@ class DatabaseClientsHelper:
         cursor.execute("""
             SELECT 
                 ip.currency,
-                SUM(CASE WHEN ip.price IS NOT NULL AND ip.price != '' THEN CAST(ip.price AS REAL) ELSE 0 END) as total_value
+                SUM(CASE WHEN ip.price IS NOT NULL THEN CAST(ip.price AS NUMERIC) ELSE 0 END) as total_value
             FROM item_price ip
             WHERE ip.currency IS NOT NULL AND ip.currency != ''
             GROUP BY ip.currency
@@ -559,7 +558,7 @@ class DatabaseClientsHelper:
         """Get batch creation date from batch_list table."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        query = "SELECT created_at FROM batch_list WHERE batch_number = ? AND client_id = ?"
+        query = "SELECT created_at FROM batch_list WHERE batch_number = %s AND client_id = %s"
         cursor.execute(query, (batch_number, client_id))
         row = cursor.fetchone()
         self.db_manager.close()
@@ -575,11 +574,11 @@ class DatabaseClientsHelper:
         # Update files status for all files in the batch
         cursor.execute("""
             UPDATE files 
-            SET status_id = ?, updated_at = CURRENT_TIMESTAMP 
+            SET status_id = %s, updated_at = CURRENT_TIMESTAMP 
             WHERE id IN (
                 SELECT fcb.file_id 
                 FROM file_client_batch fcb 
-                WHERE fcb.batch_number = ? AND fcb.client_id = ?
+                WHERE fcb.batch_number = %s AND fcb.client_id = %s
             )
         """, (status_id, batch_number, client_id))
         
@@ -595,7 +594,7 @@ class DatabaseClientsHelper:
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
-            "UPDATE batch_list SET note = ?, updated_at = CURRENT_TIMESTAMP WHERE batch_number = ?",
+            "UPDATE batch_list SET note = %s, updated_at = CURRENT_TIMESTAMP WHERE batch_number = %s",
             ("Finished", batch_number)
         )
         self.db_manager.connection.commit()
@@ -618,7 +617,7 @@ class DatabaseClientsHelper:
         """Get all batch numbers for a client."""
         self.db_manager.connect(write=False)
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("SELECT batch_number, note, created_at FROM batch_list WHERE client_id = ? ORDER BY batch_number ASC", (client_id,))
+        cursor.execute("SELECT batch_number, note, created_at FROM batch_list WHERE client_id = %s ORDER BY batch_number ASC", (client_id,))
         batch_numbers = []
         for row in cursor.fetchall():
             # Return as tuple (batch_number, note, created_at)

@@ -341,13 +341,17 @@ class TransactionViewDialog(QDialog):
         self.lbl_name.setText(data.get('transaction_name', 'N/A'))
         
         # Format date
-        date_str = data.get('transaction_date', '')
-        if date_str:
+        date_val = data.get('transaction_date', '')
+        if date_val:
             try:
-                dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-                formatted_date = dt.strftime('%Y-%m-%d %H:%M')
+                from datetime import datetime, date
+                if isinstance(date_val, (datetime, date)):
+                    formatted_date = date_val.strftime('%Y-%m-%d %H:%M') if isinstance(date_val, datetime) else date_val.strftime('%Y-%m-%d')
+                else:
+                    dt = datetime.fromisoformat(str(date_val).replace('Z', '+00:00'))
+                    formatted_date = dt.strftime('%Y-%m-%d %H:%M')
             except:
-                formatted_date = date_str
+                formatted_date = str(date_val)
         else:
             formatted_date = 'N/A'
         self.lbl_date.setText(formatted_date)

@@ -278,8 +278,13 @@ class AttendanceHelper:
             hours = ""
             if check_in and check_out:
                 try:
-                    dt_in = datetime.strptime(check_in, "%Y-%m-%d %H:%M:%S")
-                    dt_out = datetime.strptime(check_out, "%Y-%m-%d %H:%M:%S")
+                    from datetime import datetime as _dt, date as _date
+                    def _to_dt(v):
+                        if isinstance(v, _dt): return v
+                        if isinstance(v, _date): return _dt.combine(v, _dt.min.time())
+                        return _dt.strptime(str(v), "%Y-%m-%d %H:%M:%S")
+                    dt_in = _to_dt(check_in)
+                    dt_out = _to_dt(check_out)
                     delta = dt_out - dt_in
                     hours_float = delta.total_seconds() / 3600
                     total_minutes = int(round(hours_float * 60))

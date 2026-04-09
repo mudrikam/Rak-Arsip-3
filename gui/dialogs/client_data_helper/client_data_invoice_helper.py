@@ -927,8 +927,12 @@ class ClientDataInvoiceHelper:
                 # Add creation date for new files
                 batch_creation_date = self.db_helper.get_batch_created_date(batch_number, client_id)
                 if batch_creation_date:
-                    from datetime import datetime
-                    created_datetime = datetime.fromisoformat(batch_creation_date.replace("Z", "+00:00") if batch_creation_date.endswith("Z") else batch_creation_date)
+                    from datetime import datetime, date
+                    if isinstance(batch_creation_date, (datetime, date)):
+                        created_datetime = batch_creation_date if isinstance(batch_creation_date, datetime) else datetime.combine(batch_creation_date, datetime.min.time())
+                    else:
+                        s = str(batch_creation_date)
+                        created_datetime = datetime.fromisoformat(s.replace("Z", "+00:00") if s.endswith("Z") else s)
                     creation_date = created_datetime.strftime("%m/%d/%Y")
                 else:
                     raise ValueError(f"Batch creation date not found for batch {batch_number} and client {client_id}")

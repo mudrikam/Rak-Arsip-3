@@ -783,7 +783,7 @@ class BatchManagementDialog(QDialog):
             ))
             
         # Sort ascending by created_at (oldest at top)
-        data.sort(key=lambda x: x[9] if x[9] else "", reverse=False)
+        data.sort(key=lambda x: x[9].isoformat() if hasattr(x[9], 'isoformat') else str(x[9]) if x[9] else "", reverse=False)
         
         # Calculate totals for header
         total_file_count = sum(d[1] for d in data)
@@ -1719,13 +1719,17 @@ class BatchManagementDialog(QDialog):
 
 def time_ago(dt_str):
     """Convert datetime string to 'x days ago' style."""
-    try:
-        dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
-    except Exception:
+    from datetime import datetime as _datetime, date as _date
+    if isinstance(dt_str, (_datetime, _date)):
+        dt = dt_str if isinstance(dt_str, _datetime) else _datetime(dt_str.year, dt_str.month, dt_str.day)
+    else:
         try:
-            dt = datetime.strptime(dt_str, "%Y-%m-%d")
+            dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
         except Exception:
-            return dt_str
+            try:
+                dt = datetime.strptime(dt_str, "%Y-%m-%d")
+            except Exception:
+                return str(dt_str)
     now = datetime.now()
     diff = now - dt
     seconds = diff.total_seconds()

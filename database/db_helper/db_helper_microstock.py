@@ -37,10 +37,11 @@ class DatabaseMicrostockHelper:
         cursor = self.db_manager.connection.cursor()
         cursor.execute("""
             INSERT INTO microstock_platforms (platform_name, platform_url, platform_description, platform_note)
-            VALUES (?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s)
+            RETURNING id
         """, (name, url, description, note))
+        last_id = cursor.fetchone()[0]
         self.db_manager.connection.commit()
-        last_id = cursor.lastrowid
         self.db_manager.close()
         return last_id
 
@@ -50,8 +51,8 @@ class DatabaseMicrostockHelper:
         cursor = self.db_manager.connection.cursor()
         cursor.execute("""
             UPDATE microstock_platforms
-            SET platform_name = ?, platform_url = ?, platform_description = ?, platform_note = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            SET platform_name = %s, platform_url = %s, platform_description = %s, platform_note = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
         """, (name, url, description, note, platform_id))
         self.db_manager.connection.commit()
         self.db_manager.close()
@@ -60,8 +61,8 @@ class DatabaseMicrostockHelper:
         """Delete a microstock platform and all related file assignments (cascade)."""
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
-        cursor.execute("DELETE FROM file_microstock_status WHERE platform_id = ?", (platform_id,))
-        cursor.execute("DELETE FROM microstock_platforms WHERE id = ?", (platform_id,))
+        cursor.execute("DELETE FROM file_microstock_status WHERE platform_id = %s", (platform_id,))
+        cursor.execute("DELETE FROM microstock_platforms WHERE id = %s", (platform_id,))
         self.db_manager.connection.commit()
         self.db_manager.close()
 
@@ -76,7 +77,7 @@ class DatabaseMicrostockHelper:
             FROM file_microstock_status fms
             JOIN microstock_platforms p ON fms.platform_id = p.id
             JOIN statuses s ON fms.status_id = s.id
-            WHERE fms.file_id = ?
+            WHERE fms.file_id = %s
             ORDER BY p.platform_name ASC
         """, (file_id,))
         rows = cursor.fetchall()
@@ -102,7 +103,7 @@ class DatabaseMicrostockHelper:
         cursor = self.db_manager.connection.cursor()
         cursor.execute("""
             INSERT INTO file_microstock_status (file_id, platform_id, status_id, note)
-            VALUES (?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s)
             ON CONFLICT(file_id, platform_id) DO UPDATE SET
                 status_id = excluded.status_id,
                 note = excluded.note,
@@ -116,7 +117,7 @@ class DatabaseMicrostockHelper:
         self.db_manager.connect()
         cursor = self.db_manager.connection.cursor()
         cursor.execute(
-            "DELETE FROM file_microstock_status WHERE file_id = ? AND platform_id = ?",
+            "DELETE FROM file_microstock_status WHERE file_id = %s AND platform_id = %s",
             (file_id, platform_id)
         )
         self.db_manager.connection.commit()
