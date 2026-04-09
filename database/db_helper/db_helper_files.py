@@ -139,7 +139,7 @@ class DatabaseFilesHelper:
         if search_query:
             search_pattern = f"%{search_query}%"
             where_clauses.append(
-                "(f.name LIKE %s OR f.path LIKE %s OR c.name LIKE %s OR sc.name LIKE %s)"
+                "(f.name ILIKE %s OR f.path ILIKE %s OR c.name ILIKE %s OR sc.name ILIKE %s)"
             )
             params.extend([search_pattern] * 4)
         
@@ -308,7 +308,7 @@ class DatabaseFilesHelper:
         if search_query:
             search_pattern = f"%{search_query}%"
             where_clauses.append(
-                "(f.name LIKE %s OR f.path LIKE %s OR c.name LIKE %s OR sc.name LIKE %s)"
+                "(f.name ILIKE %s OR f.path ILIKE %s OR c.name ILIKE %s OR sc.name ILIKE %s)"
             )
             params.extend([search_pattern] * 4)
         
