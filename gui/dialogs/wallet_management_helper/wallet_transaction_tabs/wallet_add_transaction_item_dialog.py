@@ -217,7 +217,12 @@ class WalletAddTransactionItemDialog(QDialog):
         self.input_license_key.setText(data.get("license_key", ""))
         
         if data.get("expiry_date"):
-            self.input_expiry_date.setDateTime(QDateTime.fromString(data["expiry_date"], "yyyy-MM-dd HH:mm"))
+            expiry_value = data["expiry_date"]
+            if isinstance(expiry_value, str):
+                expiry_str = expiry_value
+            else:
+                expiry_str = expiry_value.strftime("%Y-%m-%d %H:%M")
+            self.input_expiry_date.setDateTime(QDateTime.fromString(expiry_str, "yyyy-MM-dd HH:mm"))
         
         self.input_digital_type.setCurrentText(data.get("digital_type", ""))
         self.input_note.setPlainText(data.get("note", ""))

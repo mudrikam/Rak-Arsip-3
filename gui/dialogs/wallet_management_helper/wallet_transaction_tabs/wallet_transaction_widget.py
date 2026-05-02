@@ -1149,7 +1149,11 @@ class WalletTransactionWidget(QWidget):
             self.input_name.setText(transaction_details['name'])
         
         if transaction_details.get('transaction_date'):
-            date_str = transaction_details['transaction_date']
+            date_value = transaction_details['transaction_date']
+            if isinstance(date_value, str):
+                date_str = date_value
+            else:
+                date_str = date_value.strftime("%Y-%m-%d %H:%M")
             qdatetime = QDateTime.fromString(date_str, "yyyy-MM-dd HH:mm")
             if not qdatetime.isValid():
                 qdatetime = QDateTime.fromString(date_str, "yyyy-MM-dd")
@@ -1513,13 +1517,16 @@ class WalletTransactionWidget(QWidget):
             # Set edit mode
             self.edit_mode = True
             self.current_transaction_id = transaction_id
-            
             # Populate form
             self.input_name.setText(transaction['transaction_name'] or '')
-            
+
             # Set transaction date
             if transaction.get('transaction_date'):
-                date_str = transaction['transaction_date']
+                date_value = transaction['transaction_date']
+                if isinstance(date_value, str):
+                    date_str = date_value
+                else:
+                    date_str = date_value.strftime("%Y-%m-%d %H:%M")
                 qdatetime = QDateTime.fromString(date_str, "yyyy-MM-dd HH:mm")
                 if not qdatetime.isValid():
                     qdatetime = QDateTime.fromString(date_str, "yyyy-MM-dd")
