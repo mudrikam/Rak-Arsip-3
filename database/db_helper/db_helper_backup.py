@@ -1,6 +1,7 @@
 import os
 import csv
 from datetime import datetime
+import time
 from PySide6.QtCore import QTimer
 from helpers.show_statusbar_helper import show_statusbar_message, find_main_window
 
@@ -133,8 +134,16 @@ class DatabaseBackupHelper:
         lock_path = os.path.join(self.db_manager.temp_dir, "backup.lock")
 
         if os.path.exists(lock_path):
-            print("Backup already in progress by another session.")
-            return
+            lock_age = time.time() - os.path.getmtime(lock_path)
+            if lock_age > 7200:
+                try:
+                    os.remove(lock_path)
+                    print(f"Removed stale backup lock file (age: {lock_age/3600:.1f} hours)")
+                except Exception as e:
+                    print(f"[BACKUP] Failed to remove stale lock: {e}")
+            else:
+                print("Backup already in progress by another session.")
+                return
 
         self.cleanup_old_backups()
 
@@ -176,8 +185,16 @@ class DatabaseBackupHelper:
         lock_path = os.path.join(self.db_manager.temp_dir, "backup.lock")
 
         if os.path.exists(lock_path):
-            print("Backup already in progress by another session.")
-            return None
+            lock_age = time.time() - os.path.getmtime(lock_path)
+            if lock_age > 7200:
+                try:
+                    os.remove(lock_path)
+                    print(f"Removed stale backup lock file (age: {lock_age/3600:.1f} hours)")
+                except Exception as e:
+                    print(f"[BACKUP] Failed to remove stale lock: {e}")
+            else:
+                print("Backup already in progress by another session.")
+                return None
 
         self.cleanup_old_backups()
 
