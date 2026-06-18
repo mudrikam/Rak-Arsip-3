@@ -28,7 +28,7 @@ class DatabaseManager(QObject):
     data_changed = Signal()
     status_message = Signal(str, int)
     
-    def __init__(self, config_manager, window_config_manager, parent_widget=None, first_launch=False):
+    def __init__(self, config_manager, window_config_manager, parent_widget=None, first_launch=False, auto_initialize=True):
         super().__init__()
         self.config_manager = config_manager
         self.window_config_manager = window_config_manager
@@ -57,10 +57,11 @@ class DatabaseManager(QObject):
         self.wallet_helper = DatabaseWalletHelper(self)
         self.microstock_helper = DatabaseMicrostockHelper(self)
 
-        self.connection_helper.ensure_database_exists()
-        if first_launch:
-            self.backup_helper.auto_backup_database_hourly()
-        self.backup_helper.setup_auto_backup_timer()
+        if auto_initialize:
+            self.connection_helper.ensure_database_exists()
+            if first_launch:
+                self.backup_helper.auto_backup_database_hourly()
+            self.backup_helper.setup_auto_backup_timer()
 
     # Core connection methods - delegate to connection helper
     def connect(self, write=True):

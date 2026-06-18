@@ -15,13 +15,17 @@ class DatabasePollingHelper(QObject):
         self._poll_timer.timeout.connect(self._poll_notifications)
 
     def _create_connection(self):
-        return psycopg2.connect(
-            host=os.getenv('DB_HOST'),
-            port=os.getenv('DB_PORT'),
-            dbname=os.getenv('DB_NAME'),
-            user=os.getenv('DB_USER'),
-            password=os.getenv('DB_PASSWORD')
-        )
+        dsn = {
+            'host': os.getenv('DB_HOST'),
+            'port': os.getenv('DB_PORT'),
+            'dbname': os.getenv('DB_NAME'),
+            'user': os.getenv('DB_USER'),
+            'password': os.getenv('DB_PASSWORD')
+        }
+        sslmode = os.getenv('DB_SSLMODE')
+        if sslmode:
+            dsn['sslmode'] = sslmode
+        return psycopg2.connect(**dsn)
 
     def start_listening(self):
         try:

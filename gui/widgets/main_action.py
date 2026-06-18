@@ -724,3 +724,40 @@ class MainActionDock(QDockWidget):
 
     def get_current_color_hex(self):
         return self._color_hex_label.text()
+
+    def set_db_manager(self, db_manager):
+        self.db_manager = db_manager
+        if hasattr(self, '_name_field_widget') and self._name_field_widget is not None:
+            self._name_field_widget.set_db_manager(db_manager)
+        if db_manager is not None:
+            try:
+                self.db_manager.connect()
+                if hasattr(self, '_combo_category'):
+                    unique_cats, self._sanitized_cat_map = get_unique_sanitized_categories(self.db_manager)
+                    self._combo_category.blockSignals(True)
+                    self._combo_category.clear()
+                    self._combo_category.addItem("")
+                    self._combo_category.addItems(unique_cats)
+                    self._combo_category.blockSignals(False)
+                if hasattr(self, '_combo_subcategory'):
+                    self._combo_subcategory.blockSignals(True)
+                    self._combo_subcategory.clear()
+                    self._combo_subcategory.addItem("")
+                    self._combo_subcategory.setEnabled(False)
+                    self._combo_subcategory.blockSignals(False)
+                if hasattr(self, '_combo_template'):
+                    self._combo_template.blockSignals(True)
+                    self._combo_template.clear()
+                    self._combo_template.addItem("No Template")
+                    templates = self.db_manager.get_all_templates()
+                    for template in templates:
+                        self._combo_template.addItem(template['name'])
+                        self._combo_template.setItemData(self._combo_template.count() - 1, template['id'])
+                    self._combo_template.blockSignals(False)
+            except Exception as e:
+                print(f"Error rebinding main action database manager: {e}")
+            finally:
+                try:
+                    self.db_manager.close()
+                except Exception:
+                    pass

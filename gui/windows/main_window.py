@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QMainWindow, QApplication, QWidget, QStatusBar, QLabel, QHBoxLayout, QDockWidget, QVBoxLayout
+from PySide6.QtWidgets import QMainWindow, QApplication, QWidget, QStatusBar, QLabel, QHBoxLayout, QDockWidget, QVBoxLayout, QDialog
 from PySide6.QtCore import Qt, QRect, QCoreApplication, QTimer
 from helpers.window_helper import get_window_config, set_app_user_model_id, set_window_icon
 from gui.widgets.main_menu import MainMenu
@@ -7,6 +7,7 @@ from gui.widgets.central_widget import CentralWidget
 from gui.widgets.properties_widget import PropertiesWidget
 from gui.widgets.attendance_bar import AttendanceBar
 from helpers.show_statusbar_helper import get_datetime_string
+from gui.dialogs.database_setup_dialog import DatabaseSetupDialog
 from database.db_manager import DatabaseManager
 from manager.config_manager import ConfigManager
 from pathlib import Path
@@ -27,12 +28,13 @@ class MainWindow(QMainWindow):
 
         db_config_path = Path(basedir) / "configs" / "db_config.json"
         self.db_config_manager = ConfigManager(str(db_config_path))
-
-        self.db_manager = DatabaseManager(self.db_config_manager, self.config_manager, parent_widget=self, first_launch=True)
+        self.db_manager = None
 
         self.menu_bar = MainMenu(self.config_manager, self)
         self.setMenuBar(self.menu_bar)
         self.menu_bar.exit_action.triggered.connect(self.close)
+
+        self._initialize_database(first_launch=self.db_config_manager.is_first_install())
 
         self.main_action_dock = MainActionDock(self.config_manager, self, db_manager=self.db_manager)
         self.addDockWidget(Qt.TopDockWidgetArea, self.main_action_dock)
@@ -75,6 +77,88 @@ class MainWindow(QMainWindow):
         self.db_manager.status_message.connect(self._update_query_time)
 
     
+    def _create_db_manager(self, auto_initialize=True, first_launch=False):
+        return DatabaseManager(
+            self.db_config_manager,
+            self.config_manager,
+            parent_widget=self,
+            first_launch=first_launch,
+            auto_initialize=auto_initialize,
+        )
+
+    def _initialize_database(self, first_launch=False):
+        if first_launch:
+            result = self.open_database_setup_dialog(first_launch=True)
+            if result != QDialog.DialogCode.Accepted:
+                raise RuntimeError("Database setup was cancelled before the application could be used.")
+
+        self.db_manager = self._create_db_manager(auto_initialize=True, first_launch=first_launch)
+
+    def open_database_setup_dialog(self, first_launch=False):
+        old_signature = self._get_current_db_signature()
+        result = DatabaseSetupDialog.open_dialog(
+            basedir=self.basedir,
+            db_manager_factory=lambda: self._create_db_manager(auto_initialize=False, first_launch=first_launch),
+            parent=self,
+            first_launch=first_launch,
+        )
+        if result == QDialog.DialogCode.Accepted and not first_launch:
+            new_signature = self._get_current_db_signature()
+            if new_signature != old_signature:
+                self.reload_database_connection()
+        return result
+
+    def _get_current_db_signature(self):
+        env_path = Path(self.basedir) / ".env"
+        signature = []
+        if env_path.exists():
+            try:
+                with open(env_path, "r", encoding="utf-8") as env_file:
+                    for line in env_file:
+                        line = line.strip()
+                        if line.startswith(("DB_HOST=", "DB_PORT=", "DB_NAME=", "DB_USER=", "DB_PASSWORD=", "DB_SSLMODE=")):
+                            signature.append(line)
+            except Exception:
+                pass
+        return tuple(signature)
+
+    def reload_database_connection(self):
+        old_db_manager = self.db_manager
+        if old_db_manager is not None:
+            try:
+                old_db_manager.status_message.disconnect(self._update_query_time)
+            except Exception:
+                pass
+        new_db_manager = self._create_db_manager(auto_initialize=True, first_launch=False)
+        self.db_manager = new_db_manager
+
+        if hasattr(self, "main_action_dock") and self.main_action_dock is not None:
+            self.main_action_dock.set_db_manager(new_db_manager)
+
+        if hasattr(self, "attendance_bar") and self.attendance_bar is not None:
+            self.attendance_bar.set_db_manager(new_db_manager)
+
+        if hasattr(self, "central_widget") and self.central_widget is not None:
+            self.central_widget.set_db_manager(new_db_manager)
+            self.central_widget.selected_row_data = None
+            self.central_widget._selected_row_index = None
+            self.central_widget._pending_row_data = None
+            self.central_widget.refresh_table()
+
+        if hasattr(self, "properties_widget") and self.properties_widget is not None:
+            self.properties_widget.clear_properties()
+
+        try:
+            self.db_manager.status_message.connect(self._update_query_time)
+        except Exception:
+            pass
+
+        if old_db_manager is not None:
+            try:
+                old_db_manager.shutdown()
+            except Exception:
+                pass
+
     def _setup_development_mode(self):
         env_path = Path(self.basedir) / ".env"
         if env_path.exists():

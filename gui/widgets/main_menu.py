@@ -6,6 +6,7 @@ import webbrowser
 from gui.dialogs.about_dialog import AboutDialog
 from gui.windows.preferences_window import PreferencesWindow
 from gui.dialogs.client_data_dialog import ClientDataDialog
+from gui.dialogs.database_setup_dialog import DatabaseSetupDialog
 import sys
 import os
 
@@ -16,9 +17,11 @@ class MainMenu(QMenuBar):
 
         file_menu = QMenu("File", self)
         self.preferences_action = QAction(qta.icon('fa6s.gear'), "Preferences", self)
+        self.database_config_action = QAction(qta.icon('fa6s.database'), "Database Config", self)
         self.relaunch_action = QAction(qta.icon('fa6s.rotate-right'), "Relaunch", self)
         self.exit_action = QAction(qta.icon('fa6s.right-from-bracket'), "Exit", self)
         file_menu.addAction(self.preferences_action)
+        file_menu.addAction(self.database_config_action)
         file_menu.addAction(self.relaunch_action)
         file_menu.addAction(self.exit_action)
         self.addMenu(file_menu)
@@ -68,6 +71,7 @@ class MainMenu(QMenuBar):
         self.exit_action.triggered.connect(self.close_app)
         self.relaunch_action.triggered.connect(self.relaunch_app)
         self.preferences_action.triggered.connect(self.show_preferences)
+        self.database_config_action.triggered.connect(self.show_database_config)
         self.about_action.triggered.connect(self.show_about)
         self.repo_action.triggered.connect(self.open_repo)
 
@@ -162,6 +166,12 @@ class MainMenu(QMenuBar):
         from database.db_manager import DatabaseManager
         from manager.config_manager import ConfigManager
 
+        parent = self.parent()
+        if parent is not None and getattr(parent, 'db_manager', None) is not None:
+            dialog = PreferencesWindow(self.config_manager, parent.db_manager, self)
+            dialog.exec()
+            return
+
         basedir = Path(__file__).parent.parent.parent
         db_config_path = basedir / "configs" / "db_config.json"
         db_config_manager = ConfigManager(str(db_config_path))
@@ -169,6 +179,16 @@ class MainMenu(QMenuBar):
 
         dialog = PreferencesWindow(self.config_manager, db_manager, self)
         dialog.exec()
+
+    def show_database_config(self):
+        parent = self.parent()
+        if parent and hasattr(parent, "open_database_setup_dialog"):
+            parent.open_database_setup_dialog(first_launch=False)
+            return
+
+        basedir = getattr(parent, 'basedir', None)
+        if basedir:
+            DatabaseSetupDialog.open_dialog(basedir=basedir, parent=self, first_launch=False)
 
     def show_about(self):
         about_config = self.config_manager.get("about")

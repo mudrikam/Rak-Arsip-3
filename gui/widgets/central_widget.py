@@ -332,6 +332,19 @@ class CentralWidget(QWidget):
         self._category_changed = False
         self._subcategory_changed = False
 
+    def set_db_manager(self, db_manager):
+        if getattr(self, "db_manager", None) is not None:
+            try:
+                self.db_manager.data_changed.disconnect(self.auto_refresh_table)
+            except Exception:
+                pass
+        self.db_manager = db_manager
+        if self.db_manager is not None:
+            try:
+                self.db_manager.data_changed.connect(self.auto_refresh_table)
+            except Exception:
+                pass
+
     def _emit_row_selected(self):
         if self._pending_row_data:
             try:

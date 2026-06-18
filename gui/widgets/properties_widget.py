@@ -939,3 +939,18 @@ class PropertiesWidget(QDockWidget):
         self._tooltip_image_label.hide()
         self._hide_image_nav_widget()
         self._is_loading = False
+
+    def clear_properties(self):
+        self._current_row_data = None
+        self.date_label.setText("-")
+        self.root_label.setText("-")
+        self.name_label.setText("-")
+        self.cat_combined_label.setText("-")
+        self.status_label.setText("-")
+        self.status_label.setStyleSheet("")
+        self.batch_label.setText("-")
+        self.shares_label.setText("-")
+        self.shares_amount_label.setText("-")
+        self.price_label.setText("-")
+        self.note_label.setText("-")
+        self.set_no_preview()

@@ -162,3 +162,17 @@ class AttendanceBar(QWidget):
             empty_label.setToolTip("No team members present")
             self.profiles_layout.addWidget(empty_label)
             self.profile_labels.append(empty_label)
+
+    def set_db_manager(self, db_manager):
+        if getattr(self, "db_manager", None) is not None:
+            try:
+                self.db_manager.data_changed.disconnect(self.refresh_attendance)
+            except Exception:
+                pass
+        self.db_manager = db_manager
+        if self.db_manager is not None:
+            try:
+                self.db_manager.data_changed.connect(self.refresh_attendance)
+            except Exception:
+                pass
+        self.refresh_attendance()

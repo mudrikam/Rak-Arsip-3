@@ -12,36 +12,41 @@ class DatabaseConnectionHelper(QObject):
         self.db_manager = db_manager
         self.query_start_time = None
 
-    def _get_dsn(self):
-        return {
+    def _get_dsn(self, dbname_override=None):
+        dsn = {
             'host': os.getenv('DB_HOST'),
             'port': os.getenv('DB_PORT'),
-            'dbname': os.getenv('DB_NAME'),
+            'dbname': dbname_override or os.getenv('DB_NAME'),
             'user': os.getenv('DB_USER'),
             'password': os.getenv('DB_PASSWORD'),
         }
+        sslmode = os.getenv('DB_SSLMODE')
+        if sslmode:
+            dsn['sslmode'] = sslmode
+        return dsn
 
     def ensure_database_exists(self):
         os.makedirs(self.db_manager.temp_dir, exist_ok=True)
 
         dbname = os.getenv('DB_NAME')
-        dsn_maintenance = {
-            'host': os.getenv('DB_HOST'),
-            'port': os.getenv('DB_PORT'),
-            'dbname': 'postgres',
-            'user': os.getenv('DB_USER'),
-            'password': os.getenv('DB_PASSWORD'),
-        }
+        dsn_maintenance = self._get_dsn(dbname_override='postgres')
         try:
             maint_conn = psycopg2.connect(**dsn_maintenance)
             maint_conn.autocommit = True
             cursor = maint_conn.cursor()
             cursor.execute("SELECT 1 FROM pg_database WHERE datname = %s", (dbname,))
             exists = cursor.fetchone()
-            if not exists:
+            current_host = (os.getenv('DB_HOST') or '').strip().lower()
+            can_create_database = current_host in {'', 'localhost', '127.0.0.1'}
+            if not exists and can_create_database:
                 print(f"[DB] Database '{dbname}' not found, creating...")
                 cursor.execute(f'CREATE DATABASE "{dbname}"')
                 print(f"[DB] Database '{dbname}' created successfully")
+            elif not exists:
+                raise RuntimeError(
+                    f"Database '{dbname}' tidak ditemukan pada host '{current_host}'. "
+                    "Buat database tersebut terlebih dahulu di layanan remote Anda, lalu ulangi koneksi."
+                )
             cursor.close()
             maint_conn.close()
         except Exception as e:

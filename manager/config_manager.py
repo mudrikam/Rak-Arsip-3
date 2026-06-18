@@ -1,7 +1,7 @@
 import json
 import os
 from pathlib import Path
-from dotenv import load_dotenv, set_key
+from dotenv import dotenv_values, load_dotenv, set_key
 
 class ConfigManager:
     def __init__(self, config_path):
@@ -36,7 +36,8 @@ class ConfigManager:
             "DB_PORT": "5432",
             "DB_NAME": "db_rak_arsip",
             "DB_USER": "postgres",
-            "DB_PASSWORD": ""
+            "DB_PASSWORD": "",
+            "DB_SSLMODE": "prefer"
         }
 
         if not env_path.exists():
@@ -84,3 +85,45 @@ class ConfigManager:
     def save(self):
         with open(self.config_path, "w", encoding="utf-8") as f:
             json.dump(self._config, f, indent=4)
+
+    def get_env_path(self):
+        config_path = Path(self.config_path)
+        return config_path.parent.parent / ".env"
+
+    def has_valid_db_config(self):
+        env_path = self.get_env_path()
+        if not env_path.exists():
+            return False
+
+        env_values = dotenv_values(env_path)
+        required_keys = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER"]
+        for key in required_keys:
+            if not (env_values.get(key) or "").strip():
+                return False
+
+        port = (env_values.get("DB_PORT") or "").strip()
+        return port.isdigit() and 1 <= int(port) <= 65535 and not self.is_default_db_config(env_values)
+
+    def is_default_db_config(self, env_values=None):
+        env_values = env_values or dotenv_values(self.get_env_path())
+        defaults = {
+            "DB_HOST": "localhost",
+            "DB_PORT": "5432",
+            "DB_NAME": "db_rak_arsip",
+            "DB_USER": "postgres",
+            "DB_PASSWORD": "",
+            "DB_SSLMODE": "prefer",
+        }
+        for key, default_value in defaults.items():
+            current_value = (env_values.get(key) or "").strip()
+            if current_value != default_value:
+                return False
+        return True
+
+    def is_first_install(self):
+        env_path = self.get_env_path()
+        if not env_path.exists():
+            return True
+
+        env_values = dotenv_values(env_path)
+        return self.is_default_db_config(env_values) or not self.has_valid_db_config()
