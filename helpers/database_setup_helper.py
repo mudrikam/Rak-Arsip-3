@@ -181,6 +181,8 @@ class DatabaseSetupHelper:
             hints.append("The database username or password is invalid.")
         if "no pg_hba.conf entry" in message.lower() or "ssl" in message.lower():
             hints.append("Try adjusting the SSL mode. Supabase usually requires sslmode=require.")
+        if "was not found on host" in message.lower():
+            hints.append("Create the target database on your remote PostgreSQL server before saving.")
         if host.endswith("supabase.co") and sslmode != "require":
             hints.append("For Supabase, use SSL mode 'require'.")
 

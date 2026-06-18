@@ -44,8 +44,8 @@ class DatabaseConnectionHelper(QObject):
                 print(f"[DB] Database '{dbname}' created successfully")
             elif not exists:
                 raise RuntimeError(
-                    f"Database '{dbname}' tidak ditemukan pada host '{current_host}'. "
-                    "Buat database tersebut terlebih dahulu di layanan remote Anda, lalu ulangi koneksi."
+                    f"Database '{dbname}' was not found on host '{current_host}'. "
+                    "Please create the database on your remote service first, then retry the connection."
                 )
             cursor.close()
             maint_conn.close()

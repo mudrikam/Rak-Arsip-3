@@ -32,7 +32,7 @@ class DatabaseSetupDialog(QDialog):
             self.setWindowIcon(parent.windowIcon())
         self.setModal(True)
         self.setWindowFlag(Qt.WindowStaysOnTopHint, True)
-        self.resize(520, 0)
+        self.resize(420, 0)
 
         self._build_ui()
         self._load_current_values()
@@ -114,11 +114,11 @@ class DatabaseSetupDialog(QDialog):
         save_button = self.button_box.button(QDialogButtonBox.Save)
         cancel_button = self.button_box.button(QDialogButtonBox.Cancel)
         if save_button is not None:
-            save_button.setText("Save & Connect")
+            save_button.setText("Save Connection")
             save_button.setIcon(qta.icon("fa6s.floppy-disk"))
         if cancel_button is not None:
             cancel_button.setIcon(qta.icon("fa6s.xmark"))
-        self.button_box.accepted.connect(self.save_and_connect)
+        self.button_box.accepted.connect(self.save_connection)
         self.button_box.rejected.connect(self.reject)
         layout.addWidget(self.button_box)
 
@@ -242,7 +242,7 @@ class DatabaseSetupDialog(QDialog):
             self.status_label.setText(message)
             self.status_label.setStyleSheet("color: #d32f2f; font-weight: bold;")
 
-    def save_and_connect(self):
+    def save_connection(self):
         config = self._collect_form_values()
         errors = self.helper.validate_config(config)
         if errors:
@@ -275,10 +275,10 @@ class DatabaseSetupDialog(QDialog):
                 QMessageBox.critical(self, "Database Setup Failed", message)
                 return
 
-        details = f"Saved to .env: {config['host']}:{config['port']} / {config['database']} / sslmode={config['sslmode']}"
+        details = f"Connection saved to .env: {config['host']}:{config['port']} / {config['database']} / sslmode={config['sslmode']}"
         self.status_label.setText(details)
         self.status_label.setStyleSheet("color: #43a047; font-weight: bold;")
-        QMessageBox.information(self, "Database Saved", details)
+        QMessageBox.information(self, "Database Connection Saved", details)
         self.accept()
 
     @staticmethod
