@@ -27,10 +27,17 @@ class ConfigManager:
 
         defaults = {
             "DEVELOPMENT": False,
+            "AI_PROVIDER": "gemini",
+            "AI_API_KEY": "",
+            "AI_MODEL": "",
+            "AI_BASE_URL": "",
             "GEMINI_API_KEY": "",
             "GEMINI_MODEL": "",
             "GEMINI_MAX_TOKENS": "",
             "GEMINI_TEMPERATURE": "",
+            "OPENAI_API_KEY": "",
+            "OPENAI_MODEL": "",
+            "OPENAI_BASE_URL": "",
             "GOOGLE_DRIVE_CREDENTIALS_PATH": "",
             "DB_HOST": "localhost",
             "DB_PORT": "5432",

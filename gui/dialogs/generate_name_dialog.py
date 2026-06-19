@@ -200,7 +200,7 @@ class GenerateNameDialog(QDialog):
         dialog_buttons = QHBoxLayout()
         self.test_api_btn = QPushButton()
         self.test_api_btn.setIcon(qta.icon("fa6s.plug-circle-check"))
-        self.test_api_btn.setToolTip("Test Gemini API Key")
+        self.test_api_btn.setToolTip("Test AI Provider Connection")
         self.test_api_btn.clicked.connect(self.test_gemini_api)
         self.api_status_label = QLabel("")
         self.api_status_label.setStyleSheet("color: #1976d2; font-weight: bold;")
@@ -234,40 +234,23 @@ class GenerateNameDialog(QDialog):
 
     def test_gemini_api(self):
         try:
-            api_key = os.getenv("GEMINI_API_KEY", "")
+            provider = self.gemini_helper.get_provider()
+            api_key = self.gemini_helper.get_effective_api_key()
+            model = self.gemini_helper.get_effective_model()
+            base_url = self.gemini_helper.get_effective_base_url()
             if not api_key:
                 self.api_status_label.setText("API Key is empty.")
                 self.api_status_label.setStyleSheet("color: #d32f2f; font-weight: bold;")
-                show_statusbar_message(self, "Gemini API Key is empty.")
+                show_statusbar_message(self, "AI API Key is empty.")
                 return
-            try:
-                import google.genai as genai
-                from google.genai import types
-                client = genai.Client(api_key=api_key)
-                response = client.models.generate_content(
-                    model=os.getenv("GEMINI_MODEL", "gemini-2.0-flash"),
-                    contents=["Say hello"]
-                )
-                if hasattr(response, "text") and response.text:
-                    self.api_status_label.setText("Gemini API is active.")
-                    self.api_status_label.setStyleSheet("color: #43a047; font-weight: bold;")
-                    show_statusbar_message(self, "Gemini API is active.")
-                else:
-                    self.api_status_label.setText("No response from Gemini API.")
-                    self.api_status_label.setStyleSheet("color: #d32f2f; font-weight: bold;")
-                    show_statusbar_message(self, "No response from Gemini API.")
-            except ImportError:
-                self.api_status_label.setText("google-genai not installed.")
-                self.api_status_label.setStyleSheet("color: #d32f2f; font-weight: bold;")
-                show_statusbar_message(self, "google-genai not installed.")
-            except Exception as e:
-                self.api_status_label.setText(f"Error: {e}")
-                self.api_status_label.setStyleSheet("color: #d32f2f; font-weight: bold;")
-                show_statusbar_message(self, f"Gemini API error: {e}")
+            self.gemini_helper.test_connection(api_key=api_key, provider=provider, model=model, base_url=base_url)
+            self.api_status_label.setText(f"AI provider '{provider}' is active.")
+            self.api_status_label.setStyleSheet("color: #43a047; font-weight: bold;")
+            show_statusbar_message(self, f"AI provider '{provider}' is active.")
         except Exception as e:
             self.api_status_label.setText(f"Error: {e}")
             self.api_status_label.setStyleSheet("color: #d32f2f; font-weight: bold;")
-            show_statusbar_message(self, f"Gemini API error: {e}")
+            show_statusbar_message(self, f"AI provider error: {e}")
 
     def on_paste_clicked(self):
         clipboard = QGuiApplication.clipboard()
