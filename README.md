@@ -5,7 +5,7 @@ A desktop archive management application with features for file categorization, 
 ## Features 🚀
 
 - **File Management** - Organize files by categories, subcategories, and statuses
-- **Template System** - Create reusable templates for file metadata
+- **Template System** - Create folder structure templates for organizing files
 - **Batch Tracking** - Group files into batches for client projects
 - **Client Management** - Manage client information and pricing
 - **Wallet System** - Track pockets, cards, and financial transactions
@@ -21,7 +21,7 @@ A desktop archive management application with features for file categorization, 
 ## Installation 💿
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/mudrikam/Rak-Arsip-3.git
 cd Rak-Arsip-3
 pip install -r requirements.txt
 ```
@@ -36,7 +36,7 @@ DB_PORT=5432
 DB_NAME=rakarsip
 DB_USER=your_username
 DB_PASSWORD=your_password
-DB_SSLMODE=prefer  # Optional
+# DB_SSLMODE=disable  # Optional: 'disable', 'require', 'verify-full', 'prefer'
 ```
 
 ### Initial Setup 🔧
@@ -73,13 +73,15 @@ Main tables:
 |-------|-------------|
 | `files` | Archived files with metadata |
 | `categories` / `subcategories` | File organization hierarchy |
-| `statuses` | File status tracking |
-| `templates` | Reusable file metadata templates |
+| `statuses` | File status tracking (Draft, Active, etc.) |
+| `templates` | Folder structure templates (stores subfolder paths) |
 | `client` | Client information |
 | `batch_list` | Project batch grouping |
 | `teams` | User/team member management |
 | `wallet_pockets` / `wallet_cards` | Financial accounts |
 | `wallet_transactions` | Transaction records |
+| `microstock_platforms` | Microstock platform settings |
+| `file_microstock_status` | File upload status per platform |
 
 Run migrations are in `database/migrations/` and apply automatically on startup.
 
