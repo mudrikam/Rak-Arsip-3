@@ -5,11 +5,14 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QFrame,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -32,7 +35,8 @@ class DatabaseSetupDialog(QDialog):
             self.setWindowIcon(parent.windowIcon())
         self.setModal(True)
         self.setWindowFlag(Qt.WindowStaysOnTopHint, True)
-        self.resize(420, 0)
+        self.resize(520, 0)
+        self.setMinimumWidth(500)
 
         self._build_ui()
         self._load_current_values()
@@ -40,36 +44,67 @@ class DatabaseSetupDialog(QDialog):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(12)
+
+        header_layout = QVBoxLayout()
+        header_layout.setSpacing(4)
+
+        title_label = QLabel("Configure Database Connection")
+        title_label.setStyleSheet("font-size: 16px; font-weight: 600;")
+        header_layout.addWidget(title_label)
 
         intro = QLabel(
             "Configure a PostgreSQL connection for local installs, Supabase, or other PostgreSQL-compatible services."
         )
         intro.setWordWrap(True)
-        layout.addWidget(intro)
+        intro.setStyleSheet("color: #555;")
+        header_layout.addWidget(intro)
+        layout.addLayout(header_layout)
+
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setFrameShadow(QFrame.Sunken)
+        layout.addWidget(separator)
+
+        connection_group = QGroupBox("Connection Settings")
+        connection_layout = QVBoxLayout(connection_group)
+        connection_layout.setContentsMargins(12, 12, 12, 12)
+        connection_layout.setSpacing(10)
 
         form_layout = QFormLayout()
-        form_layout.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        form_layout.setContentsMargins(0, 0, 0, 0)
+        form_layout.setHorizontalSpacing(12)
+        form_layout.setVerticalSpacing(10)
+        form_layout.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         form_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
 
         self.connection_type_combo = QComboBox()
         self.connection_type_combo.addItem("Local PostgreSQL", "local")
         self.connection_type_combo.addItem("Supabase", "supabase")
         self.connection_type_combo.addItem("Custom", "custom")
+        self.connection_type_combo.setMinimumHeight(32)
         self.connection_type_combo.currentIndexChanged.connect(self._apply_selected_preset)
         form_layout.addRow(self._make_label("Connection Type", "fa6s.server"), self.connection_type_combo)
 
         self.host_edit = QLineEdit()
         self.host_edit.setPlaceholderText("localhost or db.project.supabase.co")
+        self.host_edit.setMinimumHeight(32)
         form_layout.addRow(self._make_label("Host", "fa6s.network-wired"), self._create_paste_field(self.host_edit))
 
         self.port_edit = QLineEdit()
         self.port_edit.setPlaceholderText("5432")
+        self.port_edit.setMinimumHeight(32)
         form_layout.addRow(self._make_label("Port", "fa6s.plug"), self._create_paste_field(self.port_edit))
 
         self.database_edit = QLineEdit()
+        self.database_edit.setPlaceholderText("db_rak_arsip")
+        self.database_edit.setMinimumHeight(32)
         form_layout.addRow(self._make_label("Database Name", "fa6s.database"), self._create_paste_field(self.database_edit))
 
         self.username_edit = QLineEdit()
+        self.username_edit.setPlaceholderText("postgres")
+        self.username_edit.setMinimumHeight(32)
         form_layout.addRow(self._make_label("Username", "fa6s.user"), self._create_paste_field(self.username_edit))
 
         password_widget = QWidget()
@@ -78,10 +113,12 @@ class DatabaseSetupDialog(QDialog):
         password_layout.setSpacing(6)
         self.password_edit = QLineEdit()
         self.password_edit.setEchoMode(QLineEdit.Password)
+        self.password_edit.setPlaceholderText("Database password")
+        self.password_edit.setMinimumHeight(32)
         self.password_paste_btn = self._create_paste_button(self.password_edit)
         self.password_toggle_btn = QPushButton(qta.icon("fa6s.eye"), "")
         self.password_toggle_btn.setCheckable(True)
-        self.password_toggle_btn.setFixedWidth(32)
+        self.password_toggle_btn.setFixedSize(32, 32)
         self.password_toggle_btn.clicked.connect(self._toggle_password_visibility)
         password_layout.addWidget(self.password_edit)
         password_layout.addWidget(self.password_paste_btn)
@@ -89,23 +126,32 @@ class DatabaseSetupDialog(QDialog):
         form_layout.addRow(self._make_label("Password", "fa6s.key"), password_widget)
 
         self.sslmode_combo = QComboBox()
+        self.sslmode_combo.setMinimumHeight(32)
         for mode in self.helper.SSL_MODES:
             self.sslmode_combo.addItem(mode)
         form_layout.addRow(self._make_label("SSL Mode", "fa6s.lock"), self.sslmode_combo)
 
-        layout.addLayout(form_layout)
+        connection_layout.addLayout(form_layout)
+        layout.addWidget(connection_group)
 
-        self.status_label = QLabel("")
+        status_group = QGroupBox("Connection Status")
+        status_layout = QVBoxLayout(status_group)
+        status_layout.setContentsMargins(12, 12, 12, 12)
+        status_layout.setSpacing(8)
+
+        self.status_label = QLabel("Ready to test and save the connection.")
         self.status_label.setWordWrap(True)
+        self.status_label.setMinimumHeight(42)
+        self.status_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.status_label.setStyleSheet("color: #1976d2; font-weight: bold;")
-        layout.addWidget(self.status_label)
+        status_layout.addWidget(self.status_label)
 
-        button_row = QHBoxLayout()
+        layout.addWidget(status_group)
+
         self.test_button = QPushButton(qta.icon("fa6s.plug-circle-check"), "Test Connection")
+        self.test_button.setMinimumHeight(34)
+        self.test_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.test_button.clicked.connect(self.test_connection)
-        button_row.addWidget(self.test_button)
-        button_row.addStretch()
-        layout.addLayout(button_row)
 
         self.button_box = QDialogButtonBox(
             QDialogButtonBox.Save | QDialogButtonBox.Cancel,
@@ -116,22 +162,36 @@ class DatabaseSetupDialog(QDialog):
         if save_button is not None:
             save_button.setText("Save Connection")
             save_button.setIcon(qta.icon("fa6s.floppy-disk"))
+            save_button.setMinimumHeight(34)
         if cancel_button is not None:
             cancel_button.setIcon(qta.icon("fa6s.xmark"))
+            cancel_button.setMinimumHeight(34)
         self.button_box.accepted.connect(self.save_connection)
         self.button_box.rejected.connect(self.reject)
-        layout.addWidget(self.button_box)
+
+        footer_row = QHBoxLayout()
+        footer_row.setContentsMargins(0, 0, 0, 0)
+        footer_row.setSpacing(8)
+        footer_row.addWidget(self.test_button)
+        footer_row.addStretch()
+        footer_row.addWidget(self.button_box)
+        layout.addLayout(footer_row)
 
     def _make_label(self, text, icon_name):
         container = QWidget()
         row = QHBoxLayout(container)
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(6)
-        row.addStretch()
+
         icon = QLabel()
         icon.setPixmap(qta.icon(icon_name).pixmap(16, 16))
+        icon.setFixedWidth(18)
         row.addWidget(icon)
-        row.addWidget(QLabel(text))
+
+        label = QLabel(text)
+        label.setMinimumWidth(120)
+        row.addWidget(label)
+        row.addStretch()
         return container
 
     def _create_paste_field(self, line_edit):
@@ -146,7 +206,7 @@ class DatabaseSetupDialog(QDialog):
     def _create_paste_button(self, target_widget):
         button = QPushButton(qta.icon("fa6s.paste"), "")
         button.setToolTip("Paste from clipboard")
-        button.setFixedWidth(32)
+        button.setFixedSize(32, 32)
         button.clicked.connect(lambda: self._paste_into_widget(target_widget))
         return button
 
@@ -204,7 +264,8 @@ class DatabaseSetupDialog(QDialog):
             self.status_label.setText("Database configuration is required before the application can be used.")
             self.status_label.setStyleSheet("color: #1976d2; font-weight: bold;")
         else:
-            self.status_label.setText("")
+            self.status_label.setText("Ready to test and save the connection.")
+            self.status_label.setStyleSheet("color: #1976d2; font-weight: bold;")
 
     def _update_cancel_availability(self):
         cancel_button = self.button_box.button(QDialogButtonBox.Cancel)

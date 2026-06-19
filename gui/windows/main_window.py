@@ -45,13 +45,14 @@ class MainWindow(QMainWindow):
         )
         self.attendance_bar = AttendanceBar(self, db_manager=self.db_manager)
         self.attendance_bar_dock.setWidget(self.attendance_bar)
-        self.addDockWidget(Qt.BottomDockWidgetArea, self.attendance_bar_dock)
 
         self.central_widget = CentralWidget(self, db_manager=self.db_manager)
         self.setCentralWidget(self.central_widget)
 
         self.properties_widget = PropertiesWidget(self)
         self.addDockWidget(Qt.RightDockWidgetArea, self.properties_widget)
+        self.addDockWidget(Qt.RightDockWidgetArea, self.attendance_bar_dock)
+        self.splitDockWidget(self.properties_widget, self.attendance_bar_dock, Qt.Vertical)
 
         self.central_widget.row_selected.connect(self.properties_widget.update_properties)
         
