@@ -409,6 +409,14 @@ class DatabaseManager(QObject):
         """Export to CSV."""
         return self.backup_helper.export_to_csv(csv_path, progress_callback)
 
+    def export_database(self, backup_path, progress_callback=None, use_pg_dump=True):
+        """Export the database to a SQL file (pg_dump if available, else built-in streaming)."""
+        return self.backup_helper.export_database(backup_path, progress_callback, use_pg_dump)
+
+    def import_database(self, backup_path, progress_callback=None):
+        """Restore a SQL file (psql/pg_restore if available, else built-in streaming)."""
+        return self.backup_helper.import_database(backup_path, progress_callback)
+
     # URL Provider methods - delegate to urls helper
     def get_all_url_providers(self):
         """Get all URL providers."""
